@@ -65,55 +65,73 @@
     <!-- Análises/Insights -->
     <div v-if="analise" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <!-- Total de Itens -->
-      <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6 border-l-4 border-blue-600">
+      <div 
+        @click="abrirModal('total')"
+        class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6 border-l-4 border-blue-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+      >
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-600 text-sm font-medium">Total de Itens</p>
+            <p class="text-gray-600 text-sm font-medium">Total Auditável</p>
             <p class="text-3xl font-bold text-blue-600">{{ analise.totalItens }}</p>
           </div>
           <i class="fas fa-list text-4xl text-blue-300 opacity-50"></i>
         </div>
       </div>
 
-      <!-- Itens Lidos -->
-      <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-600">
+      <!-- Itens Lidos Corretamente -->
+      <div 
+        @click="abrirModal('lidos')"
+        class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+      >
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-600 text-sm font-medium">Itens Lidos</p>
-            <p class="text-3xl font-bold text-green-600">{{ analise.itensLidos }}</p>
+            <p class="text-gray-600 text-sm font-medium">✅ Lidos Corretamente</p>
+            <p class="text-3xl font-bold text-green-600">{{ analise.itensLidosCorretamente }}</p>
           </div>
           <i class="fas fa-check-circle text-4xl text-green-300 opacity-50"></i>
         </div>
       </div>
 
-      <!-- Itens NÃO Lidos -->
-      <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6 border-l-4 border-orange-600">
+      <!-- Itens Pendentes -->
+      <div 
+        @click="abrirModal('pendentes')"
+        class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6 border-l-4 border-orange-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+      >
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-600 text-sm font-medium">Itens NÃO Lidos</p>
+            <p class="text-gray-600 text-sm font-medium">⏳ Pendentes</p>
             <p class="text-3xl font-bold text-orange-600">{{ analise.itensPendentes }}</p>
           </div>
           <i class="fas fa-clock text-4xl text-orange-300 opacity-50"></i>
         </div>
       </div>
 
-      <!-- Parcial (% Não Lidos) -->
-      <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow-lg p-6 border-l-4 border-purple-600">
+      <!-- Itens Com Problema -->
+      <div 
+        @click="abrirModal('problema')"
+        class="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow-lg p-6 border-l-4 border-red-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+      >
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-600 text-sm font-medium">Parcial (% Não Lidos)</p>
-            <p class="text-3xl font-bold text-purple-600">{{ analise.parcialPercentual }}%</p>
+            <p class="text-gray-600 text-sm font-medium">⚠️ Com Problema</p>
+            <p class="text-3xl font-bold text-red-600">{{ analise.itensLidosComProblema }}</p>
           </div>
-          <i class="fas fa-chart-pie text-4xl text-purple-300 opacity-50"></i>
+          <i class="fas fa-exclamation-circle text-4xl text-red-300 opacity-50"></i>
         </div>
-        <div class="mt-3 bg-gray-200 rounded-full h-2">
-          <div 
-            :style="{ width: analise.parcialPercentual + '%' }" 
-            class="bg-purple-600 h-2 rounded-full transition-all"
-          />
+        <div v-if="analise.itensLidosComProblema > 0" class="mt-3 text-xs text-red-700 space-y-1">
+          <p v-if="analise.itensComEstoqueZero > 0">• Estoque Zero: {{ analise.itensComEstoqueZero }}</p>
+          <p v-if="analise.itensLidoNaoPertence > 0">• Local Errado: {{ analise.itensLidoNaoPertence }}</p>
         </div>
       </div>
     </div>
+
+    <!-- Modal de Métrica -->
+    <ModalMetrica 
+      :aberto="modalAberto"
+      :tipo="tipoMetricaSelecionada"
+      :dados="analise"
+      @fechar="fecharModal"
+    />
 
     <!-- Insights de Setores e Locais -->
     <div v-if="analise" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -183,6 +201,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
+import ModalMetrica from './ModalMetrica.vue'
 
 const props = defineProps({
   auditoria: Object
@@ -195,6 +214,8 @@ const nomeArquivo = ref(null)
 const arquivoSelecionado = ref(null)
 const processando = ref(false)
 const analise = ref(null)
+const modalAberto = ref(false)
+const tipoMetricaSelecionada = ref(null)
 
 const handleFileChange = (event) => {
   event.stopPropagation()
@@ -242,5 +263,15 @@ const processar = async () => {
   } finally {
     processando.value = false
   }
+}
+
+const abrirModal = (tipo) => {
+  tipoMetricaSelecionada.value = tipo
+  modalAberto.value = true
+}
+
+const fecharModal = () => {
+  modalAberto.value = false
+  tipoMetricaSelecionada.value = null
 }
 </script>

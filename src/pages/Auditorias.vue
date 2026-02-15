@@ -9,34 +9,72 @@ const abaAtiva = ref('calendario')
 
 // Formulário
 const formulario = ref({
-  sku: '',
+  arquivo: null,
   tipo: 'Etiqueta',
   data: new Date().toISOString().split('T')[0],
 })
 
-const submeterAuditoria = () => {
-  if (!formulario.value.sku || formulario.value.sku <= 0) {
-    store.addToast('Digite uma quantidade válida de itens!', 'warning')
+const processando = ref(false)
+
+const submeterAuditoria = async () => {
+  if (!formulario.value.arquivo) {
+    store.addToast('Selecione um arquivo Excel!', 'warning')
     return
   }
   
-  const novaAuditoria = store.addAuditoria({
-    sku: formulario.value.sku,
-    tipo: formulario.value.tipo,
-    data: formulario.value.data,
-    dados: [],
-    analise: null,
-    total: parseInt(formulario.value.sku)
-  })
+  if (!formulario.value.tipo) {
+    store.addToast('Selecione o tipo de auditoria!', 'warning')
+    return
+  }
+  
+  processando.value = true
+  
+  try {
+    // Processar arquivo
+    const dados = await store.processarExcelPresenca(formulario.value.arquivo)
+    
+    if (!dados || dados.length === 0) {
+      store.addToast('Arquivo vazio ou inválido!', 'warning')
+      return
+    }
+    
+    // Analisar dados
+    const analise = store.analisarDadosPresenca(dados)
+    
+    // Criar auditoria com dados já processados
+    const novaAuditoria = store.addAuditoria({
+      sku: analise.totalItens, // SKU = total de itens auditáveis
+      tipo: formulario.value.tipo,
+      data: formulario.value.data,
+      dados: dados,
+      analise: analise,
+      parcial: analise.parcialPercentual,
+      total: analise.totalItens
+    })
 
-  // Redirecionar para a página de detalhes
-  router.push(`/auditoria/${novaAuditoria.id}`)
+    store.addToast(`Auditoria criada com sucesso! ${dados.length} itens carregados.`, 'success')
+    
+    // Redirecionar para a página de detalhes
+    router.push(`/auditoria/${novaAuditoria.id}`)
 
-  // Limpar formulário
-  formulario.value = {
-    sku: '',
-    tipo: 'Etiqueta',
-    data: new Date().toISOString().split('T')[0],
+    // Limpar formulário
+    formulario.value = {
+      arquivo: null,
+      tipo: 'Etiqueta',
+      data: new Date().toISOString().split('T')[0],
+    }
+  } catch (erro) {
+    console.error('Erro ao processar:', erro)
+    store.addToast('Erro ao processar arquivo: ' + erro.message, 'error')
+  } finally {
+    processando.value = false
+  }
+}
+
+const handleFileChange = (event) => {
+  const files = event.target.files
+  if (files && files.length > 0) {
+    formulario.value.arquivo = files[0]
   }
 }
 
@@ -54,11 +92,28 @@ const diasSemana = computed(() => {
 })
 
 const auditoriasFiltradasPorTipo = computed(() => {
+  let auditorias = []
   if (!abaAtiva.value || abaAtiva.value === 'calendario') {
-    return store.auditorias
+    auditorias = store.auditorias
+  } else {
+    auditorias = store.auditoriasAgrupadas[abaAtiva.value] || []
   }
-  return store.auditoriasAgrupadas[abaAtiva.value] || []
+  // Filtrar apenas auditorias ativas
+  return auditorias.filter(a => a.status === 'em_andamento')
 })
+
+const excluirAuditoria = (id) => {
+  if (confirm('Tem certeza que deseja excluir esta auditoria?')) {
+    store.deleteAuditoria(id)
+  }
+}
+
+const fecharAuditoria = (id) => {
+  if (confirm('Deseja fechar esta auditoria? Ela não aparecerá mais na lista de ativas.')) {
+    store.updateAuditoria(id, { status: 'fechada' })
+    store.addToast('Auditoria fechada com sucesso!', 'success')
+  }
+}
 </script>
 
 <template>
@@ -147,17 +202,19 @@ const auditoriasFiltradasPorTipo = computed(() => {
         </h2>
 
         <div class="space-y-4">
-          <!-- Identificação da Auditoria -->
+          <!-- Arquivo Excel -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Total de Itens da Loja (SKU)</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Arquivo Excel</label>
             <input
-              v-model.number="formulario.sku"
-              type="number"
-              min="1"
-              placeholder="Ex: 250"
+              @change="handleFileChange"
+              type="file"
+              accept=".xlsx,.xls,.csv"
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p class="text-xs text-gray-500 mt-1">Digite a quantidade total de itens que podem ser auditados nesta loja</p>
+            <p class="text-xs text-gray-500 mt-1">Selecione o arquivo Excel com os dados da auditoria</p>
+            <p v-if="formulario.arquivo" class="text-xs text-green-600 mt-1">
+              ✓ {{ formulario.arquivo.name }}
+            </p>
           </div>
 
           <!-- Tipo de Auditoria -->
@@ -186,10 +243,11 @@ const auditoriasFiltradasPorTipo = computed(() => {
           <!-- Botão Submeter -->
           <button
             @click="submeterAuditoria"
-            class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+            :disabled="processando || !formulario.arquivo"
+            class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            <i class="fas fa-plus mr-2"></i>
-            Criar Auditoria
+            <i :class="processando ? 'fas fa-spinner fa-spin' : 'fas fa-plus'" class="mr-2"></i>
+            {{ processando ? 'Processando...' : 'Criar Auditoria' }}
           </button>
         </div>
       </div>
@@ -209,29 +267,51 @@ const auditoriasFiltradasPorTipo = computed(() => {
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
-        <router-link
+        <div
           v-for="auditoria in auditoriasFiltradasPorTipo"
           :key="auditoria.id"
-          :to="`/auditoria/${auditoria.id}`"
-          class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-lg p-6 cursor-pointer hover:border-blue-500 hover:shadow-lg transition group no-underline text-inherit"
+          class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-lg p-6 hover:border-blue-500 hover:shadow-lg transition group relative"
         >
-          <!-- Header -->
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <h3 class="text-2xl font-bold text-gray-800">{{ auditoria.sku }}</h3>
-              <p class="text-xs text-gray-500 mt-1">SKU / Total de Itens</p>
-            </div>
-            <span
-              :class="[
-                'px-3 py-1 rounded-full text-xs font-semibold transition',
-                auditoria.tipo === 'Etiqueta' ? 'bg-blue-100 text-blue-800 group-hover:bg-blue-200' :
-                auditoria.tipo === 'Presença' ? 'bg-green-100 text-green-800 group-hover:bg-green-200' :
-                'bg-orange-100 text-orange-800 group-hover:bg-orange-200'
-              ]"
+          <!-- Botões de Ação -->
+          <div class="absolute top-2 right-2 flex gap-1">
+            <button
+              @click.stop="fecharAuditoria(auditoria.id)"
+              class="p-1.5 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition text-xs"
+              title="Fechar Auditoria"
             >
-              {{ auditoria.tipo }}
-            </span>
+              <i class="fas fa-lock"></i>
+            </button>
+            <button
+              @click.stop="excluirAuditoria(auditoria.id)"
+              class="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition text-xs"
+              title="Excluir Auditoria"
+            >
+              <i class="fas fa-trash"></i>
+            </button>
           </div>
+
+          <!-- Header -->
+          <router-link
+            :to="`/auditoria/${auditoria.id}`"
+            class="block no-underline text-inherit"
+          >
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="text-2xl font-bold text-gray-800">{{ auditoria.sku }}</h3>
+                <p class="text-xs text-gray-500 mt-1">SKU / Total de Itens</p>
+              </div>
+              <span
+                :class="[
+                  'px-3 py-1 rounded-full text-xs font-semibold transition',
+                  auditoria.tipo === 'Etiqueta' ? 'bg-blue-100 text-blue-800 group-hover:bg-blue-200' :
+                  auditoria.tipo === 'Presença' ? 'bg-green-100 text-green-800 group-hover:bg-green-200' :
+                  'bg-orange-100 text-orange-800 group-hover:bg-orange-200'
+                ]"
+              >
+                {{ auditoria.tipo }}
+              </span>
+            </div>
+          </router-link>
 
           <!-- Data -->
           <div class="border-b pb-4 mb-4">
@@ -242,46 +322,51 @@ const auditoriasFiltradasPorTipo = computed(() => {
           </div>
 
           <!-- Status -->
-          <div v-if="auditoria.total > 0" class="space-y-3">
-            <!-- Métrica de Leitura -->
-            <div>
-              <div class="flex justify-between mb-1">
-                <span class="text-sm font-medium text-gray-700">Progresso</span>
-                <span class="text-sm font-bold text-blue-600">{{ 100 - auditoria.parcial }}%</span>
+          <router-link
+            :to="`/auditoria/${auditoria.id}`"
+            class="block no-underline text-inherit"
+          >
+            <div v-if="auditoria.total > 0" class="space-y-3">
+              <!-- Métrica de Leitura -->
+              <div>
+                <div class="flex justify-between mb-1">
+                  <span class="text-sm font-medium text-gray-700">Progresso</span>
+                  <span class="text-sm font-bold text-blue-600">{{ (auditoria.analise?.percentualConclusao || 0).toFixed(2) }}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    :style="{ width: Math.min(auditoria.analise?.percentualConclusao || 0, 100) + '%' }"
+                    class="bg-linear-to-r from-green-500 to-green-600 h-full transition-all"
+                  />
+                </div>
               </div>
-              <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                <div
-                  :style="{ width: (100 - auditoria.parcial) + '%' }"
-                  class="bg-linear-to-r from-green-500 to-green-600 h-full transition-all"
-                />
+
+              <!-- Info Cards -->
+              <div class="grid grid-cols-2 gap-2 pt-2">
+                <div class="bg-green-50 rounded p-2 text-center">
+                  <p class="text-xs text-gray-600">Lidos</p>
+                  <p class="text-lg font-bold text-green-600">{{ (auditoria.analise?.itensLidosCorretamente || 0) + (auditoria.analise?.itensLidosComProblema || 0) }}</p>
+                </div>
+                <div class="bg-orange-50 rounded p-2 text-center">
+                  <p class="text-xs text-gray-600">Pendentes</p>
+                  <p class="text-lg font-bold text-orange-600">{{ auditoria.analise?.itensPendentes || 0 }}</p>
+                </div>
               </div>
             </div>
 
-            <!-- Info Cards -->
-            <div class="grid grid-cols-2 gap-2 pt-2">
-              <div class="bg-green-50 rounded p-2 text-center">
-                <p class="text-xs text-gray-600">Lidos</p>
-                <p class="text-lg font-bold text-green-600">{{ auditoria.analise?.itensLidos || 0 }}</p>
-              </div>
-              <div class="bg-orange-50 rounded p-2 text-center">
-                <p class="text-xs text-gray-600">Pendentes</p>
-                <p class="text-lg font-bold text-orange-600">{{ auditoria.parcial }}%</p>
-              </div>
+            <!-- Status Vazio -->
+            <div v-else class="text-center py-6">
+              <i class="fas fa-upload text-gray-300 text-3xl mb-2"></i>
+              <p class="text-sm text-gray-500">Upload pendente</p>
             </div>
-          </div>
 
-          <!-- Status Vazio -->
-          <div v-else class="text-center py-6">
-            <i class="fas fa-upload text-gray-300 text-3xl mb-2"></i>
-            <p class="text-sm text-gray-500">Upload pendente</p>
-          </div>
-
-          <!-- Hover Info -->
-          <div class="mt-4 pt-4 border-t text-center text-xs text-gray-500 group-hover:text-blue-600 transition">
-            <i class="fas fa-arrow-right mr-1"></i>
-            Clique para ver detalhes completos
-          </div>
-        </router-link>
+            <!-- Hover Info -->
+            <div class="mt-4 pt-4 border-t text-center text-xs text-gray-500 group-hover:text-blue-600 transition">
+              <i class="fas fa-arrow-right mr-1"></i>
+              Clique para ver detalhes completos
+            </div>
+          </router-link>
+        </div>
       </div>
     </div>
   </div>

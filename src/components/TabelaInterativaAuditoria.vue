@@ -99,8 +99,8 @@
             :key="index"
             class="hover:bg-gray-50 transition"
             :class="{
-              'bg-green-50': item['Presença confirmada'],
-              'bg-orange-50': !item['Presença confirmada']
+              'bg-green-50': item._temPresenca,
+              'bg-orange-50': !item._temPresenca
             }"
           >
             <td class="px-4 py-3 font-bold text-gray-800">{{ item['Código'] }}</td>
@@ -111,15 +111,15 @@
             <td class="px-4 py-3">
               <span 
                 :class="{
-                  'bg-green-100 text-green-800': item['Presença confirmada'],
-                  'bg-orange-100 text-orange-800': !item['Presença confirmada']
+                  'bg-green-100 text-green-800': item._temPresenca,
+                  'bg-orange-100 text-orange-800': !item._temPresenca
                 }"
                 class="px-2 py-1 rounded-full text-xs font-semibold"
               >
-                {{ item['Presença confirmada'] ? 'Confirmada' : 'Pendente' }}
+                {{ item._temPresenca ? 'Confirmada' : 'Pendente' }}
               </span>
             </td>
-            <td class="px-4 py-3 text-right text-gray-700">{{ item['Estoque atual'] }}</td>
+            <td class="px-4 py-3 text-right text-gray-700">{{ item._estoque !== undefined ? item._estoque : (item['Estoque atual'] || 0) }}</td>
             <td class="px-4 py-3 text-right text-gray-700">{{ item['Dias sem venda'] }}</td>
           </tr>
           <tr v-if="dadosFiltrados.length === 0" class="text-center">
@@ -194,11 +194,12 @@ const dadosFiltrados = computed(() => {
       return false
     }
 
-    // Filtro de presença
-    if (filtroPresenca.value === 'lido' && !item['Presença confirmada']) {
+    // Filtro de presença (usa valor normalizado se disponível)
+    const temPresenca = item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)
+    if (filtroPresenca.value === 'lido' && !temPresenca) {
       return false
     }
-    if (filtroPresenca.value === 'pendente' && item['Presença confirmada']) {
+    if (filtroPresenca.value === 'pendente' && temPresenca) {
       return false
     }
 

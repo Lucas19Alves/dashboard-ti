@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
+import ModalMetrica from '../components/ModalMetrica.vue'
+import ModalSetorLocal from '../components/ModalSetorLocal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,8 +18,22 @@ const abaAtiva = ref('dashboard')
 const filtroUsuario = ref('')
 const filtroDados = ref('')
 const filtroFornecedor = ref('')
+const modalMetricaAberto = ref(false)
+const metricaSelecionada = ref(null)
+const modalSetorLocalAberto = ref(false)
+const tipoModalSetorLocal = ref(null)
+const itemsModalSetorLocal = ref([])
+const viewModeLocais = ref('grid') // 'grid' ou 'list'
+const modalRelatorioAberto = ref(false)
+const filtroItens = ref('')
+const ordenacaoItens = ref({ coluna: 'Código', direcao: 'asc' })
+const mostrarUploadSubstituir = ref(false)
+const modalItensAberto = ref(false)
+const itensModal = ref([])
+const tituloModalItens = ref('')
 
-const abas = ['Dashboard', 'Usuários', 'Dados', 'Estatísticas']
+const abas = ['dashboard', 'usuarios', 'dados', 'estatisticas']
+const abasDisplay = { dashboard: 'Dashboard', usuarios: 'Usuários', dados: 'Dados', estatisticas: 'Estatísticas' }
 
 onMounted(() => {
   if (!auditoria.value) {
@@ -27,13 +43,16 @@ onMounted(() => {
 
 const handleUploadCompleto = ({ dados, analise }) => {
   if (auditoria.value) {
+    // Atualizar SKU automaticamente baseado em itens auditáveis
     store.updateAuditoria(auditoria.value.id, {
       dados: dados,
       analise: analise,
+      sku: analise.totalItens, // SKU = total de itens auditáveis
       parcial: analise.parcialPercentual,
       total: analise.totalItens
     })
     store.addToast('Dados importados com sucesso!', 'success')
+    mostrarUploadSubstituir.value = false
   }
 }
 
@@ -41,12 +60,22 @@ const handleUploadCompleto = ({ dados, analise }) => {
 const metricasGerais = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
+  // Total auditável = itens lidos corretamente + pendentes + com problema
+  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  // Total lidos = lidos corretamente + com problema (ambos contam)
+  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
+  
   return {
-    totalItens: a.totalItens,
-    lidos: a.itensLidos,
+    totalItens: a.totalItens, // Total de itens auditáveis (SKU)
+    lidosCorretamente: a.itensLidosCorretamente,
     pendentes: a.itensPendentes,
-    percentualConclusao: 100 - a.parcialPercentual,
-    velocidadeLeitura: a.totalItens > 0 ? Math.round((a.itensLidos / a.totalItens) * 100) : 0,
+    comProblema: a.itensLidosComProblema,
+    totalLidos: totalLidos, // Total lidos (corretos + problemas)
+    percentualConclusao: a.percentualConclusao || 0, // % concluído (exato)
+    percentualPendente: a.parcialPercentual || 0, // % pendente (exato)
+    metaConclusao: 97.0, // Meta de conclusão
+    metaPendente: 3.0, // Meta de pendente (foco)
+    faltaParaMeta: Math.max(0, (a.parcialPercentual || 0) - 3.0), // Quanto falta para meta de 3%
     setoresParados: a.setoresParados?.length || 0,
     locaisCriticos: a.locaisSemLeitura?.length || 0
   }
@@ -58,56 +87,117 @@ const insights = computed(() => {
   const insights = []
   const a = auditoria.value.analise
   const dados = auditoria.value.dados
+  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
+  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  const percentualConclusao = a.percentualConclusao || 0
+  const percentualPendente = a.parcialPercentual || 0
 
-  // Insight 1: Setores críticos
+  // Insight 1: Status da Meta
+  if (percentualPendente <= 3.0) {
+    insights.push({
+      tipo: 'sucesso',
+      titulo: '🎯 Meta Atingida!',
+      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
+      detalhes: [`✅ Auditoria dentro da meta estabelecida`]
+    })
+  } else {
+    const falta = percentualPendente - 3.0
+    const itensFaltam = Math.ceil((falta / 100) * totalAuditaveis)
+    insights.push({
+      tipo: 'critico',
+      titulo: '⚠️ Meta Não Atingida',
+      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
+      detalhes: [
+        `Faltam ${falta.toFixed(2)}% para atingir a meta`,
+        `Aproximadamente ${itensFaltam} itens precisam ser lidos`
+      ]
+    })
+  }
+
+  // Insight 2: Setores críticos
   if (a.setoresParados?.length > 0) {
     insights.push({
       tipo: 'critico',
       titulo: '🚨 Setores Parados',
       mensagem: `${a.setoresParados.length} setor(es) sem nenhuma leitura`,
-      detalhes: a.setoresParados
+      detalhes: a.setoresParados.slice(0, 5)
     })
   }
 
-  // Insight 2: Progresso
-  const percentual = 100 - a.parcialPercentual
-  if (percentual > 75) {
+  // Insight 3: Itens com Problema
+  if (a.itensLidosComProblema > 0) {
+    const detalhes = []
+    if (a.itensComEstoqueZero > 0) detalhes.push(`${a.itensComEstoqueZero} com estoque zerado`)
+    if (a.itensLidoNaoPertence > 0) detalhes.push(`${a.itensLidoNaoPertence} em local errado`)
+    insights.push({
+      tipo: 'aviso',
+      titulo: '⚠️ Ítens Requerem Atenção',
+      mensagem: `${a.itensLidosComProblema} itens lidos mas com problemas`,
+      detalhes: detalhes
+    })
+  }
+
+  // Insight 4: Progresso Geral
+  if (percentualConclusao >= 95) {
     insights.push({
       tipo: 'sucesso',
       titulo: '🎯 Excelente Progresso!',
-      mensagem: `${percentual}% de conclusão - Continue assim!`,
-      detalhes: [`${a.itensLidos} de ${a.totalItens} itens lidos`]
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`${totalLidos} de ${totalAuditaveis} itens lidos`]
     })
-  } else if (percentual > 50) {
+  } else if (percentualConclusao >= 80) {
+    insights.push({
+      tipo: 'info',
+      titulo: '⚡ Bom Progresso',
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`Ainda restam ${a.itensPendentes} itens pendentes`]
+    })
+  } else {
     insights.push({
       tipo: 'aviso',
-      titulo: '⚡ Mais da metade completada',
-      mensagem: `${percentual}% de conclusão`,
-      detalhes: [`Ainda restam ${a.itensPendentes} itens`]
+      titulo: '📊 Progresso em Andamento',
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`Faltam ${a.itensPendentes} itens para completar`]
     })
   }
 
-  // Insight 3: Usuário mais produtivo
+  // Insight 5: Usuário mais produtivo
   if (Object.keys(a.porUsuario).length > 0) {
     const usuarioTopProdutivo = Object.entries(a.porUsuario)
-      .sort(([,a], [,b]) => b.lidos - a.lidos)[0]
-    if (usuarioTopProdutivo) {
+      .map(([nome, dados]) => ({
+        nome,
+        total: (dados.lidos || 0) + (dados.comProblema || 0)
+      }))
+      .sort((a, b) => b.total - a.total)[0]
+    if (usuarioTopProdutivo && usuarioTopProdutivo.total > 0) {
       insights.push({
         tipo: 'info',
         titulo: '⭐ Melhor Desempenho',
-        mensagem: `${usuarioTopProdutivo[0]} leu ${usuarioTopProdutivo[1].lidos} itens`,
-        detalhes: [``]
+        mensagem: `${usuarioTopProdutivo.nome} leu ${usuarioTopProdutivo.total} itens`,
+        detalhes: []
       })
     }
   }
 
-  // Insight 4: Locais críticos
+  // Insight 6: Locais críticos
   if (a.locaisSemLeitura?.length > 0) {
     insights.push({
       tipo: 'aviso',
       titulo: '📍 Locais Sem Leitura',
       mensagem: `${a.locaisSemLeitura.length} local(is) ainda precisam de atenção`,
-      detalhes: a.locaisSemLeitura.slice(0, 3)
+      detalhes: a.locaisSemLeitura.slice(0, 5)
+    })
+  }
+
+  // Insight 7: Distribuição de leituras
+  const usuariosAtivos = Object.keys(a.porUsuario).length
+  if (usuariosAtivos > 0) {
+    const mediaPorUsuario = Math.round(totalLidos / usuariosAtivos)
+    insights.push({
+      tipo: 'info',
+      titulo: '👥 Equipe em Ação',
+      mensagem: `${usuariosAtivos} usuário(s) ativo(s)`,
+      detalhes: [`Média de ${mediaPorUsuario} itens lidos por usuário`]
     })
   }
 
@@ -120,17 +210,43 @@ const usuariosOrdenados = computed(() => {
   const analise = auditoria.value.analise
   return analise.usuarios
     .filter(u => u.toLowerCase().includes(filtroUsuario.value.toLowerCase()))
-    .map(u => ({
-      nome: u,
-      lidos: analise.porUsuario[u]?.lidos || 0,
-      pendentes: analise.porUsuario[u]?.pendentes || 0,
-      total: (analise.porUsuario[u]?.lidos || 0) + (analise.porUsuario[u]?.pendentes || 0),
-      percentual: analise.porUsuario[u]?.lidos ? 
-        Math.round((analise.porUsuario[u].lidos / ((analise.porUsuario[u].lidos || 0) + (analise.porUsuario[u].pendentes || 0))) * 100) 
-        : 0,
-      velocidade: 'Rápido'
-    }))
-    .sort((a, b) => b.lidos - a.lidos)
+    .map(u => {
+      const lidos = analise.porUsuario[u]?.lidos || 0
+      const comProblema = analise.porUsuario[u]?.comProblema || 0
+      const totalLidos = lidos + comProblema // Total lidos (corretos + problemas)
+      const total = lidos + (analise.porUsuario[u]?.pendentes || 0) + comProblema
+      
+      // Avaliação de performance baseada em total lidos
+      let performance = '⭐'
+      let performanceClass = 'text-gray-500'
+      if (total > 0) {
+        const percentualLido = (totalLidos / total) * 100
+        if (percentualLido >= 95) {
+          performance = '⭐⭐⭐'
+          performanceClass = 'text-green-600'
+        } else if (percentualLido >= 80) {
+          performance = '⭐⭐'
+          performanceClass = 'text-yellow-600'
+        } else if (percentualLido >= 60) {
+          performance = '⭐'
+          performanceClass = 'text-orange-600'
+        } else {
+          performance = '⚠️'
+          performanceClass = 'text-red-600'
+        }
+      }
+      
+      return {
+        nome: u,
+        lidos: lidos,
+        comProblema: comProblema,
+        totalLidos: totalLidos,
+        total: total,
+        performance: performance,
+        performanceClass: performanceClass
+      }
+    })
+    .sort((a, b) => b.totalLidos - a.totalLidos)
 })
 
 const analiseUsuarios = computed(() => {
@@ -164,53 +280,150 @@ const mapaSeteores = computed(() => {
       nome: setor,
       lidos: dados.lidos,
       pendentes: dados.pendentes,
-      total: dados.lidos + dados.pendentes,
-      percentualConclusao: dados.lidos + dados.pendentes > 0 ? 
-        Math.round((dados.lidos / (dados.lidos + dados.pendentes)) * 100) : 0
+      comProblema: dados.comProblema,
+      total: dados.lidos + dados.pendentes + dados.comProblema,
+      percentualConclusao: (dados.lidos + dados.pendentes + dados.comProblema) > 0 ? 
+        Math.round((dados.lidos / (dados.lidos + dados.pendentes + dados.comProblema)) * 100) : 0
     }
   })
 
   return setores
 })
 
+const itensComEstoqueZero = computed(() => {
+  if (!auditoria.value?.analise) return []
+  return auditoria.value.analise.itensComEstoqueZeroDetalhes || []
+})
+
+const itensLidoNaoPertence = computed(() => {
+  if (!auditoria.value?.analise) return []
+  return auditoria.value.analise.itensLidoNaoPertenceDetalhes || []
+})
+
+// Funções auxiliares para processar dados da planilha
+// (Versões simplificadas para uso nos componentes - os dados já vêm normalizados do store)
+
+const isPlaceholder = (valor) => {
+  if (!valor) return true
+  if (typeof valor === 'string') {
+    const limpo = valor.trim()
+    return limpo.startsWith('###') || 
+           limpo === '' || 
+           limpo.toLowerCase() === 'undefined' || 
+           limpo.toLowerCase() === 'null' ||
+           limpo.toLowerCase() === 'não' ||
+           limpo.toLowerCase() === 'nao'
+  }
+  return false
+}
+
+const extrairEstoque = (item) => {
+  // Se já tem valor normalizado, usa ele
+  if (item._estoque !== undefined) {
+    return item._estoque
+  }
+  
+  // Senão, tenta extrair manualmente (fallback)
+  const colunasEstoque = ['Estoque atual', 'oque atual', 'Estoque Leitura']
+  for (const coluna of colunasEstoque) {
+    if (item[coluna] !== undefined && item[coluna] !== null) {
+      const valor = item[coluna]
+      if (typeof valor === 'number') {
+        return valor > 0 ? valor : 0
+      }
+      if (typeof valor === 'string') {
+        let limpo = valor.replace(/^###\s*/, '').trim()
+        limpo = limpo.replace(/KG/gi, '').replace(/\s+/g, ' ')
+        const match = limpo.match(/(\d+)[,.]?(\d*)/)
+        if (match) {
+          const parteInteira = match[1] || '0'
+          const parteDecimal = match[2] || '0'
+          const numero = parseFloat(parteInteira + '.' + parteDecimal)
+          if (!isNaN(numero) && numero > 0) {
+            return numero
+          }
+        }
+      }
+    }
+  }
+  return 0
+}
+
+const temPresencaConfirmada = (item) => {
+  // Se já tem valor normalizado, usa ele
+  if (item._temPresenca !== undefined) {
+    return item._temPresenca
+  }
+  
+  // Senão, tenta determinar manualmente (fallback)
+  const situacao = item['Situação'] || item['Situação atual da auditoria'] || ''
+  if (situacao) {
+    const sitLower = situacao.toString().toLowerCase()
+    if (sitLower.includes('com prese') || sitLower.includes('com presença')) {
+      return true
+    }
+    if (sitLower.includes('sem prese') || sitLower.includes('sem presença')) {
+      return false
+    }
+  }
+  
+  const presenca = item['Presença confirmada'] || item['Presença'] || ''
+  if (presenca) {
+    if (isPlaceholder(presenca)) {
+      return false
+    }
+    if (typeof presenca === 'number') {
+      return true
+    }
+    if (typeof presenca === 'string' && presenca.trim() !== '') {
+      return !isPlaceholder(presenca)
+    }
+  }
+  
+  return false
+}
+
 const itensVendidosOjeSemLeitura = computed(() => {
-  if (!auditoria.value?.dados) return []
-  const hoje = new Date().toISOString().split('T')[0]
+  if (!auditoria.value?.dados) return 0
   return auditoria.value.dados.filter(item => {
-    const temPresenca = item['Presença confirmada'] && item['Presença confirmada'] !== ''
-    const vendidoHoje = item['Dias sem venda'] === '0' || item['Dias sem venda'] === 0
+    const temPresenca = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
+    const vendidoHoje = item['Dias sem venda'] === '0' || item['Dias sem venda'] === 0 || item['Dias sem venda'] === '0'
     return vendidoHoje && !temPresenca
   }).length
 })
 
 const itensLidosEstoqueZero = computed(() => {
-  if (!auditoria.value?.dados) return []
-  return auditoria.value.dados.filter(item => {
-    const temPresenca = item['Presença confirmada'] && item['Presença confirmada'] !== ''
-    const estoqueZero = !item['Estoque atual'] || item['Estoque atual'] === '0' || item['Estoque atual'] === 0 || parseInt(item['Estoque atual']) <= 0
-    return temPresenca && estoqueZero
-  }).slice(0, 5)
+  if (!auditoria.value?.analise) return []
+  return (auditoria.value.analise.itensComEstoqueZeroDetalhes || []).slice(0, 5)
 })
 
 const itensGrandeEstoqueNaoLidos = computed(() => {
   if (!auditoria.value?.dados) return []
   return auditoria.value.dados.filter(item => {
-    const temPresenca = item['Presença confirmada'] && item['Presença confirmada'] !== ''
-    const estoque = parseInt(item['Estoque atual']) || 0
+    const temPresenca = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
+    const estoque = item._estoque !== undefined ? item._estoque : extrairEstoque(item)
     return !temPresenca && estoque > 100
   })
-    .sort((a, b) => parseInt(b['Estoque atual']) - parseInt(a['Estoque atual']))
+    .sort((a, b) => {
+      const estoqueA = a._estoque !== undefined ? a._estoque : extrairEstoque(a)
+      const estoqueB = b._estoque !== undefined ? b._estoque : extrairEstoque(b)
+      return estoqueB - estoqueA
+    })
     .slice(0, 5)
 })
 
 const itensMuitoTempoNaoLidos = computed(() => {
   if (!auditoria.value?.dados) return []
   return auditoria.value.dados.filter(item => {
-    const temPresenca = item['Presença confirmada'] && item['Presença confirmada'] !== ''
+    const temPresenca = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
     const diasSemVenda = parseInt(item['Dias sem venda']) || 0
     return !temPresenca && diasSemVenda > 30
   })
-    .sort((a, b) => parseInt(b['Dias sem venda']) - parseInt(a['Dias sem venda']))
+    .sort((a, b) => {
+      const diasA = parseInt(a['Dias sem venda']) || 0
+      const diasB = parseInt(b['Dias sem venda']) || 0
+      return diasB - diasA
+    })
     .slice(0, 5)
 })
 
@@ -242,37 +455,119 @@ const itensPorFornecedor = computed(() => {
 
 // =========== ESTATÍSTICAS ===========
 const setoresComAnalise = computed(() => {
-  if (!auditoria.value?.analise) return []
+  if (!auditoria.value?.analise || !auditoria.value.analise.porSetor) return []
   const analise = auditoria.value.analise
   
   return Object.entries(analise.porSetor)
-    .map(([setor, dados]) => ({
-      nome: setor,
-      lidos: dados.lidos,
-      pendentes: dados.pendentes,
-      total: dados.lidos + dados.pendentes,
-      percentualPendente: dados.lidos + dados.pendentes > 0 ? 
-        Math.round((dados.pendentes / (dados.lidos + dados.pendentes)) * 100) : 0,
-      percentualLido: dados.lidos + dados.pendentes > 0 ? 
-        Math.round((dados.lidos / (dados.lidos + dados.pendentes)) * 100) : 0
-    }))
-    .sort((a, b) => b.pendentes - a.pendentes)
+    .map(([setor, dados]) => {
+      const lidos = dados.lidos || 0
+      const pendentes = dados.pendentes || 0
+      const comProblema = dados.comProblema || 0
+      const totalLidos = lidos + comProblema // Total lidos (corretos + problemas)
+      const total = lidos + pendentes + comProblema
+      const percentualPendente = total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0
+      const percentualConclusao = total > 0 ? parseFloat(((totalLidos / total) * 100).toFixed(2)) : 0
+      
+      // Classificação baseada na meta de 3% pendente
+      let classificacao = 'Excelente'
+      let classificacaoClass = 'text-green-600'
+      if (percentualPendente <= 3.0) {
+        classificacao = 'Excelente'
+        classificacaoClass = 'text-green-600'
+      } else if (percentualPendente <= 5.0) {
+        classificacao = 'Bom'
+        classificacaoClass = 'text-yellow-600'
+      } else if (percentualPendente <= 10.0) {
+        classificacao = 'Regular'
+        classificacaoClass = 'text-orange-600'
+      } else {
+        classificacao = 'Crítico'
+        classificacaoClass = 'text-red-600'
+      }
+      
+      return {
+        nome: setor,
+        lidos: lidos,
+        pendentes: pendentes,
+        comProblema: comProblema,
+        totalLidos: totalLidos,
+        total: total,
+        percentualPendente: percentualPendente,
+        percentualConclusao: percentualConclusao,
+        classificacao: classificacao,
+        classificacaoClass: classificacaoClass
+      }
+    })
+    .filter(setor => setor.total > 0) // Filtrar apenas setores com itens
+    .sort((a, b) => b.percentualPendente - a.percentualPendente) // Ordenar por maior % pendente
 })
 
 const locaisComAnalise = computed(() => {
-  if (!auditoria.value?.analise) return []
+  if (!auditoria.value?.analise || !auditoria.value.analise.porLocal) return []
   const analise = auditoria.value.analise
   
-  return Object.entries(analise.porLocal)
-    .map(([local, dados]) => ({
-      nome: local,
-      lidos: dados.lidos,
-      pendentes: dados.pendentes,
-      total: dados.lidos + dados.pendentes,
-      percentualPendente: dados.lidos + dados.pendentes > 0 ? 
-        Math.round((dados.pendentes / (dados.lidos + dados.pendentes)) * 100) : 0
-    }))
+  const locais = Object.entries(analise.porLocal)
+    .map(([local, dados]) => {
+      const lidos = dados.lidos || 0
+      const pendentes = dados.pendentes || 0
+      const comProblema = dados.comProblema || 0
+      const totalLidos = lidos + comProblema
+      const total = lidos + pendentes + comProblema
+      return {
+        nome: local,
+        lidos: lidos,
+        pendentes: pendentes,
+        comProblema: comProblema,
+        totalLidos: totalLidos,
+        total: total,
+        percentualPendente: total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0,
+        percentualLido: total > 0 ? parseFloat(((totalLidos / total) * 100).toFixed(2)) : 0
+      }
+    })
+    .filter(local => local.total > 0) // Filtrar apenas locais com itens
+    .sort((a, b) => b.pendentes - a.pendentes) // Ordenar por maior quantidade pendente
+  
+  return locais
+})
+
+// Dados para o relatório
+const dadosRelatorio = computed(() => {
+  if (!auditoria.value?.analise) return null
+  
+  const a = auditoria.value.analise
+  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
+  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  const percentualConclusao = a.percentualConclusao || 0
+  const percentualPendente = a.parcialPercentual || 0
+  
+  // Top 20 locais com mais itens pendentes
+  const topLocaisPendentes = locaisComAnalise.value
     .sort((a, b) => b.pendentes - a.pendentes)
+    .slice(0, 20)
+  
+  // Locais sem leitura
+  const locaisSemLeitura = a.locaisSemLeitura || []
+  
+  // Quantidade que falta para meta
+  const faltaParaMeta = Math.max(0, percentualPendente - 3.0)
+  const itensFaltam = Math.ceil((faltaParaMeta / 100) * totalAuditaveis)
+  
+  return {
+    setores: setoresComAnalise.value,
+    topLocaisPendentes: topLocaisPendentes,
+    locaisSemLeitura: locaisSemLeitura,
+    resultadoGeral: {
+      totalAuditaveis: totalAuditaveis,
+      totalLidos: totalLidos,
+      pendentes: a.itensPendentes,
+      percentualConclusao: percentualConclusao,
+      percentualPendente: percentualPendente,
+      metaConclusao: 97.0,
+      metaPendente: 3.0,
+      faltaParaMeta: faltaParaMeta,
+      itensFaltam: itensFaltam
+    }
+  }
 })
 
 const voltar = () => {
@@ -281,12 +576,103 @@ const voltar = () => {
 
 const iconeAba = (tab) => {
   const icones = {
-    'Dashboard': 'fas fa-chart-line',
-    'Usuários': 'fas fa-users-cog',
-    'Dados': 'fas fa-database',
-    'Estatísticas': 'fas fa-chart-bar'
+    'dashboard': 'fas fa-chart-line',
+    'usuarios': 'fas fa-users-cog',
+    'dados': 'fas fa-database',
+    'estatisticas': 'fas fa-chart-bar'
   }
   return icones[tab]
+}
+
+const abrirModalMetrica = (tipo) => {
+  metricaSelecionada.value = tipo
+  modalMetricaAberto.value = true
+}
+
+const fecharModalMetrica = () => {
+  modalMetricaAberto.value = false
+  metricaSelecionada.value = null
+}
+
+const abrirModalSetorLocal = (tipo, items) => {
+  tipoModalSetorLocal.value = tipo
+  itemsModalSetorLocal.value = items
+  modalSetorLocalAberto.value = true
+}
+
+const fecharModalSetorLocal = () => {
+  modalSetorLocalAberto.value = false
+  tipoModalSetorLocal.value = null
+  itemsModalSetorLocal.value = []
+}
+
+const abrirLocaisDoSetor = ({ setor, locais }) => {
+  tipoModalSetorLocal.value = 'local'
+  itemsModalSetorLocal.value = locais
+  modalSetorLocalAberto.value = true
+}
+
+const abrirItensDoLocal = ({ local, itens }) => {
+  tituloModalItens.value = `Itens do Local: ${local}`
+  itensModal.value = itens
+  modalItensAberto.value = true
+}
+
+const fecharModalItens = () => {
+  modalItensAberto.value = false
+  itensModal.value = []
+  tituloModalItens.value = ''
+  filtroItens.value = ''
+  ordenacaoItens.value = { coluna: 'Código', direcao: 'asc' }
+}
+
+const itensModalFiltrados = computed(() => {
+  let filtrados = itensModal.value || []
+  
+  // Aplicar filtro de busca
+  if (filtroItens.value) {
+    const busca = filtroItens.value.toLowerCase()
+    filtrados = filtrados.filter(item => 
+      String(item['Código'] || '').toLowerCase().includes(busca) ||
+      String(item['Produto'] || '').toLowerCase().includes(busca)
+    )
+  }
+  
+  // Aplicar ordenação
+  filtrados = [...filtrados].sort((a, b) => {
+    const coluna = ordenacaoItens.value.coluna
+    let valorA = a[coluna] || ''
+    let valorB = b[coluna] || ''
+    
+    // Tratamento especial para colunas numéricas
+    if (coluna === 'Estoque atual') {
+      valorA = a._estoque !== undefined ? a._estoque : extrairEstoque(a)
+      valorB = b._estoque !== undefined ? b._estoque : extrairEstoque(b)
+    } else if (coluna === 'Dias sem venda') {
+      valorA = parseInt(valorA) || 0
+      valorB = parseInt(valorB) || 0
+    }
+    
+    if (typeof valorA === 'number' && typeof valorB === 'number') {
+      return ordenacaoItens.value.direcao === 'asc' 
+        ? valorA - valorB
+        : valorB - valorA
+    }
+    
+    return ordenacaoItens.value.direcao === 'asc'
+      ? String(valorA).localeCompare(String(valorB))
+      : String(valorB).localeCompare(String(valorA))
+  })
+  
+  return filtrados
+})
+
+const abrirModalRelatorio = () => {
+  modalRelatorioAberto.value = true
+}
+
+const fecharModalRelatorio = () => {
+  modalRelatorioAberto.value = false
 }
 </script>
 
@@ -306,9 +692,20 @@ const iconeAba = (tab) => {
             <i class="fas fa-tasks mr-2"></i>Total: {{ auditoria.analise?.totalItens || 0 }} itens
           </p>
         </div>
-        <div class="text-right">
-          <div class="text-5xl font-bold">{{ 100 - (auditoria.analise?.parcialPercentual || 0) }}%</div>
-          <p class="text-blue-100">Conclusão</p>
+        <div class="text-right flex items-center gap-6">
+          <div>
+            <div class="text-5xl font-bold">{{ (auditoria.analise?.percentualConclusao || 0).toFixed(2) }}%</div>
+            <p class="text-blue-100">Conclusão</p>
+            <p class="text-blue-200 text-sm mt-1">
+              Pendente: {{ (auditoria.analise?.parcialPercentual || 0).toFixed(2) }}%
+            </p>
+          </div>
+          <button
+            @click="abrirModalRelatorio"
+            class="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition font-medium shadow-lg"
+          >
+            <i class="fas fa-file-alt mr-2"></i>Relatório
+          </button>
         </div>
       </div>
     </div>
@@ -319,15 +716,15 @@ const iconeAba = (tab) => {
         <button
           v-for="tab in abas"
           :key="tab"
-          @click="abaAtiva = tab.toLowerCase()"
+          @click="abaAtiva = tab"
           :class="[
             'px-6 py-4 font-medium transition border-b-2',
-            abaAtiva === tab.toLowerCase()
+            abaAtiva === tab
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-gray-600 hover:text-gray-800'
           ]"
         >
-          <i :class="iconeAba(tab)" class="mr-2"></i>{{ tab }}
+          <i :class="iconeAba(tab)" class="mr-2"></i>{{ abasDisplay[tab] }}
         </button>
       </div>
     </div>
@@ -336,7 +733,7 @@ const iconeAba = (tab) => {
     <div class="max-w-7xl mx-auto p-6">
       <!-- DASHBOARD -->
       <div v-if="abaAtiva === 'dashboard'" class="space-y-8">
-        <!-- Upload se não houver dados -->
+        <!-- Upload se não houver dados OU botão para substituir -->
         <div v-if="!auditoria.dados || auditoria.dados.length === 0" class="bg-blue-50 border-2 border-blue-300 rounded-lg p-12">
           <div class="text-center">
             <i class="fas fa-cloud-upload-alt text-6xl text-blue-500 mb-6"></i>
@@ -349,28 +746,92 @@ const iconeAba = (tab) => {
           </div>
         </div>
 
+        <!-- Botão para substituir planilha se já houver dados -->
+        <div v-else class="mb-4 flex justify-end">
+          <button
+            @click="mostrarUploadSubstituir = true"
+            class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
+          >
+            <i class="fas fa-upload mr-2"></i>Carregar Nova Planilha (Substituir)
+          </button>
+        </div>
+
+        <!-- Modal para substituir planilha -->
+        <div 
+          v-if="mostrarUploadSubstituir"
+          class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          @click.stop="mostrarUploadSubstituir = false"
+        >
+          <div 
+            class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6"
+            @click.stop
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xl font-bold text-gray-800">Substituir Planilha</h3>
+              <button
+                @click="mostrarUploadSubstituir = false"
+                class="text-gray-500 hover:text-gray-700"
+              >
+                <i class="fas fa-times text-xl"></i>
+              </button>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Ao carregar uma nova planilha, os dados atuais serão substituídos completamente.
+            </p>
+            <UploadAnaliseAuditoria 
+              :auditoria="auditoria"
+              @analiseCompleta="handleUploadCompleto"
+            />
+            <div class="mt-4 flex justify-end">
+              <button
+                @click="mostrarUploadSubstituir = false"
+                class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Métricas Gerais -->
         <template v-else>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-blue-500">
-              <p class="text-gray-600 text-sm font-medium">Total de Itens</p>
+            <div 
+              @click="abrirModalMetrica('total')"
+              class="bg-white rounded-lg p-6 shadow border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition"
+            >
+              <p class="text-gray-600 text-sm font-medium">Total Auditável</p>
               <p class="text-4xl font-bold text-blue-600 mt-2">{{ metricasGerais?.totalItens }}</p>
-              <p class="text-xs text-gray-500 mt-1">Auditoria completa</p>
+              <p class="text-xs text-gray-500 mt-1">Itens para auditar</p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-green-500">
-              <p class="text-gray-600 text-sm font-medium">Itens Lidos</p>
-              <p class="text-4xl font-bold text-green-600 mt-2">{{ metricasGerais?.lidos }}</p>
-              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.velocidadeLeitura }}% de conclusão</p>
+            <div 
+              @click="abrirModalMetrica('lidos')"
+              class="bg-white rounded-lg p-6 shadow border-l-4 border-green-500 cursor-pointer hover:shadow-lg transition"
+            >
+              <p class="text-gray-600 text-sm font-medium">✅ Total Lidos</p>
+              <p class="text-4xl font-bold text-green-600 mt-2">{{ metricasGerais?.totalLidos }}</p>
+              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído</p>
+              <p class="text-xs text-gray-400 mt-1">Meta: {{ metricasGerais?.metaConclusao }}%</p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-orange-500">
-              <p class="text-gray-600 text-sm font-medium">Pendentes</p>
+            <div 
+              @click="abrirModalMetrica('pendentes')"
+              class="bg-white rounded-lg p-6 shadow border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition"
+            >
+              <p class="text-gray-600 text-sm font-medium">⏳ Pendentes</p>
               <p class="text-4xl font-bold text-orange-600 mt-2">{{ metricasGerais?.pendentes }}</p>
-              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.pendentes > 0 ? '⚠️ Ação necessária' : '✅ Completo' }}</p>
+              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.percentualPendente?.toFixed(2) }}% pendente</p>
+              <p class="text-xs" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-red-600'">
+                Meta: {{ metricasGerais?.metaPendente }}% 
+                <span v-if="metricasGerais?.faltaParaMeta > 0">(+{{ metricasGerais?.faltaParaMeta.toFixed(2) }}%)</span>
+              </p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-red-500">
-              <p class="text-gray-600 text-sm font-medium">Alertas</p>
-              <p class="text-4xl font-bold text-red-600 mt-2">{{ metricasGerais?.setoresParados + metricasGerais?.locaisCriticos }}</p>
-              <p class="text-xs text-gray-500 mt-1">Setores + Locais parados</p>
+            <div 
+              @click="abrirModalMetrica('problema')"
+              class="bg-white rounded-lg p-6 shadow border-l-4 border-red-500 cursor-pointer hover:shadow-lg transition"
+            >
+              <p class="text-gray-600 text-sm font-medium">⚠️ Com Problema</p>
+              <p class="text-4xl font-bold text-red-600 mt-2">{{ metricasGerais?.comProblema }}</p>
+              <p class="text-xs text-gray-500 mt-1">Requer atenção</p>
             </div>
           </div>
 
@@ -378,19 +839,46 @@ const iconeAba = (tab) => {
           <div class="bg-white rounded-lg p-6 shadow">
             <h3 class="font-bold text-lg text-gray-800 mb-4">Progresso Geral da Auditoria</h3>
             <div class="space-y-3">
-              <div class="flex justify-between text-sm">
-                <span class="text-gray-700 font-medium">Conclusão</span>
-                <span class="font-bold text-blue-600">{{ metricasGerais?.velocidadeLeitura }}%</span>
+              <div class="space-y-4">
+                <!-- Conclusão -->
+                <div>
+                  <div class="flex justify-between text-sm mb-2">
+                    <span class="text-gray-700 font-medium">Concluído (Lidos + Problemas)</span>
+                    <span class="font-bold text-green-600">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}%</span>
+                  </div>
+                  <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      :style="{ width: Math.min(metricasGerais?.percentualConclusao || 0, 100) + '%' }"
+                      class="h-full bg-linear-to-r from-green-500 to-green-600 transition-all duration-500"
+                    />
+                  </div>
+                  <p class="text-xs text-gray-600 mt-1">
+                    {{ metricasGerais?.totalLidos }} de {{ metricasGerais?.totalItens }} itens lidos | Meta: {{ metricasGerais?.metaConclusao }}%
+                  </p>
+                </div>
+                
+                <!-- Pendente -->
+                <div>
+                  <div class="flex justify-between text-sm mb-2">
+                    <span class="text-gray-700 font-medium">Pendente</span>
+                    <span class="font-bold" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                      {{ metricasGerais?.percentualPendente?.toFixed(2) }}%
+                    </span>
+                  </div>
+                  <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      :style="{ width: Math.min(metricasGerais?.percentualPendente || 0, 100) + '%' }"
+                      class="h-full bg-linear-to-r from-orange-500 to-orange-600 transition-all duration-500"
+                    />
+                  </div>
+                  <p class="text-xs mt-1" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                    {{ metricasGerais?.pendentes }} itens pendentes | Meta: {{ metricasGerais?.metaPendente }}%
+                    <span v-if="metricasGerais?.faltaParaMeta > 0" class="font-bold">
+                      (Faltam {{ metricasGerais?.faltaParaMeta.toFixed(2) }}% para meta)
+                    </span>
+                  </p>
+                </div>
               </div>
-              <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
-                <div 
-                  :style="{ width: metricasGerais?.velocidadeLeitura + '%' }"
-                  class="h-full bg-linear-to-r from-blue-500 to-blue-600 transition-all duration-500"
-                />
-              </div>
-              <p class="text-xs text-gray-600 mt-2">
-                {{ metricasGerais?.lidos }} de {{ metricasGerais?.totalItens }} itens lidos
-              </p>
             </div>
           </div>
 
@@ -454,10 +942,10 @@ const iconeAba = (tab) => {
             <thead class="bg-gray-100 border-b">
               <tr>
                 <th class="px-6 py-4 text-left font-semibold text-gray-700">Usuário</th>
-                <th class="px-6 py-4 text-right font-semibold text-gray-700">Lidos</th>
-                <th class="px-6 py-4 text-right font-semibold text-gray-700">Pendentes</th>
-                <th class="px-6 py-4 text-right font-semibold text-gray-700">Total</th>
-                <th class="px-6 py-4 text-right font-semibold text-gray-700">Percentual</th>
+                <th class="px-6 py-4 text-right font-semibold text-gray-700">Lidos Corretamente</th>
+                <th class="px-6 py-4 text-right font-semibold text-gray-700">Com Problema</th>
+                <th class="px-6 py-4 text-right font-semibold text-gray-700">Total Lidos</th>
+                <th class="px-6 py-4 text-right font-semibold text-gray-700">Total Auditável</th>
                 <th class="px-6 py-4 text-center font-semibold text-gray-700">Performance</th>
               </tr>
             </thead>
@@ -465,23 +953,11 @@ const iconeAba = (tab) => {
               <tr v-for="usuario in usuariosOrdenados" :key="usuario.nome" class="hover:bg-blue-50 transition">
                 <td class="px-6 py-4 font-medium text-gray-800">{{ usuario.nome }}</td>
                 <td class="px-6 py-4 text-right text-green-600 font-semibold">{{ usuario.lidos }}</td>
-                <td class="px-6 py-4 text-right text-orange-600 font-semibold">{{ usuario.pendentes }}</td>
+                <td class="px-6 py-4 text-right text-red-600 font-semibold">{{ usuario.comProblema || 0 }}</td>
+                <td class="px-6 py-4 text-right text-blue-600 font-semibold">{{ usuario.totalLidos }}</td>
                 <td class="px-6 py-4 text-right text-gray-600 font-semibold">{{ usuario.total }}</td>
-                <td class="px-6 py-4 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        :style="{ width: usuario.percentual + '%' }"
-                        class="h-full bg-blue-500"
-                      />
-                    </div>
-                    <span class="text-sm font-bold text-blue-600">{{ usuario.percentual }}%</span>
-                  </div>
-                </td>
                 <td class="px-6 py-4 text-center">
-                  <span v-if="usuario.percentual >= 80" class="text-lg">⭐⭐⭐</span>
-                  <span v-else-if="usuario.percentual >= 60" class="text-lg">⭐⭐</span>
-                  <span v-else class="text-lg">⭐</span>
+                  <span :class="usuario.performanceClass" class="text-lg font-bold">{{ usuario.performance }}</span>
                 </td>
               </tr>
             </tbody>
@@ -500,7 +976,8 @@ const iconeAba = (tab) => {
             <div 
               v-for="(setor, nome) in mapaSeteores"
               :key="nome"
-              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition border-l-4"
+              @click="abrirModalSetorLocal('setor', [setor])"
+              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition border-l-4 cursor-pointer"
               :class="setor.percentualConclusao >= 75 ? 'border-green-500' : setor.percentualConclusao >= 50 ? 'border-yellow-500' : 'border-red-500'"
             >
               <div class="flex items-start justify-between mb-4">
@@ -563,11 +1040,14 @@ const iconeAba = (tab) => {
               </thead>
               <tbody class="divide-y">
                 <tr v-for="(item, i) in itensPorFornecedor" :key="i" class="hover:bg-blue-50">
-                  <td class="px-4 py-3 text-gray-800">{{ item['Produto'] || '-' }}</td>
+                  <td class="px-4 py-3">
+                    <p class="font-bold text-gray-900">{{ item['Código'] || '-' }}</p>
+                    <p class="text-sm text-gray-600">{{ item['Produto'] || '-' }}</p>
+                  </td>
                   <td class="px-4 py-3 text-gray-600">{{ item['Setor'] || item['Classe de Produto Raiz'] || '-' }}</td>
-                  <td class="px-4 py-3 text-right font-semibold">{{ item['Estoque atual'] || '0' }}</td>
+                  <td class="px-4 py-3 text-right font-semibold">{{ item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || '0') }}</td>
                   <td class="px-4 py-3 text-center">
-                    <span v-if="item['Presença confirmada']" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">✓ Lido</span>
+                    <span v-if="item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">✓ Lido</span>
                     <span v-else class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">⏳ Pendente</span>
                   </td>
                 </tr>
@@ -578,46 +1058,53 @@ const iconeAba = (tab) => {
 
         <!-- Análises de Dados Críticos -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Itens Vendidos Hoje sem Leitura -->
+          <!-- Itens Lidos com Estoque Zero -->
           <div class="bg-white rounded-lg p-6 shadow">
             <h4 class="font-bold text-lg text-red-600 mb-4">
-              <i class="fas fa-shopping-cart mr-2"></i>Vendidos Hoje - Sem Leitura
+              <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ Lidos com Estoque Zero
             </h4>
-            <div v-if="itensVendidosOjeSemLeitura > 0" class="space-y-2">
-              <p class="text-3xl font-bold text-red-600">{{ itensVendidosOjeSemLeitura }}</p>
-              <p class="text-sm text-gray-600">⚠️ Produtos vendidos mas não foram lidos na auditoria</p>
+            <p class="text-3xl font-bold text-red-600 mb-3">{{ auditoria.analise?.itensComEstoqueZero || 0 }}</p>
+            <p class="text-sm text-gray-600 mb-4">Itens com presença confirmada mas sem estoque no sistema</p>
+            <div v-if="itensLidosEstoqueZero.length > 0" class="space-y-2 max-h-48 overflow-y-auto">
+              <div v-for="item in itensLidosEstoqueZero" :key="item.codigo" class="text-xs text-gray-700 bg-red-50 p-2 rounded">
+                <p class="font-bold text-red-800">Código: {{ item.codigo }}</p>
+                <p class="font-medium">{{ item.produto }}</p>
+                <p class="text-gray-600">Usuário: {{ item.usuario }} | Local: {{ item.local }}</p>
+              </div>
             </div>
             <div v-else class="text-green-600">
-              <p class="text-lg font-bold">✅ Nenhum item</p>
-              <p class="text-sm">Todos os itens vendidos foram lidos</p>
+              <p class="text-sm">✅ Nenhum item</p>
             </div>
           </div>
 
-          <!-- Itens Lidos com Estoque Zero -->
-          <div class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-orange-600 mb-4">
-              <i class="fas fa-exclamation-triangle mr-2"></i>Lidos com Estoque Zero
+          <!-- Itens Lido Não Pertence -->
+          <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white rounded-lg p-6 shadow">
+            <h4 class="font-bold text-lg text-yellow-600 mb-4">
+              <i class="fas fa-map-marker-alt mr-2"></i>⚠️ Lido no Local Errado
             </h4>
-            <p class="text-3xl font-bold text-orange-600 mb-3">{{ itensLidosEstoqueZero.length }}</p>
-            <p class="text-sm text-gray-600 mb-4">Itens confirmados mas sem estoque</p>
-            <div v-if="itensLidosEstoqueZero.length > 0" class="space-y-2">
-              <div v-for="item in itensLidosEstoqueZero" :key="item['Código']" class="text-xs text-gray-700 bg-orange-50 p-2 rounded">
-                {{ item['Produto'] }} - {{ item['Fornecedor'] }}
+            <p class="text-3xl font-bold text-yellow-600 mb-3">{{ auditoria.analise?.itensLidoNaoPertence || 0 }}</p>
+            <p class="text-sm text-gray-600 mb-4">Itens lidos mas no local incorreto</p>
+            <div v-if="itensLidoNaoPertence.length > 0" class="space-y-2 max-h-48 overflow-y-auto">
+              <div v-for="item in itensLidoNaoPertence.slice(0, 5)" :key="item.codigo" class="text-xs text-gray-700 bg-yellow-50 p-2 rounded">
+                <p class="font-bold text-yellow-800">Código: {{ item.codigo }}</p>
+                <p class="font-medium">{{ item.produto }}</p>
+                <p class="text-gray-600">Usuário: {{ item.usuario }} | Local: {{ item.local }}</p>
               </div>
             </div>
           </div>
 
           <!-- Grande Estoque não Lido -->
           <div class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-yellow-600 mb-4">
+            <h4 class="font-bold text-lg text-orange-600 mb-4">
               <i class="fas fa-boxes mr-2"></i>Grande Estoque Não Lido
             </h4>
-            <p class="text-3xl font-bold text-yellow-600 mb-3">{{ itensGrandeEstoqueNaoLidos.length }}</p>
-            <p class="text-sm text-gray-600 mb-4">Produtos com estoque > 100 itens não confirmados</p>
+            <p class="text-3xl font-bold text-orange-600 mb-3">{{ itensGrandeEstoqueNaoLidos.length }}</p>
+            <p class="text-sm text-gray-600 mb-4">Produtos com estoque > 100 itens ainda não confirmados</p>
             <div v-if="itensGrandeEstoqueNaoLidos.length > 0" class="space-y-2">
-              <div v-for="item in itensGrandeEstoqueNaoLidos" :key="item['Código']" class="text-xs text-gray-700 bg-yellow-50 p-2 rounded">
-                <span class="font-bold">{{ item['Produto'] }}</span> - 
-                <span class="text-yellow-700">{{ item['Estoque atual'] }} un</span>
+              <div v-for="item in itensGrandeEstoqueNaoLidos" :key="item['Código']" class="text-xs text-gray-700 bg-orange-50 p-2 rounded">
+                <p class="font-bold text-orange-800">Código: {{ item['Código'] }}</p>
+                <p class="font-medium">{{ item['Produto'] }}</p>
+                <p class="text-orange-700">Estoque: {{ item._estoque !== undefined ? item._estoque : extrairEstoque(item) }} un</p>
               </div>
             </div>
           </div>
@@ -631,8 +1118,9 @@ const iconeAba = (tab) => {
             <p class="text-sm text-gray-600 mb-4">Itens não confirmados há mais de 30 dias</p>
             <div v-if="itensMuitoTempoNaoLidos.length > 0" class="space-y-2">
               <div v-for="item in itensMuitoTempoNaoLidos" :key="item['Código']" class="text-xs text-gray-700 bg-red-50 p-2 rounded">
-                <span class="font-bold">{{ item['Produto'] }}</span> - 
-                <span class="text-red-700">{{ item['Dias sem venda'] }} dias</span>
+                <p class="font-bold text-red-800">Código: {{ item['Código'] }}</p>
+                <p class="font-medium">{{ item['Produto'] }}</p>
+                <p class="text-red-700">{{ item['Dias sem venda'] }} dias sem venda</p>
               </div>
             </div>
           </div>
@@ -647,14 +1135,17 @@ const iconeAba = (tab) => {
             <table class="w-full text-sm">
               <thead class="bg-blue-50 border-b">
                 <tr>
-                  <th class="px-4 py-2 text-left font-semibold text-gray-700">Produto</th>
+                  <th class="px-4 py-2 text-left font-semibold text-gray-700">Código / Produto</th>
                   <th class="px-4 py-2 text-right font-semibold text-gray-700">Custo</th>
                   <th class="px-4 py-2 text-left font-semibold text-gray-700">Fornecedor</th>
                 </tr>
               </thead>
               <tbody class="divide-y">
                 <tr v-for="item in itensRupturaMenorCusto" :key="item['Código']" class="hover:bg-blue-50">
-                  <td class="px-4 py-2 text-gray-800">{{ item['Produto'] }}</td>
+                  <td class="px-4 py-2">
+                    <p class="font-bold text-gray-900">{{ item['Código'] }}</p>
+                    <p class="text-sm text-gray-600">{{ item['Produto'] }}</p>
+                  </td>
                   <td class="px-4 py-2 text-right font-semibold text-blue-600">R$ {{ parseFloat(item['Custo Ruptura']).toFixed(2) }}</td>
                   <td class="px-4 py-2 text-gray-600">{{ item['Fornecedor'] }}</td>
                 </tr>
@@ -676,7 +1167,8 @@ const iconeAba = (tab) => {
             <div 
               v-for="setor in setoresComAnalise"
               :key="setor.nome"
-              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition"
+              @click="abrirModalSetorLocal('setor', [setor])"
+              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition cursor-pointer"
             >
               <div class="flex items-center justify-between mb-4">
                 <div>
@@ -685,33 +1177,37 @@ const iconeAba = (tab) => {
                 </div>
                 <div class="text-right">
                   <p class="text-3xl font-bold text-orange-600">{{ setor.pendentes }}</p>
-                  <p class="text-sm text-gray-600">não lidos</p>
+                  <p class="text-sm text-gray-600">pendentes</p>
+                  <p class="text-xs font-semibold mt-1" :class="setor.classificacaoClass">{{ setor.classificacao }}</p>
                 </div>
               </div>
               <div class="space-y-3">
                 <div>
                   <div class="flex justify-between text-sm mb-2">
-                    <span class="text-gray-700">Lidos</span>
-                    <span class="font-bold text-green-600">{{ setor.percentualLido }}%</span>
+                    <span class="text-gray-700">Concluído</span>
+                    <span class="font-bold text-green-600">{{ setor.percentualConclusao.toFixed(2) }}%</span>
                   </div>
                   <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
-                      :style="{ width: setor.percentualLido + '%' }"
+                      :style="{ width: Math.min(setor.percentualConclusao, 100) + '%' }"
                       class="h-full bg-green-500"
                     />
                   </div>
                 </div>
                 <div>
                   <div class="flex justify-between text-sm mb-2">
-                    <span class="text-gray-700">Não Lidos</span>
-                    <span class="font-bold text-orange-600">{{ setor.percentualPendente }}%</span>
+                    <span class="text-gray-700">Pendente</span>
+                    <span class="font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                      {{ setor.percentualPendente.toFixed(2) }}%
+                    </span>
                   </div>
                   <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
-                      :style="{ width: setor.percentualPendente + '%' }"
+                      :style="{ width: Math.min(setor.percentualPendente, 100) + '%' }"
                       class="h-full bg-orange-500"
                     />
                   </div>
+                  <p class="text-xs text-gray-500 mt-1">Meta: 3%</p>
                 </div>
               </div>
             </div>
@@ -720,30 +1216,387 @@ const iconeAba = (tab) => {
 
         <!-- Locais com Mais Itens para Ler -->
         <div>
-          <h2 class="text-2xl font-bold text-gray-800 mb-6">
-            <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais com Mais Itens para Ler
-          </h2>
-          <div class="space-y-3">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">
+              <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais com Mais Itens para Ler
+            </h2>
+            <!-- Toggle de Visualização -->
+            <div class="flex gap-2">
+              <button
+                @click="viewModeLocais = 'grid'"
+                :class="['px-4 py-2 rounded font-medium transition', viewModeLocais === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+              >
+                <i class="fas fa-th mr-2"></i>Grade
+              </button>
+              <button
+                @click="viewModeLocais = 'list'"
+                :class="['px-4 py-2 rounded font-medium transition', viewModeLocais === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
+              >
+                <i class="fas fa-list mr-2"></i>Lista
+              </button>
+            </div>
+          </div>
+          
+          <!-- Visualização em Grade -->
+          <div v-if="viewModeLocais === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div 
               v-for="(local, i) in locaisComAnalise"
               :key="local.nome"
-              class="bg-white rounded-lg p-6 shadow flex items-center justify-between hover:shadow-lg transition"
+              @click="abrirModalSetorLocal('local', [local])"
+              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition cursor-pointer border-l-4"
+              :class="local.percentualLido >= 75 ? 'border-green-500' : local.percentualLido >= 50 ? 'border-yellow-500' : 'border-red-500'"
             >
-              <div class="flex items-center gap-4 flex-1">
-                <div class="text-2xl font-bold text-gray-400 w-8 text-center">{{ i + 1 }}</div>
+              <div class="flex items-start justify-between mb-4">
                 <div class="flex-1">
-                  <h4 class="font-bold text-gray-800">{{ local.nome }}</h4>
-                  <p class="text-sm text-gray-600">
-                    {{ local.lidos }} lidos · {{ local.pendentes }} pendentes
-                  </p>
+                  <h4 class="font-bold text-lg text-gray-800">{{ local.nome }}</h4>
+                  <p class="text-sm text-gray-500 mt-1">Total: {{ local.total }} itens</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-3xl font-bold text-red-600">{{ local.pendentes }}</p>
+                  <p class="text-xs text-gray-600">pendentes</p>
                 </div>
               </div>
-              <div class="text-right">
-                <p class="text-2xl font-bold text-red-600">{{ local.pendentes }}</p>
-                <p class="text-xs text-gray-600">{{ local.percentualPendente }}%</p>
+              <div class="space-y-2">
+                <div class="flex justify-between text-sm">
+                  <span class="text-green-600 font-medium">✓ {{ local.lidos }} lidos</span>
+                  <span class="text-orange-600 font-medium">⏳ {{ local.pendentes }} pendentes</span>
+                </div>
+                <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    :style="{ width: local.percentualLido + '%' }"
+                    class="h-full bg-linear-to-r from-blue-500 to-green-500"
+                  />
+                </div>
+                  <p class="text-xs text-gray-600 text-center">{{ local.percentualLido.toFixed(2) }}% concluído</p>
               </div>
             </div>
           </div>
+          
+          <!-- Visualização em Lista -->
+          <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-100 border-b">
+                <tr>
+                  <th class="px-6 py-4 text-left font-semibold text-gray-700">#</th>
+                  <th class="px-6 py-4 text-left font-semibold text-gray-700">Local</th>
+                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Lidos</th>
+                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Pendentes</th>
+                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Problema</th>
+                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Total</th>
+                  <th class="px-6 py-4 text-right font-semibold text-gray-700">%</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                <tr 
+                  v-for="(local, i) in locaisComAnalise"
+                  :key="local.nome"
+                  @click="abrirModalSetorLocal('local', [local])"
+                  class="hover:bg-blue-50 transition cursor-pointer"
+                >
+                  <td class="px-6 py-4 text-center font-bold text-gray-400">{{ i + 1 }}</td>
+                  <td class="px-6 py-4 font-medium text-gray-800">{{ local.nome }}</td>
+                  <td class="px-6 py-4 text-right text-green-600 font-semibold">{{ local.lidos }}</td>
+                  <td class="px-6 py-4 text-right text-orange-600 font-semibold">{{ local.pendentes }}</td>
+                  <td class="px-6 py-4 text-right text-red-600 font-semibold">{{ local.comProblema || 0 }}</td>
+                  <td class="px-6 py-4 text-right font-semibold text-blue-600">{{ local.total }}</td>
+                  <td class="px-6 py-4 text-right font-bold text-blue-600">{{ local.percentualLido.toFixed(2) }}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div v-if="locaisComAnalise.length === 0" class="bg-white rounded-lg p-8 text-center text-gray-500">
+            <i class="fas fa-map-marker-alt text-4xl text-gray-300 mb-4"></i>
+            <p>Nenhum local encontrado com itens para ler</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ModalMetrica -->
+    <ModalMetrica 
+      :aberto="modalMetricaAberto"
+      :tipo="metricaSelecionada"
+      :dados="auditoria.analise"
+      @fechar="fecharModalMetrica"
+    />
+
+    <!-- ModalSetorLocal -->
+    <ModalSetorLocal 
+      :aberto="modalSetorLocalAberto"
+      :tipo="tipoModalSetorLocal"
+      :items="itemsModalSetorLocal"
+      :titulo="tipoModalSetorLocal ? (tipoModalSetorLocal === 'setor' ? 'Detalhes do Setor' : 'Locais do Setor') : ''"
+      :subtitulo="tipoModalSetorLocal && itemsModalSetorLocal.length > 0 ? (tipoModalSetorLocal === 'setor' ? itemsModalSetorLocal[0].nome : 'Clique em um local para ver os itens') : ''"
+      :dadosCompletos="auditoria.dados"
+      :analise="auditoria.analise"
+      @fechar="fecharModalSetorLocal"
+      @abrirLocais="abrirLocaisDoSetor"
+      @abrirItens="abrirItensDoLocal"
+    />
+
+    <!-- Modal Itens -->
+    <div 
+      v-if="modalItensAberto"
+      class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      @click.stop="fecharModalItens"
+    >
+      <div 
+        class="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+        @click.stop
+      >
+        <!-- Header -->
+        <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-bold">{{ tituloModalItens }}</h2>
+            <p class="text-blue-100 text-sm mt-1">{{ itensModal.length }} itens</p>
+          </div>
+          <button
+            @click="fecharModalItens"
+            class="text-white hover:opacity-80 transition"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <!-- Filtros e Ordenação -->
+        <div class="bg-gray-100 border-b px-4 py-3 flex gap-2 flex-wrap items-center">
+          <input
+            v-model="filtroItens"
+            type="text"
+            placeholder="🔍 Buscar por código, produto..."
+            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]"
+          />
+          <select
+            v-model="ordenacaoItens.coluna"
+            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="Código">Ordenar por Código</option>
+            <option value="Produto">Ordenar por Produto</option>
+            <option value="Estoque atual">Ordenar por Estoque</option>
+            <option value="Dias sem venda">Ordenar por Dias sem Venda</option>
+          </select>
+          <select
+            v-model="ordenacaoItens.direcao"
+            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="asc">Crescente</option>
+            <option value="desc">Decrescente</option>
+          </select>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-4">
+          <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100 border-b sticky top-0">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Código</th>
+                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Produto</th>
+                  <th class="px-4 py-3 text-right font-semibold text-gray-700">Estoque</th>
+                  <th class="px-4 py-3 text-right font-semibold text-gray-700">Dias sem Venda</th>
+                  <th class="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                <tr 
+                  v-for="(item, idx) in itensModalFiltrados" 
+                  :key="idx" 
+                  class="hover:bg-blue-50 transition"
+                >
+                  <td class="px-4 py-3 font-bold text-gray-900">{{ item['Código'] || '-' }}</td>
+                  <td class="px-4 py-3 text-gray-800">{{ item['Produto'] || '-' }}</td>
+                  <td class="px-4 py-3 text-right font-semibold">{{ item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || 0) }}</td>
+                  <td class="px-4 py-3 text-right text-gray-600">{{ item['Dias sem venda'] || 0 }}</td>
+                  <td class="px-4 py-3 text-center">
+                    <span 
+                      v-if="item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)" 
+                      class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded"
+                    >
+                      ✓ Lido
+                    </span>
+                    <span 
+                      v-else 
+                      class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded"
+                    >
+                      ⏳ Pendente
+                    </span>
+                  </td>
+                </tr>
+                <tr v-if="itensModalFiltrados.length === 0">
+                  <td colspan="5" class="px-4 py-6 text-center text-gray-500">Nenhum item encontrado</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 px-4 py-2 flex justify-between items-center">
+          <p class="text-sm text-gray-600">Mostrando {{ itensModalFiltrados.length }} de {{ itensModal.length }} itens</p>
+          <button
+            @click="fecharModalItens"
+            class="px-4 py-2 rounded-lg bg-gray-300 text-gray-800 hover:bg-gray-400 transition font-medium"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Relatório -->
+    <div 
+      v-if="modalRelatorioAberto"
+      class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      @click.stop="fecharModalRelatorio"
+    >
+      <div 
+        class="bg-white rounded-lg shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col print:max-w-full print:shadow-none"
+        @click.stop
+        style="max-height: 95vh;"
+      >
+        <!-- Header -->
+        <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between print:bg-blue-800">
+          <div>
+            <h2 class="text-xl font-bold">Relatório de Auditoria</h2>
+            <p class="text-blue-100 text-sm">{{ auditoria.tipo }} - {{ auditoria.data }}</p>
+          </div>
+          <button
+            @click="fecharModalRelatorio"
+            class="text-white hover:opacity-80 transition print:hidden"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <!-- Content - Compacto para Print -->
+        <div class="overflow-y-auto p-4 space-y-3 text-sm">
+          <!-- Resultado Geral com Destaque para % Pendente -->
+          <div class="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4 border-l-4 border-orange-600">
+            <div class="grid grid-cols-4 gap-3 mb-3">
+              <div>
+                <p class="text-xs text-gray-600">Total Auditável</p>
+                <p class="text-lg font-bold text-blue-600">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-600">Total Lidos</p>
+                <p class="text-lg font-bold text-green-600">{{ dadosRelatorio?.resultadoGeral.totalLidos }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-600">Pendentes</p>
+                <p class="text-lg font-bold text-orange-600">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
+              </div>
+              <div class="bg-white rounded p-2 border-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-500' : 'border-orange-500'">
+                <p class="text-xs font-bold text-gray-700">% PENDENTE</p>
+                <p class="text-2xl font-bold" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                  {{ dadosRelatorio?.resultadoGeral.percentualPendente.toFixed(2) }}%
+                </p>
+                <p class="text-xs" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                  Meta: 3%
+                </p>
+              </div>
+            </div>
+            <div class="bg-white rounded p-2 text-xs">
+              <p class="font-semibold text-gray-800">
+                <span v-if="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0" class="text-red-600">
+                  ⚠️ Faltam {{ dadosRelatorio?.resultadoGeral.faltaParaMeta.toFixed(2) }}% ({{ dadosRelatorio?.resultadoGeral.itensFaltam }} itens) para meta
+                </span>
+                <span v-else class="text-green-600 font-bold">
+                  ✅ Meta atingida!
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Setores - Tabela Compacta -->
+          <div>
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Análise por Setor</h3>
+            <div class="bg-white rounded border overflow-hidden">
+              <table class="w-full text-xs">
+                <thead class="bg-gray-100 border-b">
+                  <tr>
+                    <th class="px-2 py-2 text-left font-semibold text-gray-700">Setor</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">Qtd</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">% Conc</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">% Pend</th>
+                    <th class="px-2 py-2 text-center font-semibold text-gray-700">Classif</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  <tr v-for="setor in dadosRelatorio?.setores" :key="setor.nome" class="hover:bg-blue-50">
+                    <td class="px-2 py-2 font-medium text-gray-800 text-xs">{{ setor.nome }}</td>
+                    <td class="px-2 py-2 text-right font-semibold">{{ setor.total }}</td>
+                    <td class="px-2 py-2 text-right text-green-600">{{ setor.percentualConclusao.toFixed(2) }}%</td>
+                    <td class="px-2 py-2 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                      {{ setor.percentualPendente.toFixed(2) }}%
+                    </td>
+                    <td class="px-2 py-2 text-center">
+                      <span class="px-2 py-0.5 rounded text-xs font-semibold" :class="setor.classificacaoClass + ' bg-opacity-20'">
+                        {{ setor.classificacao }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Top 20 Locais - Tabela Compacta -->
+          <div>
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Top 20 Locais com Mais Pendentes</h3>
+            <div class="bg-white rounded border overflow-hidden">
+              <table class="w-full text-xs">
+                <thead class="bg-gray-100 border-b">
+                  <tr>
+                    <th class="px-2 py-2 text-center font-semibold text-gray-700">#</th>
+                    <th class="px-2 py-2 text-left font-semibold text-gray-700">Local</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">Pend</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">Total</th>
+                    <th class="px-2 py-2 text-right font-semibold text-gray-700">% Pend</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y">
+                  <tr v-for="(local, i) in dadosRelatorio?.topLocaisPendentes" :key="local.nome" class="hover:bg-orange-50">
+                    <td class="px-2 py-2 text-center font-bold text-gray-400">{{ i + 1 }}</td>
+                    <td class="px-2 py-2 font-medium text-gray-800">{{ local.nome }}</td>
+                    <td class="px-2 py-2 text-right font-semibold text-orange-600">{{ local.pendentes }}</td>
+                    <td class="px-2 py-2 text-right text-gray-600">{{ local.total }}</td>
+                    <td class="px-2 py-2 text-right font-bold text-orange-600">{{ local.percentualPendente.toFixed(2) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Locais Sem Leitura -->
+          <div v-if="dadosRelatorio?.locaisSemLeitura.length > 0" class="bg-red-50 border-l-4 border-red-500 rounded p-2">
+            <h3 class="text-xs font-bold text-gray-800 mb-2">Locais Sem Leitura</h3>
+            <div class="flex flex-wrap gap-1">
+              <span 
+                v-for="local in dadosRelatorio.locaisSemLeitura" 
+                :key="local"
+                class="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs"
+              >
+                {{ local }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 px-4 py-2 flex justify-end gap-2 print:hidden">
+          <button
+            @click="window.print()"
+            class="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium"
+          >
+            <i class="fas fa-print mr-1"></i>Imprimir
+          </button>
+          <button
+            @click="fecharModalRelatorio"
+            class="px-3 py-1.5 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 transition text-sm font-medium"
+          >
+            Fechar
+          </button>
         </div>
       </div>
     </div>
