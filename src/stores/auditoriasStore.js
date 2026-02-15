@@ -172,6 +172,51 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return false
   }
 
+  const normalizarTexto = (valor) => {
+    if (valor === undefined || valor === null) return ''
+    return String(valor).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  }
+
+  const getLidoNaoPertence = (item) => {
+    if (!item) return false
+    let valor = undefined
+    if (Object.prototype.hasOwnProperty.call(item, 'Lido não pertence')) {
+      valor = item['Lido não pertence']
+    } else if (Object.prototype.hasOwnProperty.call(item, 'Lido nao pertence')) {
+      valor = item['Lido nao pertence']
+    } else {
+      const key = Object.keys(item).find(k => {
+        const n = normalizarTexto(k)
+        return n.includes('lido') && n.includes('pertence')
+      })
+      if (key) valor = item[key]
+    }
+    // Se não existe coluna específica, tentar inferir pela Situação
+    if (valor === undefined || valor === null) {
+      const camposSituacao = ['Situação', 'Situação atual da auditoria']
+      for (const campo of camposSituacao) {
+        if (Object.prototype.hasOwnProperty.call(item, campo)) {
+          const texto = normalizarTexto(item[campo])
+          if (texto && texto.includes('lido') && texto.includes('pertence')) {
+            valor = texto
+            break
+          }
+        }
+      }
+    }
+    if (valor === undefined || valor === null) return false
+    if (valor === true) return true
+    if (typeof valor === 'number') return valor > 0
+    if (typeof valor === 'string') {
+      const texto = normalizarTexto(valor)
+      if (!texto) return false
+      if (texto.includes('lido') && texto.includes('pertence')) return true
+      if (texto.includes('sim')) return true
+      return false
+    }
+    return false
+  }
+
   const processarExcelPresenca = async (file) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
@@ -204,18 +249,20 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           // Normalizar dados usando as novas funções
           const temPresenca = temPresencaConfirmada(item)
           const estoque = extrairEstoque(item)
+          const lidoNaoPertence = getLidoNaoPertence(item)
           
           return {
             ...item,
             _temPresenca: temPresenca,
             _estoque: estoque,
-            _situacao: item['Situação'] || item['Situação atual da auditoria'] || ''
+            _situacao: item['Situação'] || item['Situação atual da auditoria'] || '',
+            _lidoNaoPertence: lidoNaoPertence
           }
         })
         .filter(item => {
           // Filtrar itens não auditáveis: sem presença E sem estoque
           // Itens auditáveis são: (sem presença + com estoque) OU (com presença + qualquer coisa)
-          if (!item._temPresenca && item._estoque === 0) {
+          if (!item._temPresenca && !item._lidoNaoPertence && item._estoque === 0) {
             return false
           }
           return true
@@ -279,31 +326,24 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       
       // Verificar "Lido não pertence" - pode não existir na planilha
       // Pode estar em diferentes formatos ou inferido da situação
-      let lidoNaoPertence = false
+      const lidoNaoPertence = item._lidoNaoPertence !== undefined
+        ? item._lidoNaoPertence
+        : getLidoNaoPertence(item)
       
-      // Verifica coluna explícita se existir
-      if (item['Lido não pertence'] !== undefined) {
-        const valor = item['Lido não pertence']
-        lidoNaoPertence = valor === 'Sim' || 
-                         valor === true ||
-                         valor === 'SIM' ||
-                         (typeof valor === 'string' && 
-                          valor.toLowerCase().includes('sim'))
-      }
-      
-      // Se não encontrou na coluna, pode inferir de outras colunas ou situação
-      // (por enquanto mantém false, pode ser expandido depois)
-      
+      // Se "Lido não pertence" é verdadeiro, assumimos que o item TEM presença,
+      // mesmo que as outras colunas digam que não.
+      const efetivamenteTemPresenca = temPresenca || lidoNaoPertence
+
       // Categorizar o item (cada item cai em apenas UMA categoria)
       let itemProblema = false
       
-      if (temPresenca && estoque > 0 && !lidoNaoPertence) {
+      if (efetivamenteTemPresenca && estoque > 0 && !lidoNaoPertence) {
         // ✅ Lido Corretamente: tem presença + tem estoque + não está no local errado
         analise.itensLidosCorretamente++
-      } else if (!temPresenca && estoque > 0) {
+      } else if (!efetivamenteTemPresenca && estoque > 0) {
         // ⏳ Pendente (não lido): sem presença mas tem estoque
         analise.itensPendentes++
-      } else if (temPresenca && (estoque === 0 || lidoNaoPertence)) {
+      } else if (efetivamenteTemPresenca && (estoque === 0 || lidoNaoPertence)) {
         // ⚠️ Lido com Problema: tem presença mas (sem estoque OU no local errado)
         analise.itensLidosComProblema++
         itemProblema = true
@@ -342,7 +382,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           analise.usuarios.push(usuario)
         }
         
-        if (temPresenca) {
+      if (efetivamenteTemPresenca) {
           analise.porUsuario[usuario].lidos++
           if (itemProblema) {
             analise.porUsuario[usuario].comProblema++
@@ -361,7 +401,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           comProblema: 0
         }
       }
-      if (temPresenca) {
+      if (efetivamenteTemPresenca) {
         analise.porSetor[setor].lidos++
         if (itemProblema) {
           analise.porSetor[setor].comProblema++
@@ -379,7 +419,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           comProblema: 0
         }
       }
-      if (temPresenca) {
+      if (efetivamenteTemPresenca) {
         analise.porLocal[local].lidos++
         if (itemProblema) {
           analise.porLocal[local].comProblema++
@@ -427,15 +467,16 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       data: auditoria.data,
       tipo: auditoria.tipo,
       sku: auditoria.sku,
-      status: auditoria.status || 'em_andamento', // 'em_andamento' ou 'fechada'
+      status: auditoria.status || 'em_andamento',
       dados: auditoria.dados || [],
       analise: auditoria.analise || null,
       parcial: auditoria.parcial || 0,
       total: auditoria.total || 0,
-      status: 'em_andamento'
+      metaAlcancada: auditoria.analise
+        ? (auditoria.analise.parcialPercentual || 0) <= 3.0
+        : false
     }
     auditorias.value.push(novaAuditoria)
-    addToast(`Auditoria ${auditoria.tipo} criada com sucesso!`, 'success')
     return novaAuditoria
   }
 
@@ -443,6 +484,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const auditoria = auditorias.value.find(a => a.id === id)
     if (auditoria) {
       Object.assign(auditoria, dados)
+      if (dados.analise) {
+        auditoria.metaAlcancada = (dados.analise.parcialPercentual || 0) <= 3.0
+      }
     }
   }
 

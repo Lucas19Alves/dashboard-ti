@@ -1,12 +1,12 @@
 <template>
   <div 
     v-if="aberto"
-    class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+    class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
     @click.stop="fechar"
   >
     <!-- Modal Content -->
     <div 
-      class="bg-white rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+      class="bg-white rounded-lg shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col"
       @click.stop
     >
       <!-- Header -->
@@ -156,6 +156,19 @@ const filtroBusca = ref('')
 const ordenacao = ref({ coluna: 'nome', direcao: 'desc' })
 const viewMode = ref('list')
 
+const normalize = (valor) => {
+  if (valor == null) return ''
+  try {
+    return String(valor)
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+  } catch {
+    return String(valor).trim().toLowerCase()
+  }
+}
+
 const nomeColuna = computed(() => {
   return props.tipo === 'setor' ? 'Setor' : 'Local'
 })
@@ -224,20 +237,26 @@ const limparFiltros = () => {
   ordenacao.value = { coluna: 'nome', direcao: 'desc' }
 }
 
+// Guarda o setor atualmente em foco (quando abrindo locais de um setor)
+const setorAtual = ref(null)
+
 const abrirLocaisDoSetor = (setor) => {
   if (!props.analise || !props.analise.porLocal) return
   
   // Buscar locais que pertencem a este setor
   const locaisDoSetor = []
   const setorNome = setor.nome
+  const setorNorm = normalize(setorNome)
+  setorAtual.value = setorNome
   
   if (props.dadosCompletos) {
     const locaisEncontrados = {}
     
     props.dadosCompletos.forEach(item => {
-      const itemSetor = item['Classe de Produto Raiz'] || 'Não especificado'
-      if (itemSetor === setorNome) {
-        const localNome = item['Local'] || 'Não especificado'
+      const itemSetorRaw = item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado'
+      const itemSetorNorm = normalize(itemSetorRaw)
+      if (itemSetorNorm === setorNorm) {
+        const localNome = (item['Local'] || 'Não especificado').trim()
         if (!locaisEncontrados[localNome]) {
           locaisEncontrados[localNome] = {
             nome: localNome,
@@ -248,8 +267,8 @@ const abrirLocaisDoSetor = (setor) => {
           }
         }
         
-        const temPresenca = item._temPresenca || false
-        const estoque = item._estoque || 0
+        const temPresenca = !!(item._temPresenca)
+        const estoque = Number(item._estoque || 0)
         
         if (temPresenca && estoque > 0) {
           locaisEncontrados[localNome].lidos++
@@ -276,12 +295,19 @@ const abrirLocaisDoSetor = (setor) => {
 }
 
 const abrirItensDoLocal = (local) => {
-  if (!props.dadosCompletos) return
+  let itensDoLocal = Array.isArray(local.itens) ? local.itens : []
   
-  const itensDoLocal = props.dadosCompletos.filter(item => {
-    const itemLocal = item['Local'] || 'Não especificado'
-    return itemLocal === local.nome
-  })
+  if ((!itensDoLocal || itensDoLocal.length === 0) && props.dadosCompletos) {
+    itensDoLocal = props.dadosCompletos.filter(item => {
+      const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
+      if (itemLocal !== local.nome) return false
+      if (setorAtual.value) {
+        const itemSetorRaw = item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado'
+        return normalize(itemSetorRaw) === normalize(setorAtual.value)
+      }
+      return true
+    })
+  }
   
   emit('abrirItens', {
     local: local.nome,

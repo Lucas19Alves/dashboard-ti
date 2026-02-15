@@ -8,8 +8,13 @@
       </h3>
 
       <div class="space-y-4" @click.stop>
-        <!-- File Input with Better Design -->
-        <div class="relative" @click.stop>
+        <div 
+          class="relative"
+          @dragover.prevent="onDragOver"
+          @dragleave.prevent="onDragLeave"
+          @drop.prevent="onDrop"
+          @click.stop
+        >
           <input 
             type="file"
             id="fileInput"
@@ -20,28 +25,50 @@
           <label 
             for="fileInput"
             @click.stop
-            class="block p-8 border-2 border-dashed border-blue-400 rounded-lg text-center cursor-pointer hover:bg-blue-50 hover:border-blue-600 transition-all"
+            :class="[
+              'block p-8 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all',
+              arrastando ? 'bg-blue-50 border-blue-600' : 'border-blue-400 hover:bg-blue-50 hover:border-blue-600'
+            ]"
           >
             <div class="flex flex-col items-center gap-3" @click.stop>
               <i class="fas fa-cloud-upload-alt text-5xl text-blue-400"></i>
               <div>
-                <p class="text-lg font-medium text-gray-700">Clique ou arraste um arquivo</p>
-                <p class="text-sm text-gray-500 mt-1">.xlsx, .xls ou .csv</p>
+                <p class="text-lg font-medium text-gray-700">
+                  Clique para selecionar ou arraste o arquivo aqui
+                </p>
+                <p class="text-sm text-gray-500 mt-1">
+                  Aceita .xlsx, .xls, .csv
+                </p>
               </div>
             </div>
           </label>
+          <p class="mt-2 text-xs text-gray-500">
+            Arquivo máximo recomendado: 20MB. Apenas um arquivo por vez.
+          </p>
+          <div v-if="erroUpload" class="mt-2 text-sm text-red-600">
+            {{ erroUpload }}
+          </div>
         </div>
 
-        <!-- File Status -->
-        <div v-if="nomeArquivo" class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3" @click.stop>
+        <div 
+          v-if="nomeArquivo" 
+          class="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3" 
+          @click.stop
+        >
           <i class="fas fa-check-circle text-green-600 text-xl"></i>
           <div>
             <p class="font-medium text-green-800">Arquivo selecionado</p>
             <p class="text-sm text-green-700">{{ nomeArquivo }}</p>
           </div>
           <button
+            @click.stop="abrirSeletor"
+            class="ml-auto px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-700 transition text-sm"
+          >
+            Trocar arquivo
+          </button>
+          <button
             @click.stop="nomeArquivo = null; arquivoSelecionado = null"
-            class="ml-auto text-green-600 hover:text-green-800"
+            class="text-green-600 hover:text-green-800"
           >
             <i class="fas fa-times"></i>
           </button>
@@ -216,15 +243,63 @@ const processando = ref(false)
 const analise = ref(null)
 const modalAberto = ref(false)
 const tipoMetricaSelecionada = ref(null)
+const arrastando = ref(false)
+const erroUpload = ref('')
 
 const handleFileChange = (event) => {
   event.stopPropagation()
   const files = event.target.files
   if (files && files.length > 0) {
-    arquivoSelecionado.value = files[0]
-    nomeArquivo.value = files[0].name
-    console.log('✅ Arquivo selecionado:', files[0].name)
+    const file = files[0]
+    if (!validarArquivo(file)) {
+      return
+    }
+    arquivoSelecionado.value = file
+    nomeArquivo.value = file.name
+    erroUpload.value = ''
+    console.log('✅ Arquivo selecionado:', file.name)
   }
+}
+
+const abrirSeletor = () => {
+  const input = document.getElementById('fileInput')
+  if (input) input.click()
+}
+
+const validarArquivo = (file) => {
+  erroUpload.value = ''
+  const permitido = ['.xlsx', '.xls', '.csv']
+  const nome = file.name.toLowerCase()
+  const okExt = permitido.some(ext => nome.endsWith(ext))
+  if (!okExt) {
+    erroUpload.value = 'Tipo de arquivo inválido. Use .xlsx, .xls ou .csv.'
+    return false
+  }
+  const max = 20 * 1024 * 1024
+  if (file.size > max) {
+    erroUpload.value = 'Arquivo muito grande. Tamanho máximo recomendado: 20MB.'
+    return false
+  }
+  return true
+}
+
+const onDragOver = () => {
+  arrastando.value = true
+}
+
+const onDragLeave = () => {
+  arrastando.value = false
+}
+
+const onDrop = (e) => {
+  arrastando.value = false
+  const dt = e.dataTransfer
+  if (!dt || !dt.files || dt.files.length === 0) return
+  const file = dt.files[0]
+  if (!validarArquivo(file)) return
+  arquivoSelecionado.value = file
+  nomeArquivo.value = file.name
+  erroUpload.value = ''
 }
 
 const processar = async () => {
