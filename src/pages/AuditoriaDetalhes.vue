@@ -1,10 +1,107 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
+import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
+
+const normalizar = (valor) => {
+  if (valor == null) return ''
+  try {
+    return String(valor).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  } catch {
+    return String(valor).toLowerCase()
+  }
+}
+
+// Column Definitions
+const colunasSetor = [
+  { chave: 'nome', titulo: 'Setor', sortable: true },
+  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
+  { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right', classeCell: 'text-green-600 font-medium' },
+  { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right', classeCell: 'text-orange-600 font-medium' },
+  { chave: 'percentualConclusao', titulo: 'Conclusão', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%' },
+  { chave: 'classificacao', titulo: 'Classificação', sortable: true, alinhamento: 'center' }
+]
+
+const colunasLocal = [
+  { chave: 'nome', titulo: 'Local', sortable: true },
+  { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right', classeCell: 'text-green-600' },
+  { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right', classeCell: 'text-orange-600' },
+  { chave: 'comProblema', titulo: 'Problema', sortable: true, alinhamento: 'right', classeCell: 'text-red-600' },
+  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right', classeCell: 'text-blue-600' },
+  { chave: 'percentualLido', titulo: '% Lido', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%', classeCell: 'font-bold' }
+]
+
+const colunasModal = [
+  { chave: 'Código', titulo: 'Código', sortable: true, classeCell: 'font-bold' },
+  { chave: 'Produto', titulo: 'Produto', sortable: true },
+  { chave: 'Local', titulo: 'Local', sortable: true, classeHeader: 'hidden pdf-only', classeCell: 'hidden pdf-only' },
+  { chave: 'Estoque atual', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
+  { chave: 'Dias sem venda', titulo: 'Dias sem Venda', sortable: true, alinhamento: 'right' },
+  { chave: 'status', titulo: 'Status', sortable: true, alinhamento: 'center' }
+]
+
+const colunasUsuario = [
+  { chave: 'nome', titulo: 'Usuário', sortable: true },
+  { chave: 'lidos', titulo: 'Lidos Corretamente', sortable: true, alinhamento: 'right', classeCell: 'text-green-600 font-semibold' },
+  { chave: 'comProblema', titulo: 'Com Problema', sortable: true, alinhamento: 'right', classeCell: 'text-red-600 font-semibold' },
+  { chave: 'totalLidos', titulo: 'Total Lidos', sortable: true, alinhamento: 'right', classeCell: 'text-blue-600 font-semibold' },
+  { chave: 'acoes', titulo: 'Detalhes', sortable: false, alinhamento: 'center' }
+]
+
+const colunasRuptura = [
+  { chave: 'produto', titulo: 'Código / Produto', sortable: true },
+  { chave: 'custo', titulo: 'Custo', sortable: true, alinhamento: 'right', format: (v) => 'R$ ' + parseFloat(v).toFixed(2) },
+  { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true }
+]
+
+const colunasFornecedor = [
+  { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'setor', titulo: 'Setor', sortable: true },
+  { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
+  { chave: 'status', titulo: 'Status', sortable: true, alinhamento: 'center' }
+]
+
+const colunasEstoqueZero = [
+  { chave: 'codigo', titulo: 'Código', sortable: true },
+  { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'local', titulo: 'Local', sortable: true },
+  { chave: 'usuario', titulo: 'Usuário', sortable: true }
+]
+
+const colunasLocalErrado = [
+  { chave: 'codigo', titulo: 'Código', sortable: true },
+  { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'local', titulo: 'Local', sortable: true },
+  { chave: 'usuario', titulo: 'Usuário', sortable: true }
+]
+
+const colunasGrandeEstoque = [
+  { chave: 'codigo', titulo: 'Código', sortable: true },
+  { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' }
+]
+
+const colunasMuitoTempo = [
+  { chave: 'codigo', titulo: 'Código', sortable: true },
+  { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'dias', titulo: 'Dias sem venda', sortable: true, alinhamento: 'right' }
+]
+
+const colunasDados = [
+    { chave: 'Código', titulo: 'Código', sortable: true },
+    { chave: 'Produto', titulo: 'Produto', sortable: true },
+    { chave: 'Classe de Produto Raiz', titulo: 'Setor', sortable: true },
+    { chave: 'Local', titulo: 'Local', sortable: true },
+    { chave: 'Usuário', titulo: 'Usuário', sortable: true },
+    { chave: 'Presença confirmada', titulo: 'Presença', sortable: true },
+    { chave: 'Estoque Atual', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
+    { chave: 'Dias sem Venda', titulo: 'Dias sem Venda', sortable: true, alinhamento: 'right' }
+]
+
 
 const router = useRouter()
 const route = useRoute()
@@ -37,6 +134,7 @@ const itensModal = ref([])
 const tituloModalItens = ref('')
 const printAreaItens = ref(null)
 const printAreaRelatorio = ref(null)
+const exibirTudoPDFItens = ref(false)
 
 const abas = ['dashboard', 'usuarios', 'dados', 'estatisticas']
 const abasDisplay = { dashboard: 'Dashboard', usuarios: 'Usuários', dados: 'Dados', estatisticas: 'Estatísticas' }
@@ -90,18 +188,30 @@ const handleUploadCompleto = ({ dados, analise }) => {
 const metricasGerais = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
-  const comProblema = (a.itensComEstoqueZero || 0) + (a.itensLidoNaoPertence || 0)
-  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
-  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
+  const atualizados = a.itensAtualizados || 0
+  let desatualizados = a.itensDesatualizados || 0
+  if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
+    const dadosArr = auditoria.value.dados
+    const soma = dadosArr.reduce((acc, item) => {
+      const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+      return acc + (s.includes('desatualizad') ? 1 : 0)
+    }, 0)
+    if (soma > 0) desatualizados = soma
+  }
+  const comProblema = (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0)
+  const totalLidos = (a.totalLidos != null) ? a.totalLidos : (atualizados + desatualizados + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao ?? (totalAuditaveis > 0 ? (totalLidos / totalAuditaveis) * 100 : 0)
-  const percentualPendente = a.parcialPercentual ?? (totalAuditaveis > 0 ? (a.itensPendentes / totalAuditaveis) * 100 : 0)
+  const percentualPendente = a.parcialPercentual ?? (totalAuditaveis > 0 ? ((a.itensPendentes || 0) / totalAuditaveis) * 100 : 0)
   
   return {
-    totalItens: a.totalItens, // Total de itens auditáveis (SKU)
+    totalItens: totalAuditaveis,
     lidosCorretamente: a.itensLidosCorretamente,
     pendentes: a.itensPendentes,
     comProblema: comProblema,
-    totalLidos: totalLidos, // Total lidos (corretos + problemas)
+    totalLidos: totalLidos,
+    atualizados,
+    desatualizados,
     percentualConclusao: percentualConclusao, // % concluído (exato)
     percentualPendente: percentualPendente, // % pendente (exato)
     metaConclusao: 97.0, // Meta de conclusão
@@ -118,8 +228,8 @@ const insights = computed(() => {
   const insights = []
   const a = auditoria.value.analise
   const dados = auditoria.value.dados
-  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
-  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao || 0
   const percentualPendente = a.parcialPercentual || 0
 
@@ -300,8 +410,8 @@ const horasEntre = (inicio, fim) => {
 const projecoes = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
-  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
-  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
 
   const agora = new Date()
   const ini = parseHoraHoje(horarioInicio.value)
@@ -450,7 +560,7 @@ const improvementInsights = computed(() => {
   // 2. Análise de Problemas
   const a = auditoria.value?.analise
   if (a) {
-    const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
+    const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
     if (totalLidos > 0) {
       const percProblema = (a.itensLidosComProblema / totalLidos) * 100
       if (percProblema > 5) {
@@ -542,12 +652,10 @@ const historicoResumo = computed(() => {
 })
 
 // =========== USUÁRIOS ===========
-const usuariosOrdenados = computed(() => {
+const dadosUsuarios = computed(() => {
   if (!auditoria.value?.analise) return []
   const analise = auditoria.value.analise
-  const lista = analise.usuarios
-    .filter(u => u.toLowerCase().includes(filtroUsuario.value.toLowerCase()))
-    .map(u => {
+  return analise.usuarios.map(u => {
       const lidos = analise.porUsuario[u]?.lidos || 0
       const comProblema = analise.porUsuario[u]?.comProblema || 0
       const pendentes = analise.porUsuario[u]?.pendentes || 0
@@ -586,41 +694,7 @@ const usuariosOrdenados = computed(() => {
         score
       }
     })
-
-  const coluna = ordenacaoUsuarios.value.coluna
-  const direcao = ordenacaoUsuarios.value.direcao === 'asc' ? 1 : -1
-
-  return lista.sort((a, b) => {
-    if (coluna === 'nome') {
-      return a.nome.localeCompare(b.nome) * direcao
-    }
-    if (coluna === 'lidos') {
-      return (a.lidos - b.lidos) * direcao
-    }
-    if (coluna === 'comProblema') {
-      return (a.comProblema - b.comProblema) * direcao
-    }
-    if (coluna === 'totalLidos') {
-      return (a.totalLidos - b.totalLidos) * direcao
-    }
-    if (coluna === 'total') {
-      return (a.total - b.total) * direcao
-    }
-    if (coluna === 'performance') {
-      return (a.score - b.score) * direcao
-    }
-    return 0
-  })
 })
-
-const ordenarUsuarios = (coluna) => {
-  if (ordenacaoUsuarios.value.coluna === coluna) {
-    ordenacaoUsuarios.value.direcao = ordenacaoUsuarios.value.direcao === 'asc' ? 'desc' : 'asc'
-  } else {
-    ordenacaoUsuarios.value.coluna = coluna
-    ordenacaoUsuarios.value.direcao = coluna === 'nome' ? 'asc' : 'desc'
-  }
-}
 
 const analiseUsuarios = computed(() => {
   if (!auditoria.value?.analise) return null
@@ -842,6 +916,8 @@ const itensLidoNaoPertence = computed(() => {
 
 const handlePrintPDFItens = async () => {
   try {
+    exibirTudoPDFItens.value = true
+    await nextTick()
     const area = printAreaItens.value
     if (!area) return
     const html2pdf = (await import('html2pdf.js')).default
@@ -869,6 +945,9 @@ const handlePrintPDFItens = async () => {
     area.classList.remove('pdf-sanitize')
   } catch (e) {
     console.error('Falha ao gerar PDF:', e)
+  }
+  finally {
+    exibirTudoPDFItens.value = false
   }
 }
 
@@ -972,7 +1051,7 @@ const itensVendidosOjeSemLeitura = computed(() => {
 
 const itensLidosEstoqueZero = computed(() => {
   if (!auditoria.value?.analise) return []
-  return (auditoria.value.analise.itensComEstoqueZeroDetalhes || []).slice(0, 5)
+  return (auditoria.value.analise.itensComEstoqueZeroDetalhes || [])
 })
 
 const itensGrandeEstoqueNaoLidos = computed(() => {
@@ -987,7 +1066,6 @@ const itensGrandeEstoqueNaoLidos = computed(() => {
       const estoqueB = b._estoque !== undefined ? b._estoque : extrairEstoque(b)
       return estoqueB - estoqueA
     })
-    .slice(0, 5)
 })
 
 const itensMuitoTempoNaoLidos = computed(() => {
@@ -1002,7 +1080,22 @@ const itensMuitoTempoNaoLidos = computed(() => {
       const diasB = parseInt(b['Dias sem venda']) || 0
       return diasB - diasA
     })
-    .slice(0, 5)
+})
+
+const itensGrandeEstoqueFormatados = computed(() => {
+  return itensGrandeEstoqueNaoLidos.value.map(item => ({
+    codigo: item['Código'],
+    produto: item['Produto'],
+    estoque: item._estoque !== undefined ? item._estoque : extrairEstoque(item)
+  }))
+})
+
+const itensMuitoTempoFormatados = computed(() => {
+  return itensMuitoTempoNaoLidos.value.map(item => ({
+    codigo: item['Código'],
+    produto: item['Produto'],
+    dias: parseInt(item['Dias sem venda']) || 0
+  }))
 })
 
 const isSemPresencaSemEstoque = (item) => {
@@ -1029,10 +1122,9 @@ const itensRupturaMenorCusto = computed(() => {
   if (!auditoria.value?.dados) return []
   return auditoria.value.dados.filter(item => {
     const custo = parseFloat(item['Custo Ruptura']) || 0
-    return custo > 0 && custo < 50
+    return custo > 0 && custo <= 50
   })
     .sort((a, b) => parseFloat(a['Custo Ruptura']) - parseFloat(b['Custo Ruptura']))
-    .slice(0, 5)
 })
 
 const fornecedoresUnicos = computed(() => {
@@ -1061,6 +1153,15 @@ const setoresComAnalise = computed(() => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
       const comProblema = dados.comProblema || 0
+      let desatualizados = dados.desatualizados || 0
+      if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
+        const soma = (auditoria.value.dados || []).reduce((acc, item) => {
+          const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+          const set = String(item['Classe de Produto Raiz'] || 'Não especificado').trim()
+          return acc + ((set === setor && s.includes('desatualizad')) ? 1 : 0)
+        }, 0)
+        if (soma > 0) desatualizados = soma
+      }
       const totalLidos = lidos + comProblema // Total lidos (corretos + problemas)
       const total = lidos + pendentes + comProblema
       const percentualPendente = total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0
@@ -1088,6 +1189,7 @@ const setoresComAnalise = computed(() => {
         lidos: lidos,
         pendentes: pendentes,
         comProblema: comProblema,
+        desatualizados: desatualizados,
         totalLidos: totalLidos,
         total: total,
         percentualPendente: percentualPendente,
@@ -1140,8 +1242,8 @@ const dadosRelatorio = computed(() => {
   if (!auditoria.value?.analise) return null
   
   const a = auditoria.value.analise
-  const totalLidos = a.itensLidosCorretamente + a.itensLidosComProblema
-  const totalAuditaveis = a.itensLidosCorretamente + a.itensPendentes + a.itensLidosComProblema
+  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao || 0
   const percentualPendente = a.parcialPercentual || 0
   
@@ -1165,6 +1267,10 @@ const dadosRelatorio = computed(() => {
       totalAuditaveis: totalAuditaveis,
       totalLidos: totalLidos,
       pendentes: a.itensPendentes,
+      desatualizados: (a.itensDesatualizados || (Array.isArray(auditoria.value?.dados) ? auditoria.value.dados.reduce((acc, item) => {
+        const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+        return acc + (s.includes('desatualizad') ? 1 : 0)
+      }, 0) : 0)),
       percentualConclusao: percentualConclusao,
       percentualPendente: percentualPendente,
       metaConclusao: 97.0,
@@ -1255,6 +1361,7 @@ const abrirLocaisDoSetor = ({ setor, locais }) => {
 }
 
 const abrirItensDoLocal = ({ local, itens }) => {
+  fecharModalSetorLocal()
   tituloModalItens.value = `Itens do Local: ${local}`
   itensModal.value = itens
   modalItensAberto.value = true
@@ -1269,7 +1376,7 @@ const fecharModalItens = () => {
   ordenacaoItens.value = { coluna: 'Código', direcao: 'asc' }
 }
 
-const itensModalFiltrados = computed(() => {
+const itensModalFormatados = computed(() => {
   let filtrados = itensModal.value || []
   
   // Remover completamente itens "Sem estoque"
@@ -1285,61 +1392,69 @@ const itensModalFiltrados = computed(() => {
     })
   }
   
-  // Aplicar filtro de busca
-  if (filtroItens.value) {
-    const busca = filtroItens.value.toLowerCase()
-    filtrados = filtrados.filter(item => 
-      String(item['Código'] || '').toLowerCase().includes(busca) ||
-      String(item['Produto'] || '').toLowerCase().includes(busca)
-    )
-  }
-  
-  // Aplicar ordenação
-  filtrados = [...filtrados].sort((a, b) => {
-    const coluna = ordenacaoItens.value.coluna
-    let valorA = a[coluna] || ''
-    let valorB = b[coluna] || ''
-    
-    // Tratamento especial para colunas numéricas
-    if (coluna === 'Estoque atual') {
-      valorA = a._estoque !== undefined ? a._estoque : extrairEstoque(a)
-      valorB = b._estoque !== undefined ? b._estoque : extrairEstoque(b)
-    } else if (coluna === 'Dias sem venda') {
-      valorA = parseInt(valorA) || 0
-      valorB = parseInt(valorB) || 0
-    }
-    
-    if (typeof valorA === 'number' && typeof valorB === 'number') {
-      return ordenacaoItens.value.direcao === 'asc' 
-        ? valorA - valorB
-        : valorB - valorA
-    }
-    
-    return ordenacaoItens.value.direcao === 'asc'
-      ? String(valorA).localeCompare(String(valorB))
-      : String(valorB).localeCompare(String(valorA))
+  return filtrados.map(item => {
+      const estoque = item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || 0)
+      const diasSemVenda = item['Dias sem venda'] || 0
+      const statusObj = getStatusItem(item)
+      const lido = (item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false))
+
+      return {
+          ...item,
+          'Estoque atual': estoque,
+          'Dias sem venda': diasSemVenda,
+          'status': statusObj.texto,
+          'statusClass': statusObj.classe,
+          'lido': lido
+      }
   })
-  
-  return filtrados
 })
 
-const abrirModalRelatorio = () => {
+const itensRupturaFormatados = computed(() => {
+  return itensRupturaMenorCusto.value.map(item => ({
+    produto: item['Produto'],
+    codigo: item['Código'],
+    custo: parseFloat(item['Custo Ruptura']),
+    fornecedor: item['Fornecedor']
+  }))
+})
+
+const itensFornecedorFormatados = computed(() => {
+  return itensPorFornecedor.value.map(item => {
+    const lido = item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)
+    return {
+        ...item,
+        produto: item['Produto'],
+        codigo: item['Código'],
+        setor: item['Setor'] || item['Classe de Produto Raiz'],
+        estoque: item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || '0'),
+        lido: lido,
+        statusTexto: lido ? '✓ Lido' : '⏳ Pendente',
+        statusClass: lido ? 'text-xs bg-green-100 text-green-800 px-2 py-1 rounded' : 'text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded'
+    }
+  })
+})
+
+const abrirRelatorio = () => {
   modalRelatorioAberto.value = true
 }
 
-const fecharModalRelatorio = () => {
+const fecharRelatorio = () => {
   modalRelatorioAberto.value = false
 }
 </script>
 
 <template>
-  <div v-if="auditoria" class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+  <div v-if="auditoria" class="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
     <!-- Header -->
     <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-6 shadow-lg">
       <div class="max-w-7xl mx-auto flex items-center justify-between">
         <div>
-          <button @click="voltar" class="mb-3 flex items-center gap-2 hover:opacity-80 transition text-blue-100">
-            <i class="fas fa-arrow-left"></i> Voltar
+          <button 
+            @click="voltar" 
+            class="mb-3 px-3 py-1.5 flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition text-white text-sm font-medium backdrop-blur-sm"
+          >
+            <i class="fas fa-arrow-left"></i> 
+            <span>Voltar</span>
           </button>
           <h1 class="text-4xl font-bold">{{ auditoria.tipo }}</h1>
           <p class="text-blue-100 mt-2">
@@ -1361,7 +1476,7 @@ const fecharModalRelatorio = () => {
         <div class="text-right flex flex-col items-end gap-3">
           <div class="flex items-center gap-3">
             <button
-              @click="abrirModalRelatorio"
+              @click="abrirRelatorio"
               class="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition font-medium shadow-lg"
             >
               <i class="fas fa-file-alt mr-2"></i>Relatório
@@ -1504,6 +1619,19 @@ const fecharModalRelatorio = () => {
               <p class="text-gray-600 text-sm font-medium">⚠️ Com Problema</p>
               <p class="text-4xl font-bold text-red-600 mt-2">{{ metricasGerais?.comProblema }}</p>
               <p class="text-xs text-gray-500 mt-1">Requer atenção</p>
+            </div>
+          </div>
+
+          <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mt-4">
+            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-emerald-500">
+              <p class="text-gray-600 text-sm font-medium">✅ Atualizado</p>
+              <p class="text-4xl font-bold text-emerald-600 mt-2">{{ metricasGerais?.atualizados || 0 }}</p>
+              <p class="text-xs text-gray-500 mt-1">Lidos e corretos</p>
+            </div>
+            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-yellow-500">
+              <p class="text-gray-600 text-sm font-medium">🛠️ Desatualizado</p>
+              <p class="text-4xl font-bold text-yellow-600 mt-2">{{ metricasGerais?.desatualizados || 0 }}</p>
+              <p class="text-xs text-gray-500 mt-1">Lidos mas desatualizados</p>
             </div>
           </div>
 
@@ -1703,86 +1831,22 @@ const fecharModalRelatorio = () => {
           </div>
         </div>
 
-        <!-- Filtro -->
-        <div>
-          <input 
-            v-model="filtroUsuario"
-            type="text"
-            placeholder="🔍 Filtrar por nome..."
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <!-- Tabela de Usuários Ordenada -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-          <table class="w-full">
-            <thead class="bg-gray-100 border-b">
-              <tr>
-                <th
-                  class="px-6 py-4 text-left font-semibold text-gray-700 cursor-pointer select-none"
-                  @click="ordenarUsuarios('nome')"
-                >
-                  Usuário
-                  <i
-                    v-if="ordenacaoUsuarios.coluna === 'nome'"
-                    :class="ordenacaoUsuarios.direcao === 'asc' ? 'fas fa-arrow-up ml-1 text-xs' : 'fas fa-arrow-down ml-1 text-xs'"
-                  />
-                </th>
-                <th
-                  class="px-6 py-4 text-right font-semibold text-gray-700 cursor-pointer select-none"
-                  @click="ordenarUsuarios('lidos')"
-                >
-                  Lidos Corretamente
-                  <i
-                    v-if="ordenacaoUsuarios.coluna === 'lidos'"
-                    :class="ordenacaoUsuarios.direcao === 'asc' ? 'fas fa-arrow-up ml-1 text-xs' : 'fas fa-arrow-down ml-1 text-xs'"
-                  />
-                </th>
-                <th
-                  class="px-6 py-4 text-right font-semibold text-gray-700 cursor-pointer select-none"
-                  @click="ordenarUsuarios('comProblema')"
-                >
-                  Com Problema
-                  <i
-                    v-if="ordenacaoUsuarios.coluna === 'comProblema'"
-                    :class="ordenacaoUsuarios.direcao === 'asc' ? 'fas fa-arrow-up ml-1 text-xs' : 'fas fa-arrow-down ml-1 text-xs'"
-                  />
-                </th>
-                <th
-                  class="px-6 py-4 text-right font-semibold text-gray-700 cursor-pointer select-none"
-                  @click="ordenarUsuarios('totalLidos')"
-                >
-                  Total Lidos
-                  <i
-                    v-if="ordenacaoUsuarios.coluna === 'totalLidos'"
-                    :class="ordenacaoUsuarios.direcao === 'asc' ? 'fas fa-arrow-up ml-1 text-xs' : 'fas fa-arrow-down ml-1 text-xs'"
-                  />
-                </th>
-                <th
-                  class="px-6 py-4 text-center font-semibold text-gray-700"
-                >
-                  Detalhes
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y">
-              <tr v-for="usuario in usuariosOrdenados" :key="usuario.nome" class="hover:bg-blue-50 transition">
-                <td class="px-6 py-4 font-medium text-gray-800">{{ usuario.nome }}</td>
-                <td class="px-6 py-4 text-right text-green-600 font-semibold">{{ usuario.lidos }}</td>
-                <td class="px-6 py-4 text-right text-red-600 font-semibold">{{ usuario.comProblema || 0 }}</td>
-                <td class="px-6 py-4 text-right text-blue-600 font-semibold">{{ usuario.totalLidos }}</td>
-                <td class="px-6 py-4 text-center">
-                  <button
-                    class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition"
-                    @click="abrirModalUsuario(usuario.nome)"
-                  >
-                    Ver detalhes
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <!-- Tabela de Usuários -->
+        <TabelaInterativaAuditoria
+          :dados="dadosUsuarios"
+          :colunas="colunasUsuario"
+          :itensPorPagina="10"
+          :mostrarBusca="true"
+        >
+          <template #cell-acoes="{ item }">
+            <button
+              class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition"
+              @click="abrirModalUsuario(item.nome)"
+            >
+              Ver detalhes
+            </button>
+          </template>
+        </TabelaInterativaAuditoria>
 
         
       </div>
@@ -1850,31 +1914,21 @@ const fecharModalRelatorio = () => {
           </select>
 
           <!-- Itens do Fornecedor Selecionado -->
-          <div v-if="filtroFornecedor && itensPorFornecedor.length > 0" class="mt-6 bg-white rounded-lg shadow overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100 border-b">
-                <tr>
-                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Produto</th>
-                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Setor</th>
-                  <th class="px-4 py-3 text-right font-semibold text-gray-700">Estoque</th>
-                  <th class="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr v-for="(item, i) in itensPorFornecedor" :key="i" class="hover:bg-blue-50">
-                  <td class="px-4 py-3">
-                    <p class="font-bold text-gray-900">{{ item['Código'] || '-' }}</p>
-                    <p class="text-sm text-gray-600">{{ item['Produto'] || '-' }}</p>
-                  </td>
-                  <td class="px-4 py-3 text-gray-600">{{ item['Setor'] || item['Classe de Produto Raiz'] || '-' }}</td>
-                  <td class="px-4 py-3 text-right font-semibold">{{ item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || '0') }}</td>
-                  <td class="px-4 py-3 text-center">
-                    <span v-if="item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)" class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">✓ Lido</span>
-                    <span v-else class="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">⏳ Pendente</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-if="filtroFornecedor && itensFornecedorFormatados.length > 0" class="mt-6">
+            <TabelaInterativaAuditoria
+              :dados="itensFornecedorFormatados"
+              :colunas="colunasFornecedor"
+              :itensPorPagina="10"
+              :mostrarBusca="true"
+            >
+              <template #cell-produto="{ item }">
+                <p class="font-bold text-gray-900">{{ item.codigo || '-' }}</p>
+                <p class="text-sm text-gray-600">{{ item.produto || '-' }}</p>
+              </template>
+              <template #cell-status="{ item }">
+                <span :class="item.statusClass">{{ item.statusTexto }}</span>
+              </template>
+            </TabelaInterativaAuditoria>
           </div>
         </div>
 
@@ -1887,13 +1941,19 @@ const fecharModalRelatorio = () => {
             </h4>
             <p class="text-3xl font-bold text-red-600 mb-3">{{ auditoria.analise?.itensComEstoqueZero || 0 }}</p>
             <p class="text-sm text-gray-600 mb-4">Itens com presença confirmada mas sem estoque no sistema</p>
-            <div v-if="itensLidosEstoqueZero.length > 0" class="space-y-2 max-h-48 overflow-y-auto">
-              <div v-for="item in itensLidosEstoqueZero" :key="item.codigo" class="text-xs text-gray-700 bg-red-50 p-2 rounded">
-                <p class="font-bold text-red-800">Código: {{ item.codigo }}</p>
-                <p class="font-medium">{{ item.produto }}</p>
-                <p class="text-gray-600">Usuário: {{ item.usuario }} | Local: {{ item.local }}</p>
-              </div>
-            </div>
+            <TabelaInterativaAuditoria
+              v-if="itensLidosEstoqueZero.length > 0"
+              :dados="itensLidosEstoqueZero"
+              :colunas="colunasEstoqueZero"
+              :itensPorPagina="5"
+              :mostrarBusca="false"
+              rowClass="bg-red-50 hover:bg-red-100"
+            >
+              <template #cell-produto="{ item }">
+                <p class="font-bold text-red-800">{{ item.codigo }}</p>
+                <p class="font-medium text-red-900">{{ item.produto }}</p>
+              </template>
+            </TabelaInterativaAuditoria>
             <div v-else class="text-green-600">
               <p class="text-sm">✅ Nenhum item</p>
             </div>
@@ -1906,13 +1966,18 @@ const fecharModalRelatorio = () => {
             </h4>
             <p class="text-3xl font-bold text-yellow-600 mb-3">{{ auditoria.analise?.itensLidoNaoPertence || 0 }}</p>
             <p class="text-sm text-gray-600 mb-4">Itens lidos mas no local incorreto</p>
-            <div v-if="itensLidoNaoPertence.length > 0" class="space-y-2 max-h-48 overflow-y-auto">
-              <div v-for="item in itensLidoNaoPertence.slice(0, 5)" :key="item.codigo" class="text-xs text-gray-700 bg-yellow-50 p-2 rounded">
-                <p class="font-bold text-yellow-800">Código: {{ item.codigo }}</p>
-                <p class="font-medium">{{ item.produto }}</p>
-                <p class="text-gray-600">Usuário: {{ item.usuario }} | Local: {{ item.local }}</p>
-              </div>
-            </div>
+            <TabelaInterativaAuditoria
+              :dados="itensLidoNaoPertence"
+              :colunas="colunasLocalErrado"
+              :itensPorPagina="5"
+              :mostrarBusca="false"
+              rowClass="bg-yellow-50 hover:bg-yellow-100"
+            >
+              <template #cell-produto="{ item }">
+                <p class="font-bold text-yellow-800">{{ item.codigo }}</p>
+                <p class="font-medium text-yellow-900">{{ item.produto }}</p>
+              </template>
+            </TabelaInterativaAuditoria>
           </div>
 
           <!-- Grande Estoque não Lido -->
@@ -1922,13 +1987,19 @@ const fecharModalRelatorio = () => {
             </h4>
             <p class="text-3xl font-bold text-orange-600 mb-3">{{ itensGrandeEstoqueNaoLidos.length }}</p>
             <p class="text-sm text-gray-600 mb-4">Produtos com estoque > 100 itens ainda não confirmados</p>
-            <div v-if="itensGrandeEstoqueNaoLidos.length > 0" class="space-y-2">
-              <div v-for="item in itensGrandeEstoqueNaoLidos" :key="item['Código']" class="text-xs text-gray-700 bg-orange-50 p-2 rounded">
-                <p class="font-bold text-orange-800">Código: {{ item['Código'] }}</p>
-                <p class="font-medium">{{ item['Produto'] }}</p>
-                <p class="text-orange-700">Estoque: {{ item._estoque !== undefined ? item._estoque : extrairEstoque(item) }} un</p>
-              </div>
-            </div>
+            <TabelaInterativaAuditoria
+              v-if="itensGrandeEstoqueFormatados.length > 0"
+              :dados="itensGrandeEstoqueFormatados"
+              :colunas="colunasGrandeEstoque"
+              :itensPorPagina="5"
+              :mostrarBusca="false"
+              rowClass="bg-orange-50 hover:bg-orange-100"
+            >
+              <template #cell-produto="{ item }">
+                <p class="font-bold text-orange-800">{{ item.codigo }}</p>
+                <p class="font-medium text-orange-900">{{ item.produto }}</p>
+              </template>
+            </TabelaInterativaAuditoria>
           </div>
 
           <!-- Muito Tempo sem Leitura -->
@@ -1938,13 +2009,22 @@ const fecharModalRelatorio = () => {
             </h4>
             <p class="text-3xl font-bold text-red-600 mb-3">{{ itensMuitoTempoNaoLidos.length }}</p>
             <p class="text-sm text-gray-600 mb-4">Itens não confirmados há mais de 30 dias</p>
-            <div v-if="itensMuitoTempoNaoLidos.length > 0" class="space-y-2">
-              <div v-for="item in itensMuitoTempoNaoLidos" :key="item['Código']" class="text-xs text-gray-700 bg-red-50 p-2 rounded">
-                <p class="font-bold text-red-800">Código: {{ item['Código'] }}</p>
-                <p class="font-medium">{{ item['Produto'] }}</p>
-                <p class="text-red-700">{{ item['Dias sem venda'] }} dias sem venda</p>
-              </div>
-            </div>
+            <TabelaInterativaAuditoria
+              v-if="itensMuitoTempoFormatados.length > 0"
+              :dados="itensMuitoTempoFormatados"
+              :colunas="colunasMuitoTempo"
+              :itensPorPagina="5"
+              :mostrarBusca="false"
+              rowClass="bg-red-50 hover:bg-red-100"
+            >
+              <template #cell-produto="{ item }">
+                <p class="font-bold text-red-800">{{ item.codigo }}</p>
+                <p class="font-medium text-red-900">{{ item.produto }}</p>
+              </template>
+              <template #cell-dias="{ item }">
+                <span class="text-red-700 font-bold">{{ item.dias }} dias</span>
+              </template>
+            </TabelaInterativaAuditoria>
           </div>
         </div>
 
@@ -1953,27 +2033,18 @@ const fecharModalRelatorio = () => {
           <h4 class="font-bold text-lg text-blue-600 mb-4">
             <i class="fas fa-coins mr-2"></i>Itens de Ruptura - Menor Custo
           </h4>
-          <div v-if="itensRupturaMenorCusto.length > 0" class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-blue-50 border-b">
-                <tr>
-                  <th class="px-4 py-2 text-left font-semibold text-gray-700">Código / Produto</th>
-                  <th class="px-4 py-2 text-right font-semibold text-gray-700">Custo</th>
-                  <th class="px-4 py-2 text-left font-semibold text-gray-700">Fornecedor</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr v-for="item in itensRupturaMenorCusto" :key="item['Código']" class="hover:bg-blue-50">
-                  <td class="px-4 py-2">
-                    <p class="font-bold text-gray-900">{{ item['Código'] }}</p>
-                    <p class="text-sm text-gray-600">{{ item['Produto'] }}</p>
-                  </td>
-                  <td class="px-4 py-2 text-right font-semibold text-blue-600">R$ {{ parseFloat(item['Custo Ruptura']).toFixed(2) }}</td>
-                  <td class="px-4 py-2 text-gray-600">{{ item['Fornecedor'] }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <TabelaInterativaAuditoria
+            v-if="itensRupturaFormatados.length > 0"
+            :dados="itensRupturaFormatados"
+            :colunas="colunasRuptura"
+            :itensPorPagina="5"
+            :mostrarBusca="false"
+          >
+             <template #cell-produto="{ item }">
+                <p class="font-bold text-gray-900">{{ item.codigo }}</p>
+                <p class="text-sm text-gray-600">{{ item.produto }}</p>
+             </template>
+          </TabelaInterativaAuditoria>
           <div v-else class="text-gray-600">Nenhum item com custo de ruptura encontrado</div>
         </div>
       </div>
@@ -1985,152 +2056,56 @@ const fecharModalRelatorio = () => {
           <h2 class="text-2xl font-bold text-gray-800 mb-6">
             <i class="fas fa-chart-pie text-blue-600 mr-2"></i>Parcial por Setor
           </h2>
-          <div class="space-y-4">
-            <div 
-              v-for="setor in setoresComAnalise"
-              :key="setor.nome"
-              @click="abrirModalSetorLocal('setor', [setor])"
-              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition cursor-pointer"
-            >
-              <div class="flex items-center justify-between mb-4">
-                <div>
-                  <h3 class="font-bold text-lg text-gray-800">{{ setor.nome }}</h3>
-                  <p class="text-sm text-gray-600">Total: {{ setor.total }} itens</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-3xl font-bold text-orange-600">{{ setor.pendentes }}</p>
-                  <p class="text-sm text-gray-600">pendentes</p>
-                  <p class="text-xs font-semibold mt-1" :class="setor.classificacaoClass">{{ setor.classificacao }}</p>
-                </div>
-              </div>
-              <div class="space-y-3">
-                <div>
-                  <div class="flex justify-between text-sm mb-2">
-                    <span class="text-gray-700">Concluído</span>
-                    <span class="font-bold text-green-600">{{ setor.percentualConclusao.toFixed(2) }}%</span>
-                  </div>
-                  <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      :style="{ width: Math.min(setor.percentualConclusao, 100) + '%' }"
-                      class="h-full bg-green-500"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <div class="flex justify-between text-sm mb-2">
-                    <span class="text-gray-700">Pendente</span>
-                    <span class="font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
-                      {{ setor.percentualPendente.toFixed(2) }}%
-                    </span>
-                  </div>
-                  <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
-                      :style="{ width: Math.min(setor.percentualPendente, 100) + '%' }"
-                      class="h-full bg-orange-500"
-                    />
-                  </div>
-                  <p class="text-xs text-gray-500 mt-1">Meta: 3%</p>
+          <TabelaInterativaAuditoria 
+            :dados="setoresComAnalise" 
+            :colunas="colunasSetor" 
+            :itensPorPagina="5"
+            clickable
+            @click-row="abrirModalSetorLocal('setor', [$event])"
+          >
+            <template #cell-classificacao="{ item }">
+              <span :class="item.classificacaoClass" class="font-bold">
+                {{ item.classificacao }}
+              </span>
+            </template>
+            <template #cell-percentualConclusao="{ item }">
+              <div class="flex flex-col items-end w-full">
+                <span>{{ item.percentualConclusao.toFixed(2) }}%</span>
+                <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1">
+                  <div 
+                    :style="{ width: Math.min(item.percentualConclusao, 100) + '%' }"
+                    class="h-full bg-green-500"
+                  />
                 </div>
               </div>
-            </div>
-          </div>
+            </template>
+          </TabelaInterativaAuditoria>
         </div>
 
         <!-- Locais com Mais Itens para Ler -->
         <div>
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-800">
-              <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais com Mais Itens para Ler
-            </h2>
-            <!-- Toggle de Visualização -->
-            <div class="flex gap-2">
-              <button
-                @click="viewModeLocais = 'grid'"
-                :class="['px-4 py-2 rounded font-medium transition', viewModeLocais === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-              >
-                <i class="fas fa-th mr-2"></i>Grade
-              </button>
-              <button
-                @click="viewModeLocais = 'list'"
-                :class="['px-4 py-2 rounded font-medium transition', viewModeLocais === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']"
-              >
-                <i class="fas fa-list mr-2"></i>Lista
-              </button>
-            </div>
-          </div>
-          
-          <!-- Visualização em Grade -->
-          <div v-if="viewModeLocais === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div 
-              v-for="(local, i) in locaisComAnalise"
-              :key="local.nome"
-              @click="abrirModalSetorLocal('local', [local])"
-              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition cursor-pointer border-l-4"
-              :class="local.percentualLido >= 75 ? 'border-green-500' : local.percentualLido >= 50 ? 'border-yellow-500' : 'border-red-500'"
-            >
-              <div class="flex items-start justify-between mb-4">
-                <div class="flex-1">
-                  <h4 class="font-bold text-lg text-gray-800">{{ local.nome }}</h4>
-                  <p class="text-sm text-gray-500 mt-1">Total: {{ local.total }} itens</p>
-                </div>
-                <div class="text-right">
-                  <p class="text-3xl font-bold text-red-600">{{ local.pendentes }}</p>
-                  <p class="text-xs text-gray-600">pendentes</p>
-                </div>
-              </div>
-              <div class="space-y-2">
-                <div class="flex justify-between text-sm">
-                  <span class="text-green-600 font-medium">✓ {{ local.lidos }} lidos</span>
-                  <span class="text-orange-600 font-medium">⏳ {{ local.pendentes }} pendentes</span>
-                </div>
-                <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">
+            <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais com Mais Itens para Ler
+          </h2>
+          <TabelaInterativaAuditoria 
+            :dados="locaisComAnalise" 
+            :colunas="colunasLocal" 
+            :itensPorPagina="10"
+            clickable
+            @click-row="abrirModalSetorLocal('local', [$event])"
+          >
+            <template #cell-percentualLido="{ item }">
+              <div class="flex flex-col items-end w-full">
+                <span>{{ item.percentualLido.toFixed(2) }}%</span>
+                <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1">
                   <div 
-                    :style="{ width: local.percentualLido + '%' }"
+                    :style="{ width: Math.min(item.percentualLido, 100) + '%' }"
                     class="h-full bg-linear-to-r from-blue-500 to-green-500"
                   />
                 </div>
-                  <p class="text-xs text-gray-600 text-center">{{ local.percentualLido.toFixed(2) }}% concluído</p>
               </div>
-            </div>
-          </div>
-          
-          <!-- Visualização em Lista -->
-          <div v-else class="bg-white rounded-lg shadow overflow-hidden">
-            <table class="w-full">
-              <thead class="bg-gray-100 border-b">
-                <tr>
-                  <th class="px-6 py-4 text-left font-semibold text-gray-700">#</th>
-                  <th class="px-6 py-4 text-left font-semibold text-gray-700">Local</th>
-                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Lidos</th>
-                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Pendentes</th>
-                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Problema</th>
-                  <th class="px-6 py-4 text-right font-semibold text-gray-700">Total</th>
-                  <th class="px-6 py-4 text-right font-semibold text-gray-700">%</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr 
-                  v-for="(local, i) in locaisComAnalise"
-                  :key="local.nome"
-                  @click="abrirModalSetorLocal('local', [local])"
-                  class="hover:bg-blue-50 transition cursor-pointer"
-                >
-                  <td class="px-6 py-4 text-center font-bold text-gray-400">{{ i + 1 }}</td>
-                  <td class="px-6 py-4 font-medium text-gray-800">{{ local.nome }}</td>
-                  <td class="px-6 py-4 text-right text-green-600 font-semibold">{{ local.lidos }}</td>
-                  <td class="px-6 py-4 text-right text-orange-600 font-semibold">{{ local.pendentes }}</td>
-                  <td class="px-6 py-4 text-right text-red-600 font-semibold">{{ local.comProblema || 0 }}</td>
-                  <td class="px-6 py-4 text-right font-semibold text-blue-600">{{ local.total }}</td>
-                  <td class="px-6 py-4 text-right font-bold text-blue-600">{{ local.percentualLido.toFixed(2) }}%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <div v-if="locaisComAnalise.length === 0" class="bg-white rounded-lg p-8 text-center text-gray-500">
-            <i class="fas fa-map-marker-alt text-4xl text-gray-300 mb-4"></i>
-            <p>Nenhum local encontrado com itens para ler</p>
-          </div>
+            </template>
+          </TabelaInterativaAuditoria>
         </div>
       </div>
     </div>
@@ -2184,12 +2159,6 @@ const fecharModalRelatorio = () => {
 
         <!-- Filtros e Ordenação -->
         <div class="bg-gray-100 border-b px-4 py-3 flex gap-2 flex-wrap items-center print:hidden">
-          <input
-            v-model="filtroItens"
-            type="text"
-            placeholder="🔍 Buscar por código, produto..."
-            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-[200px]"
-          />
           <select
             v-model="filtroStatusItens"
             class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -2198,22 +2167,6 @@ const fecharModalRelatorio = () => {
             <option value="todos">Todos os status</option>
             <option value="lido">Apenas Lidos</option>
             <option value="pendente">Apenas Pendentes</option>
-          </select>
-          <select
-            v-model="ordenacaoItens.coluna"
-            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="Código">Ordenar por Código</option>
-            <option value="Produto">Ordenar por Produto</option>
-            <option value="Estoque atual">Ordenar por Estoque</option>
-            <option value="Dias sem venda">Ordenar por Dias sem Venda</option>
-          </select>
-          <select
-            v-model="ordenacaoItens.direcao"
-            class="px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="asc">Crescente</option>
-            <option value="desc">Decrescente</option>
           </select>
         </div>
 
@@ -2224,48 +2177,29 @@ const fecharModalRelatorio = () => {
             <div class="hidden pdf-print-show text-xs text-gray-700 p-2 border-b">
               <div><strong>Local:</strong> {{ tituloModalItens }}</div>
             </div>
-            <table class="w-full text-sm border border-gray-200">
-              <thead class="bg-gray-100 border-b sticky top-0">
-                <tr>
-                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Código</th>
-                  <th class="px-4 py-3 text-left font-semibold text-gray-700">Produto</th>
-                  <th class="px-4 py-3 text-left font-semibold text-gray-700 hidden pdf-only">Local</th>
-                  <th class="px-4 py-3 text-right font-semibold text-gray-700">Estoque</th>
-                  <th class="px-4 py-3 text-right font-semibold text-gray-700">Dias sem Venda</th>
-                  <th class="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr 
-                  v-for="(item, idx) in itensModalFiltrados" 
-                  :key="idx" 
-                  class="hover:bg-blue-50 transition"
-                >
-                  <td class="px-4 py-3 font-bold text-gray-900">{{ item['Código'] || '-' }}</td>
-                  <td class="px-4 py-3 text-gray-800">{{ item['Produto'] || '-' }}</td>
-                  <td class="px-4 py-3 text-gray-700 hidden pdf-only">{{ item['Local'] || item['Local '] || '-' }}</td>
-                  <td class="px-4 py-3 text-right font-semibold">{{ item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || 0) }}</td>
-                  <td class="px-4 py-3 text-right text-gray-600">{{ item['Dias sem venda'] || 0 }}</td>
-                  <td class="px-4 py-3 text-center">
-                    <span class="pdf-hide" :class="getStatusItem(item).classe">
-                      {{ getStatusItem(item).texto }}
+            
+            <TabelaInterativaAuditoria
+              :dados="itensModalFormatados"
+              :colunas="colunasModal"
+              :itensPorPagina="10"
+              :mostrarBusca="true"
+              :exibirTudo="exibirTudoPDFItens"
+            >
+                <template #cell-status="{ item }">
+                    <span class="pdf-hide" :class="item.statusClass">
+                      {{ item.status }}
                     </span>
                     <span class="pdf-only text-gray-800 font-semibold">
-                      {{ (item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)) ? 'Lido' : 'Não lido' }}
+                      {{ item.lido ? 'Lido' : 'Não lido' }}
                     </span>
-                  </td>
-                </tr>
-                <tr v-if="itensModalFiltrados.length === 0">
-                  <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhum item encontrado</td>
-                </tr>
-              </tbody>
-            </table>
+                </template>
+            </TabelaInterativaAuditoria>
           </div>
         </div>
 
         <!-- Footer -->
         <div class="bg-gray-50 px-4 py-2 flex justify-between items-center print:hidden">
-          <p class="text-sm text-gray-600">Mostrando {{ itensModalFiltrados.length }} de {{ itensModal.length }} itens</p>
+          <p class="text-sm text-gray-600">Mostrando {{ itensModalFormatados.length }} de {{ itensModal.length }} itens</p>
           <div class="flex items-center gap-2">
             <button
               @click="fecharModalItens"
@@ -2289,7 +2223,7 @@ const fecharModalRelatorio = () => {
     <div 
       v-if="modalRelatorioAberto"
       class="modal-relatorio-overlay fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      @click.stop="fecharModalRelatorio"
+      @click.stop="fecharRelatorio"
     >
       <div 
         ref="printAreaRelatorio"
@@ -2305,7 +2239,7 @@ const fecharModalRelatorio = () => {
             <p class="text-blue-100 text-sm">{{ auditoria.tipo }} - {{ dataAuditoriaBR }}</p>
           </div>
           <button
-            @click="fecharModalRelatorio"
+            @click="fecharRelatorio"
             class="text-white hover:opacity-80 transition print:hidden"
           >
             <i class="fas fa-times text-xl"></i>
@@ -2315,8 +2249,8 @@ const fecharModalRelatorio = () => {
         <!-- Content - Compacto para Print -->
         <div class="overflow-y-auto p-4 space-y-3 text-sm">
           <!-- Resultado Geral com Destaque para % Pendente -->
-          <div class="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4 border-l-4 border-orange-600">
-            <div class="grid grid-cols-4 gap-3 mb-3">
+          <div class="bg-linear-to-r from-orange-50 to-red-50 rounded-lg p-4 border-l-4 border-orange-600">
+            <div class="grid grid-cols-5 gap-3 mb-3">
               <div>
                 <p class="text-xs text-gray-600">Total Auditável</p>
                 <p class="text-lg font-bold text-blue-600">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
@@ -2328,6 +2262,10 @@ const fecharModalRelatorio = () => {
               <div>
                 <p class="text-xs text-gray-600">Pendentes</p>
                 <p class="text-lg font-bold text-orange-600">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-600">Desatualizados</p>
+                <p class="text-lg font-bold text-yellow-600">{{ dadosRelatorio?.resultadoGeral.desatualizados || 0 }}</p>
               </div>
               <div class="bg-white rounded p-2 border-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-500' : 'border-orange-500'">
                 <p class="text-xs font-bold text-gray-700">% PENDENTE</p>
@@ -2362,6 +2300,7 @@ const fecharModalRelatorio = () => {
                     <tr>
                       <th class="px-2 py-2 text-left font-semibold text-gray-700">Setor</th>
                       <th class="px-2 py-2 text-right font-semibold text-gray-700">Pendentes</th>
+                      <th class="px-2 py-2 text-right font-semibold text-gray-700">Desat.</th>
                       <th class="px-2 py-2 text-right font-semibold text-gray-700">% Pend</th>
                       <th class="px-2 py-2 text-center font-semibold text-gray-700">Classif</th>
                     </tr>
@@ -2383,6 +2322,7 @@ const fecharModalRelatorio = () => {
                     >
                       <td class="px-2 py-2 font-medium text-gray-800 text-xs">{{ setor.nome }}</td>
                       <td class="px-2 py-2 text-right font-semibold">{{ setor.pendentes }}</td>
+                      <td class="px-2 py-2 text-right font-semibold text-yellow-600">{{ setor.desatualizados || 0 }}</td>
                       <td class="px-2 py-2 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
                         {{ setor.percentualPendente.toFixed(2) }}%
                         <div class="text-[10px] font-normal text-gray-500">SKU: {{ setor.total }}</div>
@@ -2450,7 +2390,7 @@ const fecharModalRelatorio = () => {
             <i class="fas fa-print mr-1"></i>Imprimir
           </button>
           <button
-            @click="fecharModalRelatorio"
+            @click="fecharRelatorio"
             class="px-3 py-1.5 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 transition text-sm font-medium"
           >
             Fechar
@@ -2664,5 +2604,13 @@ const fecharModalRelatorio = () => {
 }
 .pdf-sanitize .pdf-only {
   display: table-cell !important;
+}
+.pdf-sanitize .sticky {
+  position: static !important;
+  top: auto !important;
+}
+.pdf-sanitize .overflow-y-auto {
+  overflow: visible !important;
+  max-height: none !important;
 }
 </style>

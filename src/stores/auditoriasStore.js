@@ -31,6 +31,11 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     'Estoque atual', 'Presença confirmada', 'Estoque Leitura', 'Dias sem venda',
     'Custo Ruptura', 'Resíduo', 'Fornecedor', 'Última compra'
   ]
+  const colunasEtiqueta = [
+    'Código', 'Produto', 'Classe de Produto Raiz', 'Classe de Produto', 'Setor',
+    'Local', 'Usuário', 'Situação', 'Situação atual da auditoria', 'Auditado em',
+    'Estoque atual', 'Presença confirmada', 'Estoque Leitura', 'Resíduo', 'Última compra'
+  ]
 
   // Ações
   const addToast = (mensagem, tipo = 'info') => {
@@ -217,6 +222,76 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return false
   }
 
+  const statusEtiqueta = (item) => {
+    const raw = (item['Situação'] || item['Situação atual da auditoria'] || '').toString()
+    const s = normalizarTexto(raw)
+    const temDesatual = s.includes('desatualizad') // cobre desatualizado/desatualizada/desatualizados
+    const temAtual = s.includes('atualizad') && !temDesatual // evita colisão com "desatualizado"
+    const atualizado = temAtual
+    const desatualizado = temDesatual
+    const naoLidoEstoque = s.includes('nao lidos com estoque') || s.includes('não lidos com estoque')
+    const lidoSemEstoque = s.includes('lido sem estoque')
+    const semEstoque = !lidoSemEstoque && s.includes('sem estoque')
+    const lidoNaoPertence = getLidoNaoPertence(item)
+    return { atualizado, desatualizado, naoLidoEstoque, lidoSemEstoque, semEstoque, lidoNaoPertence }
+  }
+
+  const detectarTipoArquivo = async (file) => {
+    const buffer = await file.arrayBuffer()
+    const data = new Uint8Array(buffer)
+    const workbook = XLSX.read(data, { type: 'array' })
+    const primeiraAba = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[primeiraAba]
+    const linhas = XLSX.utils.sheet_to_json(worksheet)
+    let etiquetaScore = 0
+    let presencaScore = 0
+    let rupturaScore = 0
+    const max = Math.min(linhas.length, 100)
+    for (let i = 0; i < max; i++) {
+      const row = linhas[i] || {}
+      const sRaw = row['Situação'] || row['Situação atual da auditoria'] || ''
+      const s = normalizarTexto(sRaw)
+      if (s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || getLidoNaoPertence(row)) {
+        etiquetaScore++
+      }
+      if (s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen') || s.includes('com presenca') || s.includes('sem presenca') || s.includes('com presença') || s.includes('sem presença')) {
+        presencaScore++
+      } else {
+        const pres = row['Presença confirmada'] ?? row['Presença']
+        if (typeof pres === 'number') {
+          presencaScore++
+        } else if (typeof pres === 'string' && !isPlaceholder(pres)) {
+          presencaScore++
+        }
+      }
+      const custo = parseFloat(row['Custo Ruptura'] || row['Custo de Ruptura'] || row['Custo ruptura'] || row['Custo de ruptura'] || 0) || 0
+      if (custo > 0) rupturaScore++
+    }
+    if (rupturaScore >= etiquetaScore && rupturaScore >= presencaScore && rupturaScore >= 3) return 'Ruptura'
+    if (etiquetaScore >= presencaScore) return 'Etiqueta'
+    return 'Presença'
+  }
+
+  const detectarTipoDados = (dados) => {
+    if (!Array.isArray(dados) || dados.length === 0) return 'Presença'
+    let hasEtiqueta = false
+    let hasPresenca = false
+    const n = Math.min(10, dados.length)
+    for (let i = 0; i < n; i++) {
+      const item = dados[i] || {}
+      const s = normalizarTexto((item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '').toString())
+      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque')) {
+        hasEtiqueta = true
+      }
+      if (s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen') || s.includes('com presenca') || s.includes('sem presenca') || s.includes('com presença') || s.includes('sem presença')) {
+        hasPresenca = true
+      }
+    }
+    if (hasEtiqueta) return 'Etiqueta'
+    if (hasPresenca) return 'Presença'
+    return 'Etiqueta'
+  }
+
   const processarExcelPresenca = async (file) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
@@ -236,6 +311,15 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Converter para JSON
       const worksheet = workbook.Sheets[primeiraAba]
       const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+      if (dadosCompletos.length > 0) {
+        const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
+        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('não lidos com estoque') || s.includes('nao lidos com estoque')
+        const indicPresenca = s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen')
+        if (indicEtiqueta && !indicPresenca) {
+          addToast('Arquivo detectado como Etiqueta. Ajustando interpretação.', 'info')
+          return await processarExcelEtiqueta(file)
+        }
+      }
       
       console.log('✅ Leitura completa:', dadosCompletos.length, 'linhas')
       
@@ -284,6 +368,56 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       console.log(`   - Sem estoque: ${semEstoque}`)
       console.log(`   - Total auditável: ${dados.length}`)
       
+      return dados
+    } catch (erro) {
+      console.error('❌ Erro na leitura:', erro.message)
+      addToast('Erro: ' + erro.message, 'error')
+      throw erro
+    }
+  }
+
+  const processarExcelEtiqueta = async (file) => {
+    console.log('🔍 Lendo arquivo:', file.name)
+    try {
+      const buffer = await file.arrayBuffer()
+      const data = new Uint8Array(buffer)
+      const workbook = XLSX.read(data, { type: 'array' })
+      const primeiraAba = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[primeiraAba]
+      const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+      if (dadosCompletos.length > 0) {
+        console.log('Colunas encontradas:', Object.keys(dadosCompletos[0]))
+      }
+      if (dadosCompletos.length > 0) {
+        const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
+        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('não lidos com estoque') || s.includes('nao lidos com estoque')
+        const indicPresenca = s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen')
+        if (indicPresenca && !indicEtiqueta) {
+          addToast('Arquivo detectado como Presença. Ajustando interpretação.', 'info')
+          return await processarExcelPresenca(file)
+        }
+      }
+      const dados = dadosCompletos
+        .map(item => {
+          const est = extrairEstoque(item)
+          const st = statusEtiqueta(item)
+          const tem = st.atualizado || st.desatualizado || st.lidoSemEstoque || st.lidoNaoPertence
+          return {
+            ...item,
+            _temPresenca: !!tem,
+            _estoque: est,
+            _situacao: item['Situação'] || item['Situação atual da auditoria'] || '',
+            _lidoNaoPertence: st.lidoNaoPertence
+          }
+        })
+        .filter(item => {
+          const st = statusEtiqueta(item)
+          if (st.semEstoque && !st.lidoSemEstoque) return false
+          return true
+        })
+      const ignorados = dadosCompletos.length - dados.length
+      console.log(`✅ Itens auditáveis: ${dados.length} linhas`)
+      console.log(`↩️ Itens ignorados: ${ignorados}`)
       return dados
     } catch (erro) {
       console.error('❌ Erro na leitura:', erro.message)
@@ -461,6 +595,109 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return analise
   }
 
+  const analisarDadosEtiqueta = (dados) => {
+    const analise = {
+      totalItens: 0,
+      itensIgnorados: 0,
+      itensLidosCorretamente: 0,
+      itensPendentes: 0,
+      itensLidosComProblema: 0,
+      itensComEstoqueZero: 0,
+      itensLidoNaoPertence: 0,
+      itensAtualizados: 0,
+      itensDesatualizados: 0,
+      parcialPercentual: 0,
+      percentualConclusao: 0,
+      totalLidos: 0,
+      porUsuario: {},
+      porSetor: {},
+      porLocal: {},
+      setoresParados: [],
+      locaisSemLeitura: [],
+      usuarios: [],
+      itensComEstoqueZeroDetalhes: [],
+      itensLidoNaoPertenceDetalhes: []
+    }
+    dados.forEach(item => {
+      const st = statusEtiqueta(item)
+      const efetivamenteTem = !!item._temPresenca || st.lidoNaoPertence
+      let itemProblema = false
+      if (st.naoLidoEstoque) {
+        analise.itensPendentes++
+      } else if (st.atualizado && !st.lidoNaoPertence) {
+        analise.itensLidosCorretamente++
+        analise.itensAtualizados++
+      } else if (st.desatualizado) {
+        analise.itensDesatualizados++
+      } else if (st.lidoSemEstoque || st.lidoNaoPertence) {
+        analise.itensLidosComProblema++
+        itemProblema = true
+        if (st.lidoSemEstoque) {
+          analise.itensComEstoqueZero++
+          analise.itensComEstoqueZeroDetalhes.push({
+            codigo: item['Código'],
+            produto: item['Produto'],
+            usuario: item['Usuário'],
+            local: item['Local'],
+            fornecedor: item['Fornecedor']
+          })
+        }
+        if (st.lidoNaoPertence) {
+          analise.itensLidoNaoPertence++
+          analise.itensLidoNaoPertenceDetalhes.push({
+            codigo: item['Código'],
+            produto: item['Produto'],
+            usuario: item['Usuário'],
+            local: item['Local']
+          })
+        }
+      }
+      const usuario = (item['Usuário'] || '').trim()
+      if (usuario && usuario !== '' && usuario !== 'undefined') {
+        if (!analise.porUsuario[usuario]) {
+          analise.porUsuario[usuario] = { lidos: 0, pendentes: 0, comProblema: 0 }
+          analise.usuarios.push(usuario)
+        }
+        if (efetivamenteTem) {
+          analise.porUsuario[usuario].lidos++
+          if (itemProblema) analise.porUsuario[usuario].comProblema++
+        } else {
+          analise.porUsuario[usuario].pendentes++
+        }
+      }
+      const setor = (item['Classe de Produto Raiz'] || 'Não especificado').trim()
+      if (!analise.porSetor[setor]) analise.porSetor[setor] = { lidos: 0, pendentes: 0, comProblema: 0, desatualizados: 0 }
+      if (efetivamenteTem) {
+        analise.porSetor[setor].lidos++
+        if (itemProblema) analise.porSetor[setor].comProblema++
+        if (st.desatualizado) analise.porSetor[setor].desatualizados++
+      } else {
+        analise.porSetor[setor].pendentes++
+      }
+      const local = (item['Local'] || 'Não especificado').trim()
+      if (!analise.porLocal[local]) analise.porLocal[local] = { lidos: 0, pendentes: 0, comProblema: 0 }
+      if (efetivamenteTem) {
+        analise.porLocal[local].lidos++
+        if (itemProblema) analise.porLocal[local].comProblema++
+      } else {
+        analise.porLocal[local].pendentes++
+      }
+    })
+    const totalLidos = analise.itensAtualizados + analise.itensDesatualizados + analise.itensLidoNaoPertence + analise.itensComEstoqueZero
+    const totalAuditaveis = totalLidos + analise.itensPendentes
+    analise.totalLidos = totalLidos
+    analise.totalItens = totalAuditaveis
+    analise.parcialPercentual = totalAuditaveis > 0 ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2)) : 0
+    analise.percentualConclusao = totalAuditaveis > 0 ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2)) : 0
+    Object.entries(analise.porSetor).forEach(([setor, dados]) => {
+      if (dados.lidos === 0) analise.setoresParados.push(setor)
+    })
+    Object.entries(analise.porLocal).forEach(([local, dados]) => {
+      if (dados.lidos === 0) analise.locaisSemLeitura.push(local)
+    })
+    return analise
+  }
+
   const addAuditoria = (auditoria) => {
     const novaAuditoria = {
       id: Date.now(),
@@ -520,10 +757,15 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     tiposAuditoriaPorDia,
     horariosAuditoria,
     colunasPresenca,
+    colunasEtiqueta,
     addToast,
     removeToast,
+    detectarTipoArquivo,
     processarExcelPresenca,
+    processarExcelEtiqueta,
     analisarDadosPresenca,
+    analisarDadosEtiqueta,
+    detectarTipoDados,
     addAuditoria,
     updateAuditoria,
     deleteAuditoria,
@@ -531,4 +773,3 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     auditoriasAgrupadas
   }
 })
-

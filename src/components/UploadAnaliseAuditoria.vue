@@ -314,7 +314,18 @@ const processar = async () => {
   processando.value = true
 
   try {
-    const dados = await store.processarExcelPresenca(arquivoSelecionado.value)
+    let dados = []
+    const tipo = props.auditoria?.tipo || 'Etiqueta'
+    const temEtiqueta = typeof store.processarExcelEtiqueta === 'function'
+    if (tipo === 'Presença') {
+      dados = await store.processarExcelPresenca(arquivoSelecionado.value)
+    } else if (tipo === 'Etiqueta') {
+      dados = temEtiqueta
+        ? await store.processarExcelEtiqueta(arquivoSelecionado.value)
+        : await store.processarExcelPresenca(arquivoSelecionado.value)
+    } else {
+      dados = await store.processarExcelPresenca(arquivoSelecionado.value)
+    }
     
     if (!dados || dados.length === 0) {
       store.addToast('Arquivo vazio ou inválido!', 'warning')
@@ -322,7 +333,16 @@ const processar = async () => {
     }
     
     console.log('✅ Dados recebidos:', dados.length, 'linhas')
-    analise.value = store.analisarDadosPresenca(dados)
+    const tipoEfetivo = typeof store.detectarTipoDados === 'function' ? store.detectarTipoDados(dados) : tipo
+    if (tipoEfetivo !== tipo) {
+      store.addToast(`Tipo detectado: ${tipoEfetivo}. Ajustando a análise.`, 'info')
+    }
+    const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
+    analise.value = tipoEfetivo === 'Presença'
+      ? store.analisarDadosPresenca(dados)
+      : tipoEfetivo === 'Etiqueta'
+        ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados) : store.analisarDadosPresenca(dados))
+        : store.analisarDadosPresenca(dados)
     
     emit('analiseCompleta', {
       dados,

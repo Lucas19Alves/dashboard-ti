@@ -52,7 +52,7 @@
             </div>
           </div>
           <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <p class="text-gray-700 text-sm"><strong>Taxa de Conclusão:</strong> {{ Math.round(((dados.itensLidosCorretamente + dados.itensLidosComProblema) / (dados.totalItens - dados.itensIgnorados) * 100) || 0) }}%</p>
+            <p class="text-gray-700 text-sm"><strong>Taxa de Conclusão:</strong> {{ Math.round(((( (dados.totalLidos != null ? dados.totalLidos : 0) || ((dados.itensAtualizados || 0) + (dados.itensDesatualizados || 0) + (dados.itensLidoNaoPertence || 0) + (dados.itensComEstoqueZero || 0))) / (dados.totalItens || 1)) * 100) || 0) }}%</p>
           </div>
         </div>
 
@@ -122,54 +122,33 @@
           </div>
         </div>
 
-        <div v-if="lista.length > 0 || filtro" class="space-y-3 pt-4 border-t">
-          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div v-if="lista.length > 0" class="space-y-3 pt-4 border-t">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
             <p class="font-bold text-gray-800">
               <i class="fas fa-list mr-2"></i>Lista de Itens
               <span class="text-sm font-normal text-gray-500 ml-2">({{ lista.length }} encontrados)</span>
             </p>
-            <input 
-              v-model="filtro"
-              type="text"
-              placeholder="🔍 Buscar código, produto..."
-              class="w-full sm:w-auto px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
           </div>
           
-          <div class="max-h-80 overflow-auto border rounded bg-white shadow-inner">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
-                <tr>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700">Código</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700">Produto</th>
-                  <th class="px-3 py-2 text-left font-semibold text-gray-700">Local</th>
-                  <th class="px-3 py-2 text-right font-semibold text-gray-700">Estoque</th>
-                  <th v-if="tipo === 'problema'" class="px-3 py-2 text-center font-semibold text-gray-700">Motivo</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr v-for="(i, idx) in lista" :key="idx" class="hover:bg-blue-50 transition">
-                  <td class="px-3 py-2 font-bold text-gray-900">{{ i['Código'] }}</td>
-                  <td class="px-3 py-2 text-gray-800">{{ i['Produto'] }}</td>
-                  <td class="px-3 py-2 text-gray-700 text-xs">{{ i['Local'] || '-' }}</td>
-                  <td class="px-3 py-2 text-right font-mono text-gray-800">{{ i._estoque || 0 }}</td>
-                  <td v-if="tipo === 'problema'" class="px-3 py-2 text-center">
-                    <span 
-                      class="px-2 py-0.5 rounded text-xs font-bold"
-                      :class="i._problema === 'Estoque Zero' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'"
-                    >
-                      {{ i._problema }}
-                    </span>
-                  </td>
-                </tr>
-                <tr v-if="lista.length === 0">
-                  <td :colspan="tipo === 'problema' ? 5 : 4" class="px-3 py-8 text-center text-gray-500">
-                    Nenhum item encontrado com o filtro atual.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <TabelaInterativaAuditoria
+            :dados="lista"
+            :colunas="colunas"
+            :itensPorPagina="10"
+            :mostrarBusca="true"
+          >
+            <template #cell-_estoque="{ item }">
+              <span class="font-mono">{{ item._estoque || 0 }}</span>
+            </template>
+            
+            <template #cell-Motivo="{ item }">
+              <span 
+                class="px-2 py-0.5 rounded text-xs font-bold"
+                :class="item._problema === 'Estoque Zero' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'"
+              >
+                {{ item._problema }}
+              </span>
+            </template>
+          </TabelaInterativaAuditoria>
         </div>
       </div>
 
@@ -188,6 +167,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import TabelaInterativaAuditoria from './TabelaInterativaAuditoria.vue'
 
 const props = defineProps({
   aberto: Boolean,
@@ -197,7 +177,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['fechar'])
-const filtro = ref('')
 
 const titulo = computed(() => {
   const titulos = {
@@ -251,7 +230,6 @@ const classeValor = computed(() => {
 })
 
 const fechar = () => {
-  filtro.value = ''
   emit('fechar')
 }
 
@@ -264,6 +242,21 @@ const isLidoNaoPertence = (item) => {
 }
 
 const temPresencaEfetiva = (item) => item._temPresenca || isLidoNaoPertence(item)
+
+const colunas = computed(() => {
+  const cols = [
+    { chave: 'Código', titulo: 'Código', sortable: true },
+    { chave: 'Produto', titulo: 'Produto', sortable: true },
+    { chave: 'Local', titulo: 'Local', sortable: true },
+    { chave: '_estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' }
+  ]
+  
+  if (props.tipo === 'problema') {
+    cols.push({ chave: 'Motivo', titulo: 'Motivo', sortable: true, alinhamento: 'center' })
+  }
+  
+  return cols
+})
 
 const lista = computed(() => {
   const items = props.dadosCompletos || []
@@ -281,21 +274,12 @@ const lista = computed(() => {
     resultado = items.filter(i => codsZ.has(i['Código']) || codsN.has(i['Código']))
       .map(i => ({
         ...i,
-        _problema: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado'
+        _problema: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado',
+        Motivo: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado' // Add mapped field for sorting/display
       }))
   }
 
-  // Filtrar
-  if (filtro.value) {
-    const termo = filtro.value.toLowerCase()
-    resultado = resultado.filter(i => 
-      String(i['Código'] || '').toLowerCase().includes(termo) ||
-      String(i['Produto'] || '').toLowerCase().includes(termo) ||
-      String(i['Local'] || '').toLowerCase().includes(termo)
-    )
-  }
-
-  // Ordenar (Problema -> Prioridade, Outros -> Estoque desc)
+  // Ordenar inicial (Problema -> Prioridade, Outros -> Estoque desc)
   return resultado.sort((a, b) => (b._estoque || 0) - (a._estoque || 0))
 })
 </script>
