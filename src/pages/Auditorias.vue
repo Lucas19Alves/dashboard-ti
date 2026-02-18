@@ -451,6 +451,40 @@ const abrirDia = (dia) => {
   }
   criarAPartirCalendario(data, formulario.value.tipo, label)
 }
+
+const parcialRestante = (a) => {
+  if (!a) return 0
+  const v = (a.analise && typeof a.analise.parcialPercentual === 'number')
+    ? a.analise.parcialPercentual
+    : (typeof a.parcial === 'number' ? a.parcial : 0)
+  return Number.isFinite(v) ? v : 0
+}
+
+const textoMeta = (a) => {
+  if (!a) return ''
+  return a.metaAlcancada ? 'Dentro da Meta' : 'Fora da Meta'
+}
+
+const classesCardDia = (d) => {
+  if (diaSelecionado.value && diaSelecionado.value.data === d.data) {
+    return 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-100'
+  }
+  const mapa = auditoriasPorDiaTipo.value || {}
+  const porData = mapa[d.data]
+  if (!porData) {
+    return 'border-gray-200 bg-gray-50 hover:border-blue-400 hover:bg-gray-100'
+  }
+  const lista = Object.values(porData).flat()
+  const temAberta = lista.some(a => a.status !== 'fechada')
+  if (temAberta) {
+    return 'border-blue-300 bg-blue-50/60 hover:border-blue-400 hover:bg-blue-50'
+  }
+  const foraMeta = lista.some(a => a.status === 'fechada' && !a.metaAlcancada)
+  if (foraMeta) {
+    return 'border-red-200 bg-red-50/60 hover:border-red-400 hover:bg-red-50'
+  }
+  return 'border-green-200 bg-green-50/60 hover:border-green-400 hover:bg-green-50'
+}
 </script>
 
 <template>
@@ -591,13 +625,7 @@ const abrirDia = (dia) => {
             :key="d.data"
             class="group min-w-55 md:min-w-0 md:flex-1 md:max-w-xs p-4 rounded-xl border cursor-pointer transition-all relative overflow-hidden"
             @click="abrirDia(d)"
-            :class="[
-              diaSelecionado && diaSelecionado.data === d.data
-                ? 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-100'
-                : (auditoriasPorDiaTipo[d.data]
-                    ? 'border-emerald-200 bg-emerald-50/60 hover:border-emerald-400 hover:bg-emerald-50'
-                    : 'border-gray-200 bg-gray-50 hover:border-blue-400 hover:bg-gray-100')
-            ]"
+            :class="classesCardDia(d)"
           >
             <div class="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-500/40 via-indigo-500/40 to-emerald-500/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="flex justify-between items-center mb-3">
@@ -650,6 +678,21 @@ const abrirDia = (dia) => {
                 <i class="fas fa-plus text-[10px]"></i>
                 Criar Auditoria
               </button>
+            </div>
+            <div
+              v-if="auditoriasPorDiaTipo[d.data]"
+              class="mt-2 text-[11px] text-gray-700 space-y-1"
+            >
+              <div
+                v-for="tipo in ['Etiqueta', 'Presença', 'Ruptura']"
+                :key="tipo + d.data"
+                v-if="auditoriasPorDiaTipo[d.data][tipo] && auditoriasPorDiaTipo[d.data][tipo].length > 0"
+                class="flex items-center gap-1"
+              >
+                <span class="font-semibold">{{ tipo }}</span>
+                <span>— {{ parcialRestante(auditoriasPorDiaTipo[d.data][tipo][0]).toFixed(2) }}% pendente —</span>
+                <span>{{ textoMeta(auditoriasPorDiaTipo[d.data][tipo][0]) }}</span>
+              </div>
             </div>
             <div class="mt-3 flex items-center justify-between text-[11px] text-gray-500">
               <span v-if="auditoriasPorDiaTipo[d.data]">Dia com auditoria</span>

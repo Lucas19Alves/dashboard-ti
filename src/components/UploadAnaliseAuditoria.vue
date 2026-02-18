@@ -94,7 +94,7 @@
       <!-- Total de Itens -->
       <div 
         @click="abrirModal('total')"
-        class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6 border-l-4 border-blue-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="bg-linear-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6 border-l-4 border-blue-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -108,7 +108,7 @@
       <!-- Itens Lidos Corretamente -->
       <div 
         @click="abrirModal('lidos')"
-        class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="bg-linear-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -122,7 +122,7 @@
       <!-- Itens Pendentes -->
       <div 
         @click="abrirModal('pendentes')"
-        class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6 border-l-4 border-orange-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="bg-linear-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6 border-l-4 border-orange-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -136,7 +136,7 @@
       <!-- Itens Com Problema -->
       <div 
         @click="abrirModal('problema')"
-        class="bg-gradient-to-br from-red-50 to-red-100 rounded-lg shadow-lg p-6 border-l-4 border-red-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="bg-linear-to-br from-red-50 to-red-100 rounded-lg shadow-lg p-6 border-l-4 border-red-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
       >
         <div class="flex items-center justify-between">
           <div>

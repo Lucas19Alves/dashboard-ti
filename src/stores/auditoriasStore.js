@@ -245,51 +245,64 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const linhas = XLSX.utils.sheet_to_json(worksheet)
     let etiquetaScore = 0
     let presencaScore = 0
-    let rupturaScore = 0
+    let rupturaSinal = 0
+    let rupturaCusto = 0
     const max = Math.min(linhas.length, 100)
     for (let i = 0; i < max; i++) {
       const row = linhas[i] || {}
       const sRaw = row['Situação'] || row['Situação atual da auditoria'] || ''
       const s = normalizarTexto(sRaw)
-      if (s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || getLidoNaoPertence(row)) {
+      // Etiqueta: status / leituras específicas
+      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || getLidoNaoPertence(row)) {
         etiquetaScore++
       }
+      // Presença: menções explícitas
       if (s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen') || s.includes('com presenca') || s.includes('sem presenca') || s.includes('com presença') || s.includes('sem presença')) {
         presencaScore++
-      } else {
-        const pres = row['Presença confirmada'] ?? row['Presença']
-        if (typeof pres === 'number') {
-          presencaScore++
-        } else if (typeof pres === 'string' && !isPlaceholder(pres)) {
-          presencaScore++
-        }
+      }
+      // Ruptura: foco em "Sem Presença e Com Estoque"
+      const semPresenca = s.includes('sem prese') || s.includes('sem presen') || s.includes('sem presenca') || s.includes('sem presença')
+      const comEstoque = s.includes('com estoq')
+      if (semPresenca && comEstoque) {
+        rupturaSinal++
       }
       const custo = parseFloat(row['Custo Ruptura'] || row['Custo de Ruptura'] || row['Custo ruptura'] || row['Custo de ruptura'] || 0) || 0
-      if (custo > 0) rupturaScore++
+      if (custo > 0) rupturaCusto++
     }
-    if (rupturaScore >= etiquetaScore && rupturaScore >= presencaScore && rupturaScore >= 3) return 'Ruptura'
-    if (etiquetaScore >= presencaScore) return 'Etiqueta'
+    // Score de ruptura pondera fortemente sinais "sem presença + com estoque" e considera custo como apoio
+    const rupturaScore = (rupturaSinal * 2) + Math.min(rupturaCusto, rupturaSinal)
+    // Decisão
+    if (etiquetaScore > Math.max(presencaScore, rupturaScore)) return 'Etiqueta'
+    if (rupturaScore >= presencaScore && rupturaSinal >= 2) return 'Ruptura'
     return 'Presença'
   }
 
   const detectarTipoDados = (dados) => {
     if (!Array.isArray(dados) || dados.length === 0) return 'Presença'
-    let hasEtiqueta = false
-    let hasPresenca = false
-    const n = Math.min(10, dados.length)
+    let etiquetaScore = 0
+    let presencaScore = 0
+    let rupturaSinal = 0
+    let rupturaCusto = 0
+    const n = Math.min(50, dados.length)
     for (let i = 0; i < n; i++) {
       const item = dados[i] || {}
       const s = normalizarTexto((item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '').toString())
-      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque')) {
-        hasEtiqueta = true
+      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || item._lidoNaoPertence) {
+        etiquetaScore++
       }
       if (s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen') || s.includes('com presenca') || s.includes('sem presenca') || s.includes('com presença') || s.includes('sem presença')) {
-        hasPresenca = true
+        presencaScore++
       }
+      const semPresenca = s.includes('sem prese') || s.includes('sem presen') || s.includes('sem presenca') || s.includes('sem presença')
+      const comEstoque = s.includes('com estoq')
+      if (semPresenca && comEstoque) rupturaSinal++
+      const custoVal = parseFloat(item['Custo Ruptura'] || item['Custo de Ruptura'] || item['Custo ruptura'] || item['Custo de ruptura'] || 0) || 0
+      if (custoVal > 0) rupturaCusto++
     }
-    if (hasEtiqueta) return 'Etiqueta'
-    if (hasPresenca) return 'Presença'
-    return 'Etiqueta'
+    if (etiquetaScore > Math.max(presencaScore, rupturaSinal)) return 'Etiqueta'
+    const rupturaScore = (rupturaSinal * 2) + Math.min(rupturaCusto, rupturaSinal)
+    if (rupturaScore >= presencaScore && rupturaSinal >= 2) return 'Ruptura'
+    return 'Presença'
   }
 
   const processarExcelPresenca = async (file) => {
