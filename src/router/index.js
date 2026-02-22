@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Inicio from '../pages/Inicio.vue'
 import Auditorias from '../pages/Auditorias.vue'
 import AuditoriaDetalhes from '../pages/AuditoriaDetalhes.vue'
-import Sistemas from '../pages/Sistemas.vue'
 import Vencimentos from '../pages/Vencimentos.vue'
 
 const routes = [
@@ -20,11 +19,6 @@ const routes = [
     path: '/auditoria/:id',
     name: 'AuditoriaDetalhes',
     component: AuditoriaDetalhes
-  },
-  {
-    path: '/sistemas',
-    name: 'Sistemas',
-    component: Sistemas
   },
   {
     path: '/vencimentos',

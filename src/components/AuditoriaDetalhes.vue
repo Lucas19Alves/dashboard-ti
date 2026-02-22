@@ -2,7 +2,7 @@
   <!-- Modal Background -->
   <div 
     v-if="auditoria"
-    class="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
+    class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40 flex items-center justify-center p-4"
     @click.stop="fechar"
   >
     <!-- Modal Content -->

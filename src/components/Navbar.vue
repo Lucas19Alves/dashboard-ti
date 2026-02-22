@@ -42,13 +42,6 @@ const isActive = (path) => {
             Auditorias
           </router-link>
           <router-link 
-            to="/sistemas" 
-            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/sistemas') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-          >
-            <i class="fas fa-server"></i>
-            Sistemas
-          </router-link>
-          <router-link 
             to="/vencimentos" 
             :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
           >
@@ -81,13 +74,6 @@ const isActive = (path) => {
         >
           <i class="fas fa-search"></i>
           Auditorias
-        </router-link>
-        <router-link 
-          to="/sistemas" 
-          :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition block', isActive('/sistemas') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-        >
-          <i class="fas fa-server"></i>
-          Sistemas
         </router-link>
         <router-link 
           to="/vencimentos" 

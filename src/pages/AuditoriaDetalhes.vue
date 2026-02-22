@@ -6,6 +6,7 @@ import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
 import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
+import { printTableInNewWindow } from '../utils/print'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -35,7 +36,7 @@ const colunasLocal = [
   { chave: 'percentualLido', titulo: '% Lido', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%', classeCell: 'font-bold' }
 ]
 
-const colunasModal = [
+const colunasModalBase = [
   { chave: 'Código', titulo: 'Código', sortable: true, classeCell: 'font-bold' },
   { chave: 'Produto', titulo: 'Produto', sortable: true },
   { chave: 'Local', titulo: 'Local', sortable: true, classeHeader: 'hidden pdf-only', classeCell: 'hidden pdf-only' },
@@ -91,7 +92,7 @@ const colunasMuitoTempo = [
   { chave: 'dias', titulo: 'Dias sem venda', sortable: true, alinhamento: 'right' }
 ]
 
-const colunasDados = [
+const colunasDadosBase = [
     { chave: 'Código', titulo: 'Código', sortable: true },
     { chave: 'Produto', titulo: 'Produto', sortable: true },
     { chave: 'Classe de Produto Raiz', titulo: 'Setor', sortable: true },
@@ -109,6 +110,20 @@ const store = useAuditoriasStore()
 
 const auditoria = computed(() => {
   return store.auditorias.find(a => a.id === parseInt(route.params.id))
+})
+
+const colunasModal = computed(() => {
+  if (auditoria.value?.tipo === 'Etiqueta') {
+    return colunasModalBase.filter(c => c.chave !== 'Dias sem venda')
+  }
+  return colunasModalBase
+})
+
+const colunasDados = computed(() => {
+  if (auditoria.value?.tipo === 'Etiqueta') {
+    return colunasDadosBase.filter(c => c.chave !== 'Dias sem Venda')
+  }
+  return colunasDadosBase
 })
 
 const abaAtiva = ref('dashboard')
@@ -133,6 +148,7 @@ const modalItensAberto = ref(false)
 const itensModal = ref([])
 const tituloModalItens = ref('')
 const printAreaItens = ref(null)
+const tabelaItensRef = ref(null)
 const printAreaRelatorio = ref(null)
 const exibirTudoPDFItens = ref(false)
 
@@ -914,46 +930,211 @@ const itensLidoNaoPertence = computed(() => {
   return auditoria.value.analise.itensLidoNaoPertenceDetalhes || []
 })
 
+const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
+  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
+  const root = tabelaRef.value.$el
+  const tbody = root.querySelector('tbody')
+  if (!tbody) return null
+  const trs = Array.from(tbody.querySelectorAll('tr'))
+  if (!trs.length) return null
+  const dados = []
+  trs.forEach(tr => {
+    const tds = Array.from(tr.querySelectorAll('td'))
+    if (!tds.length) return
+    const obj = {}
+    colunas.forEach((col, idx) => {
+      const td = tds[idx]
+      const texto = td ? td.textContent ?? '' : ''
+      obj[col.chave] = String(texto).trim()
+    })
+    dados.push(obj)
+  })
+  return dados
+}
+
 const handlePrintPDFItens = async () => {
-  try {
-    exibirTudoPDFItens.value = true
-    await nextTick()
-    const area = printAreaItens.value
-    if (!area) return
-    const html2pdf = (await import('html2pdf.js')).default
-    const nomeArquivo = (tituloModalItens.value || 'itens-local').replace(/[^\w\-]+/g, '_') + '.pdf'
-    const opt = {
-      margin:       [10, 10, 10, 10],
-      filename:     nomeArquivo,
-      image:        { type: 'jpeg', quality: 0.95 },
-      html2canvas:  { 
-        scale: 2, 
-        useCORS: true, 
-        scrollY: 0,
-        onclone: (doc) => {
-          try {
-            const el = doc.querySelector('[data-pdf-area=\"itens\"]') || doc.querySelector('[ref=\"printAreaItens\"]') || doc.querySelector('[data-pdf-area]')
-            if (el) el.classList.add('pdf-sanitize')
-          } catch {}
-        }
-      },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-    }
-    area.classList.add('pdf-sanitize')
-    await html2pdf().from(area).set(opt).save()
-    area.classList.remove('pdf-sanitize')
-  } catch (e) {
-    console.error('Falha ao gerar PDF:', e)
-  }
-  finally {
+  if (!colunasModal.value.length) return
+  exibirTudoPDFItens.value = true
+  await nextTick()
+  const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaItensRef, colunasModal.value)
+  const base = dadosOrdenados && dadosOrdenados.length ? dadosOrdenados : itensModalFormatados.value
+  if (!base || !base.length) {
     exibirTudoPDFItens.value = false
+    return
   }
+  const partesNome = [
+    auditoria.value?.tipo,
+    dataAuditoriaBR.value,
+    tituloModalItens.value || 'Itens do Local'
+  ].filter(Boolean)
+  const titulo = partesNome.join(' - ')
+  printTableInNewWindow(base, colunasModal.value, titulo)
+  exibirTudoPDFItens.value = false
 }
 
 const handlePrintRelatorio = () => {
-  if (typeof window !== 'undefined' && window.print) {
-    window.print()
+  if (typeof window === 'undefined') return
+  if (!dadosRelatorio.value || !auditoria.value) return
+  const win = window.open('', '_blank')
+  if (!win) return
+  const doc = win.document
+  const titulo = `Relatorio_Auditoria_${auditoria.value.tipo || ''}_${dataAuditoriaBR.value || ''}`
+  const safeTitle = titulo.replace(/\s+/g, '_')
+  const escapeHtml = (v) => {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+  const rg = dadosRelatorio.value.resultadoGeral || {}
+  const setores = dadosRelatorio.value.setores || []
+  const locais = dadosRelatorio.value.topLocaisPendentes || []
+  const locaisSemLeitura = dadosRelatorio.value.locaisSemLeitura || []
+  const setoresRows = setores.map(setor => {
+    return `<tr>
+      <td>${escapeHtml(setor.nome)}</td>
+      <td style="text-align:right;">${escapeHtml(setor.pendentes)}</td>
+      <td style="text-align:right;">${escapeHtml(setor.desatualizados || 0)}</td>
+      <td style="text-align:right;">${escapeHtml(setor.percentualPendente != null ? setor.percentualPendente.toFixed(2) + '%' : '')}</td>
+      <td>${escapeHtml(setor.classificacao)}</td>
+    </tr>`
+  }).join('')
+  const locaisRows = locais.map((local, i) => {
+    return `<tr>
+      <td style="text-align:center;">${i + 1}</td>
+      <td>${escapeHtml(local.nome)}</td>
+      <td style="text-align:right;">${escapeHtml(local.pendentes)}</td>
+      <td style="text-align:right;">${escapeHtml(local.total)}</td>
+      <td style="text-align:right;">${escapeHtml(local.percentualPendente != null ? local.percentualPendente.toFixed(2) + '%' : '')}</td>
+    </tr>`
+  }).join('')
+  const locaisSemLeituraChips = locaisSemLeitura.map(local => {
+    return `<span style="display:inline-block;margin:2px 4px;padding:2px 6px;border-radius:9999px;background:#fee2e2;color:#b91c1c;font-size:11px;">${escapeHtml(local)}</span>`
+  }).join('')
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(safeTitle)}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 11px;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+          }
+          h1 {
+            font-size: 18px;
+            margin: 0 0 12px 0;
+          }
+          h2 {
+            font-size: 14px;
+            margin: 16px 0 8px 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            border: 1px solid #e5e7eb;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: middle;
+          }
+          th {
+            background: #f3f4f6;
+            font-weight: 600;
+          }
+          tr:nth-child(even) td {
+            background: #f9fafb;
+          }
+          .section {
+            margin-bottom: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(`Relatório de Auditoria - ${auditoria.value.tipo || ''} - ${dataAuditoriaBR.value || ''}`)}</h1>
+        <div class="section">
+          <h2>Resultado Geral</h2>
+          <table>
+            <tbody>
+              <tr><th>Total Auditável</th><td>${escapeHtml(rg.totalAuditaveis)}</td></tr>
+              <tr><th>Total Lidos</th><td>${escapeHtml(rg.totalLidos)}</td></tr>
+              <tr><th>Pendentes</th><td>${escapeHtml(rg.pendentes)}</td></tr>
+              <tr><th>Desatualizados</th><td>${escapeHtml(rg.desatualizados || 0)}</td></tr>
+              <tr><th>% Pendente</th><td>${escapeHtml(rg.percentualPendente != null ? rg.percentualPendente.toFixed(2) + '%' : '')}</td></tr>
+              <tr><th>Meta</th><td>3%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h2>Análise por Setor</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Setor</th>
+                <th>Pendentes</th>
+                <th>Desat.</th>
+                <th>% Pend</th>
+                <th>Classif.</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${setoresRows}
+            </tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h2>Top 20 Locais com Mais Pendentes</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Local</th>
+                <th>Pend</th>
+                <th>Total</th>
+                <th>% Pend</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${locaisRows}
+            </tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h2>Locais Sem Leitura</h2>
+          <div>
+            ${locaisSemLeituraChips || '<span>Nenhum local sem leitura.</span>'}
+          </div>
+        </div>
+      </body>
+    </html>
+  `
+  doc.open()
+  doc.write(html)
+  doc.close()
+  win.document.title = safeTitle
+  const handle = () => {
+    try {
+      win.focus()
+      win.print()
+    } finally {
+      win.close()
+    }
+  }
+  if (win.document.readyState === 'complete') {
+    handle()
+  } else {
+    win.onload = handle
   }
 }
 
@@ -1628,7 +1809,10 @@ const fecharRelatorio = () => {
               <p class="text-4xl font-bold text-emerald-600 mt-2">{{ metricasGerais?.atualizados || 0 }}</p>
               <p class="text-xs text-gray-500 mt-1">Lidos e corretos</p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-yellow-500">
+            <div 
+              @click="abrirModalMetrica('desatualizado')"
+              class="bg-white rounded-lg p-6 shadow border-l-4 border-yellow-500 cursor-pointer hover:shadow-lg transition"
+            >
               <p class="text-gray-600 text-sm font-medium">🛠️ Desatualizado</p>
               <p class="text-4xl font-bold text-yellow-600 mt-2">{{ metricasGerais?.desatualizados || 0 }}</p>
               <p class="text-xs text-gray-500 mt-1">Lidos mas desatualizados</p>
@@ -2179,6 +2363,7 @@ const fecharRelatorio = () => {
             </div>
             
             <TabelaInterativaAuditoria
+              ref="tabelaItensRef"
               :dados="itensModalFormatados"
               :colunas="colunasModal"
               :itensPorPagina="10"

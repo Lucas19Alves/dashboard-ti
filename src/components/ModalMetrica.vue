@@ -128,13 +128,58 @@
               <i class="fas fa-list mr-2"></i>Lista de Itens
               <span class="text-sm font-normal text-gray-500 ml-2">({{ lista.length }} encontrados)</span>
             </p>
+            <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
+              <select
+                v-if="usuariosOpcoes.length > 0"
+                v-model="filtroUsuario"
+                class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white"
+              >
+                <option value="">Todos usuários</option>
+                <option v-for="u in usuariosOpcoes" :key="u" :value="u">{{ u }}</option>
+              </select>
+              <select
+                v-if="setoresOpcoes.length > 0"
+                v-model="filtroSetor"
+                class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white"
+              >
+                <option value="">Todos setores</option>
+                <option v-for="s in setoresOpcoes" :key="s" :value="s">{{ s }}</option>
+              </select>
+              <select
+                v-if="locaisOpcoes.length > 0"
+                v-model="filtroLocal"
+                class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white"
+              >
+                <option value="">Todos locais</option>
+                <option v-for="l in locaisOpcoes" :key="l" :value="l">{{ l }}</option>
+              </select>
+              <select
+                v-if="tipo === 'problema'"
+                v-model="filtroProblema"
+                class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white"
+              >
+                <option value="">Todos problemas</option>
+                <option v-for="p in problemasOpcoes" :key="p" :value="p">{{ p }}</option>
+              </select>
+              <button
+                type="button"
+                @click="imprimirLista"
+                class="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition shadow"
+              >
+                <i class="fas fa-print mr-1"></i>
+                <span class="hidden sm:inline">Imprimir relatório</span>
+                <span class="sm:hidden">Imprimir</span>
+              </button>
+            </div>
           </div>
           
           <TabelaInterativaAuditoria
+            ref="tabelaListaRef"
             :dados="lista"
             :colunas="colunas"
-            :itensPorPagina="10"
+            :itensPorPagina="15"
             :mostrarBusca="true"
+            :exibirTudo="exibirTudoTabela"
           >
             <template #cell-_estoque="{ item }">
               <span class="font-mono">{{ item._estoque || 0 }}</span>
@@ -166,8 +211,9 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import TabelaInterativaAuditoria from './TabelaInterativaAuditoria.vue'
+import { printTableInNewWindow } from '../utils/print'
 
 const props = defineProps({
   aberto: Boolean,
@@ -178,12 +224,20 @@ const props = defineProps({
 
 const emit = defineEmits(['fechar'])
 
+const tabelaListaRef = ref(null)
+const exibirTudoTabela = ref(false)
+const filtroUsuario = ref('')
+const filtroSetor = ref('')
+const filtroLocal = ref('')
+const filtroProblema = ref('')
+
 const titulo = computed(() => {
   const titulos = {
     'total': 'Total de Itens da Auditoria',
     'lidos': 'Itens Lidos Corretamente',
     'pendentes': 'Itens Pendentes - Não Lidos',
-    'problema': 'Itens Lidos Com Problema'
+    'problema': 'Itens Lidos Com Problema',
+    'desatualizado': 'Itens Lidos Desatualizados'
   }
   return titulos[props.tipo] || 'Métrica'
 })
@@ -193,7 +247,8 @@ const subtitulo = computed(() => {
     'total': 'Total de itens auditáveis (excluindo: sem leitura e sem estoque)',
     'lidos': 'Itens com presença confirmada e estoque disponível',
     'pendentes': 'Itens sem presença confirmada mas com estoque',
-    'problema': 'Itens com presença mas estoque zerado ou lido no local errado'
+    'problema': 'Itens com presença mas estoque zerado ou lido no local errado',
+    'desatualizado': 'Itens lidos com informação desatualizada em relação ao sistema'
   }
   return subtitulos[props.tipo] || ''
 })
@@ -204,7 +259,8 @@ const valor = computed(() => {
     'total': props.dados.totalItens || 0,
     'lidos': props.dados.itensLidosCorretamente || 0,
     'pendentes': props.dados.itensPendentes || 0,
-    'problema': props.dados.itensLidosComProblema || 0
+    'problema': props.dados.itensLidosComProblema || 0,
+    'desatualizado': props.dados.itensDesatualizados || 0
   }
   return valores[props.tipo] || 0
 })
@@ -214,7 +270,8 @@ const corFundo = computed(() => {
     'total': 'bg-gradient-to-r from-blue-600 to-blue-800',
     'lidos': 'bg-gradient-to-r from-green-600 to-green-800',
     'pendentes': 'bg-gradient-to-r from-orange-600 to-orange-800',
-    'problema': 'bg-gradient-to-r from-red-600 to-red-800'
+    'problema': 'bg-gradient-to-r from-red-600 to-red-800',
+    'desatualizado': 'bg-gradient-to-r from-yellow-500 to-yellow-700'
   }
   return cores[props.tipo] || 'bg-gradient-to-r from-gray-600 to-gray-800'
 })
@@ -224,7 +281,8 @@ const classeValor = computed(() => {
     'total': 'text-blue-600',
     'lidos': 'text-green-600',
     'pendentes': 'text-orange-600',
-    'problema': 'text-red-600'
+    'problema': 'text-red-600',
+    'desatualizado': 'text-yellow-600'
   }
   return classes[props.tipo] || 'text-gray-600'
 })
@@ -232,6 +290,17 @@ const classeValor = computed(() => {
 const fechar = () => {
   emit('fechar')
 }
+
+const normalizar = (valor) => {
+  if (valor == null) return ''
+  try {
+    return String(valor).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  } catch {
+    return String(valor).toLowerCase()
+  }
+}
+
+const problemasOpcoes = computed(() => ['Estoque Zero', 'Local Errado'])
 
 const isLidoNaoPertence = (item) => {
   const valor = item['Lido não pertence']
@@ -258,28 +327,124 @@ const colunas = computed(() => {
   return cols
 })
 
-const lista = computed(() => {
+const baseLista = computed(() => {
   const items = props.dadosCompletos || []
   if (!props.dados || items.length === 0) return []
   
-  let resultado = []
-  
   if (props.tipo === 'pendentes') {
-    resultado = items.filter(i => !temPresencaEfetiva(i) && (i._estoque || 0) > 0)
-  } else if (props.tipo === 'lidos') {
-    resultado = items.filter(i => temPresencaEfetiva(i) && (i._estoque || 0) > 0)
-  } else if (props.tipo === 'problema') {
+    return items.filter(i => !temPresencaEfetiva(i) && (i._estoque || 0) > 0)
+  }
+  if (props.tipo === 'lidos') {
+    return items.filter(i => temPresencaEfetiva(i) && (i._estoque || 0) > 0)
+  }
+  if (props.tipo === 'problema') {
     const codsZ = new Set((props.dados.itensComEstoqueZeroDetalhes || []).map(d => d.codigo))
     const codsN = new Set((props.dados.itensLidoNaoPertenceDetalhes || []).map(d => d.codigo))
-    resultado = items.filter(i => codsZ.has(i['Código']) || codsN.has(i['Código']))
+    return items
+      .filter(i => codsZ.has(i['Código']) || codsN.has(i['Código']))
       .map(i => ({
         ...i,
         _problema: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado',
-        Motivo: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado' // Add mapped field for sorting/display
+        Motivo: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado'
       }))
   }
-
-  // Ordenar inicial (Problema -> Prioridade, Outros -> Estoque desc)
-  return resultado.sort((a, b) => (b._estoque || 0) - (a._estoque || 0))
+  if (props.tipo === 'desatualizado') {
+    return items.filter(i => {
+      const s = normalizar(i['Situação'] || i['Situação atual da auditoria'] || i._situacao || '')
+      return s.includes('desatualizad')
+    })
+  }
+  return []
 })
+
+const aplicarFiltrosAvancados = (items, { ignorarUsuario = false, ignorarSetor = false, ignorarLocal = false, ignorarProblema = false } = {}) => {
+  let resultado = [...items]
+
+  if (!ignorarUsuario && filtroUsuario.value) {
+    resultado = resultado.filter(i => (i['Usuário'] || '').toString().trim() === filtroUsuario.value)
+  }
+  if (!ignorarSetor && filtroSetor.value) {
+    resultado = resultado.filter(i => {
+      const v = (i['Classe de Produto Raiz'] || i['Setor'] || '').toString().trim()
+      return v === filtroSetor.value
+    })
+  }
+  if (!ignorarLocal && filtroLocal.value) {
+    resultado = resultado.filter(i => (i['Local'] || '').toString().trim() === filtroLocal.value)
+  }
+  if (props.tipo === 'problema' && !ignorarProblema && filtroProblema.value) {
+    resultado = resultado.filter(i => (i._problema || '') === filtroProblema.value)
+  }
+
+  return resultado
+}
+
+const usuariosOpcoes = computed(() => {
+  const set = new Set()
+  const items = aplicarFiltrosAvancados(baseLista.value, { ignorarUsuario: true })
+  items.forEach(i => {
+    const v = (i['Usuário'] || '').toString().trim()
+    if (v) set.add(v)
+  })
+  return Array.from(set).sort()
+})
+
+const setoresOpcoes = computed(() => {
+  const set = new Set()
+  const items = aplicarFiltrosAvancados(baseLista.value, { ignorarSetor: true })
+  items.forEach(i => {
+    const v = (i['Classe de Produto Raiz'] || i['Setor'] || '').toString().trim()
+    if (v) set.add(v)
+  })
+  return Array.from(set).sort()
+})
+
+const locaisOpcoes = computed(() => {
+  const set = new Set()
+  const items = aplicarFiltrosAvancados(baseLista.value, { ignorarLocal: true })
+  items.forEach(i => {
+    const v = (i['Local'] || '').toString().trim()
+    if (v) set.add(v)
+  })
+  return Array.from(set).sort()
+})
+
+const lista = computed(() => {
+  const filtrada = aplicarFiltrosAvancados(baseLista.value)
+  return filtrada.sort((a, b) => (b._estoque || 0) - (a._estoque || 0))
+})
+
+const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
+  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
+  const root = tabelaRef.value.$el
+  const tbody = root.querySelector('tbody')
+  if (!tbody) return null
+  const trs = Array.from(tbody.querySelectorAll('tr'))
+  if (!trs.length) return null
+  const dados = []
+  trs.forEach(tr => {
+    const tds = Array.from(tr.querySelectorAll('td'))
+    if (!tds.length) return
+    const obj = {}
+    colunas.forEach((col, idx) => {
+      const td = tds[idx]
+      const texto = td ? td.textContent ?? '' : ''
+      obj[col.chave] = String(texto).trim()
+    })
+    dados.push(obj)
+  })
+  return dados
+}
+
+const imprimirLista = async () => {
+  if (!colunas.value.length) return
+  exibirTudoTabela.value = true
+  await nextTick()
+  const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaListaRef, colunas.value)
+  exibirTudoTabela.value = false
+  const base = dadosOrdenados && dadosOrdenados.length ? dadosOrdenados : lista.value
+  if (!base || !base.length) return
+  const tituloRel = `Auditoria - ${titulo.value}`
+  printTableInNewWindow(base, colunas.value, tituloRel)
+}
 </script>

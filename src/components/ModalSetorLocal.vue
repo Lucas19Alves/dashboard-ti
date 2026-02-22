@@ -32,6 +32,7 @@
           :itensPorPagina="10"
           :mostrarBusca="true"
           :clickable="tipo === 'setor'"
+          :exibirTudo="true"
           @click-row="handleRowClick"
         >
           <template #cell-percentualPendente="{ item }">

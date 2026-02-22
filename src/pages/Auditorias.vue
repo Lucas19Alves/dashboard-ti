@@ -308,6 +308,50 @@ const auditoriasPaginadas = computed(() => {
   return auditoriasFiltradas.value.slice(inicio, inicio + itensPorPagina)
 })
 
+const totalAuditorias = computed(() => Array.isArray(store.auditorias) ? store.auditorias.length : 0)
+const auditoriasAbertas = computed(() =>
+  Array.isArray(store.auditorias) ? store.auditorias.filter(a => a && a.status !== 'fechada') : []
+)
+const auditoriasFechadas = computed(() =>
+  Array.isArray(store.auditorias) ? store.auditorias.filter(a => a && a.status === 'fechada') : []
+)
+
+const parcialMediaGeral = computed(() => {
+  const lista = Array.isArray(store.auditorias) ? store.auditorias.filter(a => a) : []
+  if (!lista.length) return 0
+  const soma = lista.reduce((acc, a) => {
+    const v = a.analise && typeof a.analise.parcialPercentual === 'number'
+      ? a.analise.parcialPercentual
+      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    return acc + (Number.isFinite(v) ? v : 0)
+  }, 0)
+  return soma / lista.length
+})
+
+const statusAuditorias = computed(() => {
+  const total = totalAuditorias.value
+  const abertas = auditoriasAbertas.value.length
+  if (!total) {
+    return {
+      titulo: 'Nenhuma auditoria cadastrada',
+      descricao: 'Use o calendário para iniciar uma nova auditoria.',
+      classe: 'bg-gray-100 text-gray-700'
+    }
+  }
+  if (abertas > 0) {
+    return {
+      titulo: 'Auditorias em andamento',
+      descricao: `${abertas} de ${total} auditorias estão abertas para acompanhamento.`,
+      classe: 'bg-blue-50 text-blue-800'
+    }
+  }
+  return {
+    titulo: 'Todas as auditorias fechadas',
+    descricao: 'Nenhuma auditoria aberta no momento.',
+    classe: 'bg-green-50 text-green-800'
+  }
+})
+
 const excluirAuditoria = (id) => {
   idParaExcluir.value = id
   mostrarModalExclusao.value = true
@@ -488,63 +532,140 @@ const classesCardDia = (d) => {
 </script>
 
 <template>
-  <div class="p-8">
-    <div class="flex items-center gap-3 mb-6">
-      <i class="fas fa-search text-3xl text-blue-600"></i>
-      <h1 class="text-4xl font-bold text-gray-800">Auditorias</h1>
-    </div>
+  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="h-12 w-12 rounded-xl bg-blue-600/10 flex items-center justify-center">
+            <i class="fas fa-search text-2xl text-blue-600"></i>
+          </div>
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Auditorias</h1>
+            <p class="text-sm text-gray-500 mt-1">
+              Organize, acompanhe e finalize as auditorias da loja.
+            </p>
+          </div>
+        </div>
+        <div
+          class="inline-flex flex-col sm:flex-row sm:items-center sm:justify-end gap-1 sm:gap-2 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-gray-100 text-gray-700 max-w-md"
+          :class="statusAuditorias.classe"
+        >
+          <span class="font-semibold">{{ statusAuditorias.titulo }}</span>
+          <span class="text-[11px] md:text-xs opacity-90">
+            {{ statusAuditorias.descricao }}
+          </span>
+        </div>
+      </div>
 
-    <!-- Abas -->
-    <div class="flex gap-2 mb-6 flex-wrap">
-      <button
-        @click="abaAtiva = 'calendario'"
-        :class="[
-          'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-          abaAtiva === 'calendario'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        ]"
-      >
-        <i class="fas fa-calendar"></i>
-        Calendário
-      </button>
-      <button
-        @click="abaAtiva = 'Etiqueta'"
-        :class="[
-          'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-          abaAtiva === 'Etiqueta'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        ]"
-      >
-        <i class="fas fa-tag"></i>
-        Etiqueta
-      </button>
-      <button
-        @click="abaAtiva = 'Presença'"
-        :class="[
-          'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-          abaAtiva === 'Presença'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        ]"
-      >
-        <i class="fas fa-check-square"></i>
-        Presença
-      </button>
-      <button
-        @click="abaAtiva = 'Ruptura'"
-        :class="[
-          'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-          abaAtiva === 'Ruptura'
-            ? 'bg-blue-600 text-white'
-            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-        ]"
-      >
-        <i class="fas fa-exclamation-triangle"></i>
-        Ruptura
-      </button>
-    </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias ativas</p>
+            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
+              <i class="fas fa-play text-xs"></i>
+            </span>
+          </div>
+          <p class="mt-2 text-2xl md:text-3xl font-bold text-blue-700">
+            {{ auditoriasAbertas.length }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500">
+            Em andamento no momento.
+          </p>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias fechadas</p>
+            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-emerald-50 text-emerald-600">
+              <i class="fas fa-lock text-xs"></i>
+            </span>
+          </div>
+          <p class="mt-2 text-2xl md:text-3xl font-bold text-emerald-700">
+            {{ auditoriasFechadas.length }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500">
+            Já concluídas e disponíveis no histórico.
+          </p>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Total de auditorias</p>
+            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-indigo-50 text-indigo-600">
+              <i class="fas fa-clipboard-list text-xs"></i>
+            </span>
+          </div>
+          <p class="mt-2 text-2xl md:text-3xl font-bold text-indigo-700">
+            {{ totalAuditorias }}
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500">
+            Registradas no sistema.
+          </p>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Parcial média</p>
+            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-amber-50 text-amber-600">
+              <i class="fas fa-chart-line text-xs"></i>
+            </span>
+          </div>
+          <p class="mt-2 text-2xl md:text-3xl font-bold" :class="parcialMediaGeral > 0 ? 'text-amber-700' : 'text-slate-700'">
+            {{ parcialMediaGeral.toFixed(1) }}%
+          </p>
+          <p class="mt-1 text-[11px] text-slate-500">
+            Quanto falta em média para entregar as auditorias.
+          </p>
+        </div>
+      </div>
+
+      <!-- Abas -->
+      <div class="flex gap-2 flex-wrap">
+        <button
+          @click="abaAtiva = 'calendario'"
+          :class="[
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+            abaAtiva === 'calendario'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          <i class="fas fa-calendar"></i>
+          Calendário
+        </button>
+        <button
+          @click="abaAtiva = 'Etiqueta'"
+          :class="[
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+            abaAtiva === 'Etiqueta'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          <i class="fas fa-tag"></i>
+          Etiqueta
+        </button>
+        <button
+          @click="abaAtiva = 'Presença'"
+          :class="[
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+            abaAtiva === 'Presença'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          <i class="fas fa-check-square"></i>
+          Presença
+        </button>
+        <button
+          @click="abaAtiva = 'Ruptura'"
+          :class="[
+            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
+            abaAtiva === 'Ruptura'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          ]"
+        >
+          <i class="fas fa-exclamation-triangle"></i>
+          Ruptura
+        </button>
+      </div>
 
     <!-- Modal de Confirmação de Exclusão -->
     <div

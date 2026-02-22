@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
-import { printTable } from '../utils/print'
+import { printTableInNewWindow } from '../utils/print'
 
 const store = useVencimentosStore()
 const toastStore = useAuditoriasStore()
@@ -69,6 +69,38 @@ const carregarPlanilha = async () => {
 }
 
 const resumo = computed(() => store.analise || { total: 0, vencidos: 0, hoje: 0, ate3: 0 })
+
+const totalCriticosPrazo = computed(() => resumo.value.vencidos + resumo.value.hoje + resumo.value.ate3)
+
+const statusValidades = computed(() => {
+  const r = resumo.value
+  if (!r.total) {
+    return {
+      titulo: 'Sem dados de validades',
+      descricao: 'Importe uma planilha para visualizar a saúde das validades.',
+      classe: 'bg-gray-100 text-gray-700'
+    }
+  }
+  if (r.vencidos > 0) {
+    return {
+      titulo: 'Risco alto em validades',
+      descricao: `${r.vencidos} itens já vencidos e ${r.hoje + r.ate3} muito próximos.`,
+      classe: 'bg-red-50 text-red-800'
+    }
+  }
+  if (r.hoje + r.ate3 > 0) {
+    return {
+      titulo: 'Atenção aos próximos dias',
+      descricao: `${r.hoje + r.ate3} itens vencendo hoje ou em até 3 dias.`,
+      classe: 'bg-yellow-50 text-yellow-800'
+    }
+  }
+  return {
+    titulo: 'Validades sob controle',
+    descricao: 'Nenhum item crítico nos próximos dias.',
+    classe: 'bg-green-50 text-green-800'
+  }
+})
 
 const fornecedores = computed(() => {
   const set = new Set()
@@ -180,19 +212,58 @@ const itensFornecedor = computed(() => {
   return store.itens.filter(i => i._fornecedor === fornecedorSelecionado.value)
 })
 
+const tabelaFornecedorRef = ref(null)
+const tabelaSetorItensRef = ref(null)
+const exibirTudoFornecedorPrint = ref(false)
+const exibirTudoSetorPrint = ref(false)
+
+const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
+  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
+  const root = tabelaRef.value.$el
+  const tbody = root.querySelector('tbody')
+  if (!tbody) return null
+  const trs = Array.from(tbody.querySelectorAll('tr'))
+  if (!trs.length) return null
+  const dados = []
+  trs.forEach(tr => {
+    const tds = Array.from(tr.querySelectorAll('td'))
+    if (!tds.length) return
+    const obj = {}
+    colunas.forEach((col, idx) => {
+      const td = tds[idx]
+      const texto = td ? td.textContent ?? '' : ''
+      obj[col.chave] = String(texto).trim()
+    })
+    dados.push(obj)
+  })
+  return dados
+}
+
 const imprimir = async (alvo) => {
-  let data, columns, title
   if (alvo === 'fornecedor') {
-    data = itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
-    columns = colunasItens
-    title = `Itens do fornecedor: ${fornecedorSelecionado.value}`
+    exibirTudoFornecedorPrint.value = true
+    await nextTick()
+    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaFornecedorRef, colunasItens)
+    exibirTudoFornecedorPrint.value = false
+    const base = dadosOrdenados && dadosOrdenados.length
+      ? dadosOrdenados
+      : itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    const title = `Vencimentos - Fornecedor - ${fornecedorSelecionado.value}`
+    if (base.length && colunasItens.length) {
+      printTableInNewWindow(base, colunasItens, title)
+    }
   } else if (alvo === 'modal-setor') {
-    data = itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
-    columns = colunasItens
-    title = `Itens do setor: ${setorModalNome.value}`
-  }
-  if (data && columns) {
-    await printTable(data, columns, title)
+    exibirTudoSetorPrint.value = true
+    await nextTick()
+    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaSetorItensRef, colunasItens)
+    exibirTudoSetorPrint.value = false
+    const base = dadosOrdenados && dadosOrdenados.length
+      ? dadosOrdenados
+      : itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    const title = `Vencimentos - Setor - ${setorModalNome.value || 'Todos'}`
+    if (base.length && colunasItens.length) {
+      printTableInNewWindow(base, colunasItens, title)
+    }
   }
 }
 
@@ -211,14 +282,33 @@ const itensSetorModal = computed(() => {
 </script>
 
 <template>
-  <div class="p-8">
-    <div class="flex items-center gap-3 mb-6">
-      <i class="fas fa-calendar-alt text-3xl text-orange-600"></i>
-      <h1 class="text-4xl font-bold text-gray-800">Vencimentos</h1>
-    </div>
+  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8">
+    <div class="max-w-7xl mx-auto space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+            <i class="fas fa-calendar-alt text-2xl text-orange-600"></i>
+          </div>
+          <div>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Vencimentos</h1>
+            <p class="text-sm text-gray-500 mt-1">
+              Painel de controle de validade dos itens.
+            </p>
+          </div>
+        </div>
+        <div
+          class="inline-flex items-center px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-gray-100 text-gray-700"
+          :class="statusValidades.classe"
+        >
+          <span class="font-semibold">{{ statusValidades.titulo }}</span>
+          <span class="hidden sm:inline text-[11px] md:text-xs opacity-90 ml-2">
+            {{ statusValidades.descricao }}
+          </span>
+        </div>
+      </div>
 
-    <div class="grid grid-cols-1 gap-6">
-      <div v-if="mostrarUpload" class="bg-white rounded-lg shadow-lg p-6">
+      <div class="grid grid-cols-1 gap-6">
+        <div v-if="mostrarUpload" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
         <div class="flex justify-between items-center mb-3">
           <h2 class="text-2xl font-bold text-gray-800">Carregar Planilha</h2>
           <button v-if="store.itens.length > 0" @click="mostrarUpload = false" class="text-gray-500 hover:text-gray-700">
@@ -258,6 +348,7 @@ const itensSetorModal = computed(() => {
           </button>
         </div>
       </div>
+      </div>
 
       <div v-if="store.itens.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div v-if="!mostrarUpload" class="col-span-1 md:col-span-4 flex justify-end">
@@ -265,7 +356,7 @@ const itensSetorModal = computed(() => {
             <i class="fas fa-file-upload mr-2"></i>Nova Importação
           </button>
         </div>
-        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-blue-100 p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-gray-600 text-sm font-medium">Total</p>
@@ -274,7 +365,7 @@ const itensSetorModal = computed(() => {
             <i class="fas fa-list text-blue-600 text-3xl opacity-20"></i>
           </div>
         </div>
-        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-red-500">
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-gray-600 text-sm font-medium">Vencidos</p>
@@ -283,7 +374,7 @@ const itensSetorModal = computed(() => {
             <i class="fas fa-times-circle text-red-600 text-3xl opacity-20"></i>
           </div>
         </div>
-        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-gray-600 text-sm font-medium">Vencendo Hoje</p>
@@ -292,7 +383,7 @@ const itensSetorModal = computed(() => {
             <i class="fas fa-bell text-orange-600 text-3xl opacity-20"></i>
           </div>
         </div>
-        <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-4">
           <div class="flex items-center justify-between">
             <div>
               <p class="text-gray-600 text-sm font-medium">Até 3 dias</p>
@@ -303,7 +394,7 @@ const itensSetorModal = computed(() => {
         </div>
       </div>
 
-      <div v-if="store.itens.length > 0" class="bg-white rounded-lg shadow-lg p-6">
+      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
         <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
           <div>
             <h2 class="text-2xl font-bold text-gray-800">Filtro</h2>
@@ -359,7 +450,7 @@ const itensSetorModal = computed(() => {
 
       </div>
 
-      <div v-if="store.itens.length > 0" class="bg-white rounded-lg shadow-lg p-6">
+      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-2xl font-bold text-gray-800">
             Itens por Filtro
@@ -390,7 +481,7 @@ const itensSetorModal = computed(() => {
         </TabelaInterativaAuditoria>
       </div>
 
-      <div v-if="store.itens.length > 0" class="bg-white rounded-lg shadow-lg p-6">
+      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
         <TabelaInterativaAuditoria
           :dados="linhasFornecedores"
           :colunas="colunasFornecedores"
@@ -416,11 +507,13 @@ const itensSetorModal = computed(() => {
             <button @click="limparFornecedor" class="text-sm text-blue-600 hover:underline">Fechar</button>
           </div>
           <TabelaInterativaAuditoria
+            ref="tabelaFornecedorRef"
             :dados="itensFornecedor.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
             :colunas="colunasItens"
             titulo=""
             :rowClass="rowClassPrazo"
             :itensPorPagina="10"
+            :exibirTudo="exibirTudoFornecedorPrint"
           >
             <template #cell-_prazo="{ valor }">
               <span
@@ -444,45 +537,53 @@ const itensSetorModal = computed(() => {
         </div>
       </div>
 
-      <div v-if="modalSetorAberto" class="fixed inset-0 z-50 flex items-center justify-center">
-          <div class="absolute inset-0 bg-black bg-opacity-40" @click="fecharModalSetor"></div>
-          <div class="relative bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-              <h3 class="text-lg font-semibold text-gray-800">Itens do setor: {{ setorModalNome }}</h3>
-              <button @click="fecharModalSetor" class="text-gray-500 hover:text-gray-700">
-                <i class="fas fa-times text-xl"></i>
-              </button>
-            </div>
-            <div class="p-4 overflow-y-auto">
-              <TabelaInterativaAuditoria
-                :dados="itensSetorModal.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-                :colunas="colunasItens"
-                titulo=""
-                :rowClass="rowClassPrazo"
-                :itensPorPagina="12"
-              >
-                <template #cell-_prazo="{ valor }">
-                  <span
-                    class="px-2 py-0.5 text-xs rounded-full border"
-                    :class="{
-                      'text-red-700 bg-red-50 border-red-200': valor === 'vencidos',
-                      'text-orange-700 bg-orange-50 border-orange-200': valor === 'hoje',
-                      'text-yellow-700 bg-yellow-50 border-yellow-200': valor === 'ate3',
-                      'text-gray-700 bg-gray-50 border-gray-200': valor === 'futuro'
-                    }"
-                  >
-                    {{ valor === 'vencidos' ? 'Vencidos' : valor === 'hoje' ? 'Hoje' : valor === 'ate3' ? 'Até 3 dias' : 'Futuro' }}
-                  </span>
-                </template>
-              </TabelaInterativaAuditoria>
-            </div>
-            <div class="px-4 py-3 border-t bg-gray-50 flex justify-end">
-              <button @click="imprimir('modal-setor')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium shadow-sm transition">
-                <i class="fas fa-print mr-2"></i>Imprimir Relatório
-              </button>
-            </div>
+      <div 
+        v-if="modalSetorAberto" 
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+        @click="fecharModalSetor"
+      >
+        <div 
+          class="relative bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 overflow-hidden flex flex-col max-h-[90vh]"
+          @click.stop
+        >
+          <div class="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+            <h3 class="text-lg font-semibold text-gray-800">Itens do setor: {{ setorModalNome }}</h3>
+            <button @click="fecharModalSetor" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-4 overflow-y-auto">
+            <TabelaInterativaAuditoria
+              ref="tabelaSetorItensRef"
+              :dados="itensSetorModal.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
+              :colunas="colunasItens"
+              titulo=""
+              :rowClass="rowClassPrazo"
+              :itensPorPagina="12"
+              :exibirTudo="exibirTudoSetorPrint"
+            >
+              <template #cell-_prazo="{ valor }">
+                <span
+                  class="px-2 py-0.5 text-xs rounded-full border"
+                  :class="{
+                    'text-red-700 bg-red-50 border-red-200': valor === 'vencidos',
+                    'text-orange-700 bg-orange-50 border-orange-200': valor === 'hoje',
+                    'text-yellow-700 bg-yellow-50 border-yellow-200': valor === 'ate3',
+                    'text-gray-700 bg-gray-50 border-gray-200': valor === 'futuro'
+                  }"
+                >
+                  {{ valor === 'vencidos' ? 'Vencidos' : valor === 'hoje' ? 'Hoje' : valor === 'ate3' ? 'Até 3 dias' : 'Futuro' }}
+                </span>
+              </template>
+            </TabelaInterativaAuditoria>
+          </div>
+          <div class="px-4 py-3 border-t bg-gray-50 flex justify-end">
+            <button @click="imprimir('modal-setor')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium shadow-sm transition">
+              <i class="fas fa-print mr-2"></i>Imprimir Relatório
+            </button>
           </div>
         </div>
+      </div>
     </div>
   </div>
 </template>

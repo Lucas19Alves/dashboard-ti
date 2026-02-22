@@ -57,7 +57,7 @@ export const printTable = async (data, columns, title = 'Relatório') => {
       image: { type: 'jpeg', quality: 0.95 },
       html2canvas: { scale: 2, useCORS: true, scrollY: 0, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      pagebreak: { mode: ['css', 'legacy'] }
     }
     if (document.fonts && document.fonts.ready) {
       try { await document.fonts.ready } catch {}
@@ -65,5 +65,103 @@ export const printTable = async (data, columns, title = 'Relatório') => {
     await html2pdf().from(container).set(opt).save()
   } finally {
     document.body.removeChild(container)
+  }
+}
+
+export const printTableInNewWindow = (data, columns, title = 'Relatório') => {
+  if (!Array.isArray(data) || data.length === 0 || !Array.isArray(columns) || columns.length === 0) return
+  if (typeof window === 'undefined') return
+  const win = window.open('', '_blank')
+  if (!win) return
+  const doc = win.document
+  const safeTitle = String(title || 'Relatório')
+  const escapeHtml = (v) => {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+  const headers = columns
+    .map(c => `<th>${escapeHtml(c.titulo)}</th>`)
+    .join('')
+  const rows = data
+    .map(item => {
+      const cells = columns
+        .map(c => {
+          const val = item?.[c.chave]
+          return `<td>${escapeHtml(val)}</td>`
+        })
+        .join('')
+      return `<tr>${cells}</tr>`
+    })
+    .join('')
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(safeTitle)}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 11px;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+          }
+          h1 {
+            font-size: 18px;
+            margin: 0 0 12px 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            border: 1px solid #e5e7eb;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: middle;
+          }
+          th {
+            background: #f3f4f6;
+            font-weight: 600;
+          }
+          tr:nth-child(even) td {
+            background: #f9fafb;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(safeTitle)}</h1>
+        <table>
+          <thead><tr>${headers}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+    </html>
+  `
+  doc.open()
+  doc.write(html)
+  doc.close()
+  win.document.title = safeTitle
+  const handle = () => {
+    try {
+      win.focus()
+      win.print()
+    } finally {
+      win.close()
+    }
+  }
+  if (win.document.readyState === 'complete') {
+    handle()
+  } else {
+    win.onload = handle
   }
 }
