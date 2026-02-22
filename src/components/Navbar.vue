@@ -42,6 +42,13 @@ const isActive = (path) => {
             Auditorias
           </router-link>
           <router-link 
+            to="/auditorias/analise" 
+            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias/analise') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+          >
+            <i class="fas fa-chart-line"></i>
+            Análise
+          </router-link>
+          <router-link 
             to="/vencimentos" 
             :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
           >

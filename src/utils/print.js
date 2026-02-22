@@ -165,3 +165,128 @@ export const printTableInNewWindow = (data, columns, title = 'Relatório') => {
     win.onload = handle
   }
 }
+
+export const printHtmlInNewWindow = (title = 'Relatório', bodyHtml = '') => {
+  if (typeof window === 'undefined') return
+  const win = window.open('', '_blank')
+  if (!win) return
+  const doc = win.document
+  const safeTitle = String(title || 'Relatório')
+  const escapeHtml = (v) => {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(safeTitle)}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 10mm;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 11px;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+          }
+          h1 {
+            font-size: 18px;
+            margin: 0 0 12px 0;
+          }
+          h2 {
+            font-size: 14px;
+            margin: 16px 0 8px 0;
+          }
+          p {
+            margin: 4px 0;
+          }
+          .cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 12px 0;
+          }
+          .card {
+            flex: 1 1 22%;
+            min-width: 140px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 8px 10px;
+            background: #f9fafb;
+          }
+          .card-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin-bottom: 4px;
+          }
+          .card-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+          }
+          .card-sub {
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 2px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4px;
+          }
+          th, td {
+            border: 1px solid #e5e7eb;
+            padding: 4px 6px;
+            text-align: left;
+            vertical-align: middle;
+          }
+          th {
+            background: #f3f4f6;
+            font-weight: 600;
+          }
+          tr:nth-child(even) td {
+            background: #f9fafb;
+          }
+          .section {
+            page-break-inside: avoid;
+            margin-bottom: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        ${bodyHtml}
+      </body>
+    </html>
+  `
+  doc.open()
+  doc.write(html)
+  doc.close()
+  win.document.title = safeTitle
+  const handle = () => {
+    try {
+      win.focus()
+      win.print()
+    } finally {
+      win.close()
+    }
+  }
+  if (win.document.readyState === 'complete') {
+    handle()
+  } else {
+    win.onload = handle
+  }
+}

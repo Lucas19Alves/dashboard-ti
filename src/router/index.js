@@ -3,6 +3,7 @@ import Inicio from '../pages/Inicio.vue'
 import Auditorias from '../pages/Auditorias.vue'
 import AuditoriaDetalhes from '../pages/AuditoriaDetalhes.vue'
 import Vencimentos from '../pages/Vencimentos.vue'
+import AnaliseAuditorias from '../pages/AnaliseAuditorias.vue'
 
 const routes = [
   {
@@ -19,6 +20,11 @@ const routes = [
     path: '/auditoria/:id',
     name: 'AuditoriaDetalhes',
     component: AuditoriaDetalhes
+  },
+  {
+    path: '/auditorias/analise',
+    name: 'AnaliseAuditorias',
+    component: AnaliseAuditorias
   },
   {
     path: '/vencimentos',
