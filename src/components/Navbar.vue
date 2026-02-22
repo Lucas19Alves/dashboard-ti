@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const isOpen = ref(false)
+const mostrarSobre = ref(false)
 const router = useRouter()
 const route = useRoute()
 
@@ -13,57 +14,79 @@ const toggleMenu = () => {
 const isActive = (path) => {
   return route.path === path
 }
+
+const abrirSobre = () => {
+  mostrarSobre.value = true
+}
+
+const fecharSobre = () => {
+  mostrarSobre.value = false
+}
+
+const irPara = (url) => {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
   <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4">
       <div class="flex justify-between items-center h-16">
-        <!-- Logo -->
-        <div class="flex-shrink-0 font-bold text-2xl flex items-center gap-2">
-          <i class="fas fa-tachometer-alt"></i>
-          Dashboard TI
+        <div class="flex items-center gap-4">
+          <div class="flex-shrink-0 font-bold text-2xl flex items-center gap-2">
+            <i class="fas fa-tachometer-alt"></i>
+            Dashboard TI
+          </div>
         </div>
 
-        <!-- Desktop Menu -->
-        <div class="hidden md:flex space-x-2">
-          <router-link 
-            to="/" 
-            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-          >
-            <i class="fas fa-home"></i>
-            Início
-          </router-link>
-          <router-link 
-            to="/auditorias" 
-            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-          >
-            <i class="fas fa-search"></i>
-            Auditorias
-          </router-link>
-          <router-link 
-            to="/auditorias/analise" 
-            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias/analise') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-          >
-            <i class="fas fa-chart-line"></i>
-            Análise
-          </router-link>
-          <router-link 
-            to="/vencimentos" 
-            :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-          >
-            <i class="fas fa-calendar-alt"></i>
-            Vencimentos
-          </router-link>
-        </div>
+        <div class="flex items-center gap-3">
+          <div class="hidden md:flex space-x-2">
+            <router-link 
+              to="/" 
+              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+            >
+              <i class="fas fa-home"></i>
+              Início
+            </router-link>
+            <router-link 
+              to="/auditorias" 
+              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+            >
+              <i class="fas fa-search"></i>
+              Auditorias
+            </router-link>
+            <router-link 
+              to="/auditorias/analise" 
+              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias/analise') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+            >
+              <i class="fas fa-chart-line"></i>
+              Análise
+            </router-link>
+            <router-link 
+              to="/vencimentos" 
+              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+            >
+              <i class="fas fa-calendar-alt"></i>
+              Vencimentos
+            </router-link>
+          </div>
 
-        <!-- Mobile Menu Button -->
-        <button
-          @click="toggleMenu"
-          class="md:hidden inline-flex items-center justify-center p-2 rounded-md hover:bg-blue-700 transition"
-        >
-          <i class="fas fa-bars text-2xl"></i>
-        </button>
+          <button
+            type="button"
+            @click="abrirSobre"
+            class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-500/80 hover:bg-blue-400 transition shadow-sm"
+            title="Sobre o projeto"
+          >
+            <i class="fas fa-info-circle text-lg"></i>
+          </button>
+
+          <button
+            @click="toggleMenu"
+            class="md:hidden inline-flex items-center justify-center p-2 rounded-md hover:bg-blue-700 transition"
+          >
+            <i class="fas fa-bars text-2xl"></i>
+          </button>
+        </div>
       </div>
 
       <!-- Mobile Menu -->
@@ -89,6 +112,91 @@ const isActive = (path) => {
           <i class="fas fa-calendar-alt"></i>
           Vencimentos
         </router-link>
+        <button
+          type="button"
+          @click="abrirSobre"
+          class="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition text-sm text-blue-50 hover:bg-blue-700"
+        >
+          <i class="fas fa-info-circle"></i>
+          Sobre
+        </button>
+      </div>
+    </div>
+
+    <div
+      v-if="mostrarSobre"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="h-9 w-9 rounded-full bg-blue-600/10 flex items-center justify-center">
+              <i class="fas fa-circle-info text-blue-600"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-semibold text-gray-900">Sobre o projeto</h2>
+              <p class="text-xs text-gray-500">Informações sobre o desenvolvedor</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            @click="fecharSobre"
+            class="text-gray-400 hover:text-gray-600"
+          >
+            <i class="fas fa-times text-sm"></i>
+          </button>
+        </div>
+
+        <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
+          <p>
+            Este painel foi desenvolvido para apoiar a operação de loja,
+            com foco em auditorias e acompanhamento de validades.
+          </p>
+          <div class="rounded-xl bg-gray-50 border border-gray-100 p-3 space-y-1">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Criado por
+            </p>
+            <p class="font-semibold text-gray-900">
+              Lucas Alves
+            </p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              @click="irPara('https://github.com/Lucas19Alves')"
+              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
+            >
+              <i class="fab fa-github"></i>
+              GitHub
+            </button>
+            <button
+              type="button"
+              @click="irPara('https://portfolio-lucasalves.vercel.app/')"
+              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
+            >
+              <i class="fas fa-globe"></i>
+              Portfólio
+            </button>
+            <button
+              type="button"
+              @click="irPara('https://www.linkedin.com/in/lucaas19alves/')"
+              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
+            >
+              <i class="fab fa-linkedin-in"></i>
+              LinkedIn
+            </button>
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-gray-100 flex justify-end">
+          <button
+            type="button"
+            @click="fecharSobre"
+            class="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+          >
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   </nav>

@@ -740,7 +740,7 @@ const classesCardDia = (d) => {
 
     <!-- Calendário Semanal -->
     <div v-if="abaAtiva === 'calendario'" class="mb-8 space-y-4">
-      <div class="bg-white rounded-lg shadow-lg p-6">
+      <div class="bg-white rounded-lg p-6">
         <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
           <i class="fas fa-calendar-week text-blue-600"></i>
           <span>Calendário Semanal</span>
