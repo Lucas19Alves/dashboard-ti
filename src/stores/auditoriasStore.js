@@ -1,6 +1,27 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as XLSX from 'xlsx'
+import { db } from '../db/appDb'
+
+const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
+
+const carregarStatusLocal = () => {
+  try {
+    const raw = localStorage.getItem(STATUS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const salvarStatusLocal = (map) => {
+  try {
+    localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(map || {}))
+  } catch {
+  }
+}
 
 export const useAuditoriasStore = defineStore('auditorias', () => {
   // Estado
@@ -711,9 +732,36 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return analise
   }
 
-  const addAuditoria = (auditoria) => {
+  const carregarAuditoriasPersistidas = async () => {
+    try {
+      const registros = await db.auditorias.toArray()
+      const statusMap = carregarStatusLocal()
+      auditorias.value = registros.map(r => {
+        const id = r.id
+        const statusPersistido = statusMap && statusMap[id]
+        const status = statusPersistido === 'fechada'
+          ? 'fechada'
+          : (r.status === 'fechada' ? 'fechada' : 'em_andamento')
+        return {
+          id,
+          data: r.data,
+          tipo: r.tipo,
+          sku: r.sku,
+          status,
+          dados: r.dados || [],
+          analise: r.analise || null,
+          parcial: r.parcial || 0,
+          total: r.total || 0,
+          metaAlcancada: r.metaAlcancada || false
+        }
+      })
+    } catch (e) {
+      console.error('Erro ao carregar auditorias do IndexedDB', e)
+    }
+  }
+
+  const addAuditoria = async (auditoria) => {
     const novaAuditoria = {
-      id: Date.now(),
       data: auditoria.data,
       tipo: auditoria.tipo,
       sku: auditoria.sku,
@@ -726,24 +774,42 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         ? (auditoria.analise.parcialPercentual || 0) <= 3.0
         : false
     }
-    auditorias.value.push(novaAuditoria)
-    return novaAuditoria
-  }
-
-  const updateAuditoria = (id, dados) => {
-    const auditoria = auditorias.value.find(a => a.id === id)
-    if (auditoria) {
-      Object.assign(auditoria, dados)
-      if (dados.analise) {
-        auditoria.metaAlcancada = (dados.analise.parcialPercentual || 0) <= 3.0
-      }
+    let id
+    try {
+      id = await db.auditorias.add(novaAuditoria)
+    } catch (e) {
+      console.error('Erro ao salvar auditoria no IndexedDB', e)
+      id = Date.now()
     }
+    const completa = { ...novaAuditoria, id }
+    auditorias.value.push(completa)
+    const statusMap = carregarStatusLocal()
+    statusMap[completa.id] = completa.status
+    salvarStatusLocal(statusMap)
+    return completa
   }
 
-  const deleteAuditoria = (id) => {
+  const updateAuditoria = async (id, dados) => {
+    const auditoria = auditorias.value.find(a => a.id === id)
+    if (!auditoria) return
+    Object.assign(auditoria, dados)
+    if (dados.analise) {
+      auditoria.metaAlcancada = (dados.analise.parcialPercentual || 0) <= 3.0
+    }
+    const statusMap = carregarStatusLocal()
+    statusMap[auditoria.id] = auditoria.status
+    salvarStatusLocal(statusMap)
+  }
+
+  const deleteAuditoria = async (id) => {
     const index = auditorias.value.findIndex(a => a.id === id)
     if (index !== -1) {
-      auditorias.value.splice(index, 1)
+      const [removida] = auditorias.value.splice(index, 1)
+      try {
+        await db.auditorias.delete(removida.id)
+      } catch (e) {
+        console.error('Erro ao remover auditoria do IndexedDB', e)
+      }
       addToast('Auditoria removida!', 'info')
     }
   }
@@ -779,6 +845,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     analisarDadosPresenca,
     analisarDadosEtiqueta,
     detectarTipoDados,
+    carregarAuditoriasPersistidas,
     addAuditoria,
     updateAuditoria,
     deleteAuditoria,

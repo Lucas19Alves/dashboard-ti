@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 
@@ -94,6 +94,10 @@ const idParaFechar = ref(null)
 const processando = ref(false)
 const arrastandoUpload = ref(false)
 const erroUpload = ref('')
+
+onMounted(() => {
+  store.carregarAuditoriasPersistidas()
+})
 
 const submeterAuditoria = async () => {
   if (!formulario.value.arquivo) {
@@ -375,9 +379,10 @@ const fecharAuditoria = (id) => {
   mostrarModalFechamento.value = true
 }
 
-const confirmarFechamento = () => {
+const confirmarFechamento = async () => {
   if (idParaFechar.value) {
-    store.updateAuditoria(idParaFechar.value, { status: 'fechada' })
+    await store.updateAuditoria(idParaFechar.value, { status: 'fechada' })
+    await store.carregarAuditoriasPersistidas()
     store.addToast('Auditoria fechada com sucesso!', 'success')
   }
   fecharModalFechamento()

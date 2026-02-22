@@ -1,11 +1,17 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
+import { exportarBackupJson, importarBackupJson } from '../utils/backup'
 
 const auditoriasStore = useAuditoriasStore()
 const vencStore = useVencimentosStore()
+
+onMounted(() => {
+  auditoriasStore.carregarAuditoriasPersistidas()
+  vencStore.carregarVencimentosPersistidos()
+})
 
 const totalAuditorias = computed(() => Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.length : 0)
 const auditoriasAbertas = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(a => a && a.status !== 'fechada').length : 0))
@@ -76,6 +82,27 @@ const itensCriticos = computed(() => {
     .slice(0, 6)
 })
 
+const importarInput = ref(null)
+
+const dispararImportarBackup = () => {
+  importarInput.value?.click()
+}
+
+const handleArquivoBackup = async (e) => {
+  const arquivo = e.target.files?.[0]
+  if (!arquivo) return
+  try {
+    await importarBackupJson(arquivo)
+    await auditoriasStore.carregarAuditoriasPersistidas()
+    await vencStore.carregarVencimentosPersistidos()
+    auditoriasStore.addToast('Backup importado com sucesso!', 'success')
+  } catch (err) {
+    auditoriasStore.addToast('Erro ao importar backup: ' + (err?.message || 'desconhecido'), 'error')
+  } finally {
+    e.target.value = ''
+  }
+}
+
 const ultimasAuditorias = computed(() => {
   const arr = Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias : []
   return arr.slice(-5).reverse()
@@ -134,6 +161,29 @@ const statusAuditorias = computed(() => {
             <i class="fas fa-clipboard-check"></i>
             Ver Auditorias
           </RouterLink>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 shadow-sm"
+            @click="exportarBackupJson"
+          >
+            <i class="fas fa-download"></i>
+            Exportar backup
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 shadow-sm"
+            @click="dispararImportarBackup"
+          >
+            <i class="fas fa-upload"></i>
+            Importar backup
+          </button>
+          <input
+            ref="importarInput"
+            type="file"
+            accept="application/json"
+            class="hidden"
+            @change="handleArquivoBackup"
+          >
         </div>
       </div>
 

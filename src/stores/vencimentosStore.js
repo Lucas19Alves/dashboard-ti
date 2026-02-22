@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as XLSX from 'xlsx'
+import { db } from '../db/appDb'
 
 export const useVencimentosStore = defineStore('vencimentos', () => {
   const itens = ref([])
@@ -63,6 +64,21 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     return 'futuro'
   }
 
+  const carregarVencimentosPersistidos = async () => {
+    try {
+      const registros = await db.vencimentos.toArray()
+      itens.value = registros.map(r => ({
+        ...r,
+        _validadeDate: r._validadeDate ? new Date(r._validadeDate) : null,
+        _revalidacaoDate: r._revalidacaoDate ? new Date(r._revalidacaoDate) : null,
+        _ultimaCompraDate: r._ultimaCompraDate ? new Date(r._ultimaCompraDate) : null
+      }))
+      analise.value = analisar(itens.value)
+    } catch (e) {
+      console.error('Erro ao carregar vencimentos do IndexedDB', e)
+    }
+  }
+
   const processarExcelVencimentos = async (file) => {
     const buffer = await file.arrayBuffer()
     const data = new Uint8Array(buffer)
@@ -108,6 +124,12 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
 
     itens.value = resultado
     analise.value = analisar(resultado)
+    try {
+      await db.vencimentos.clear()
+      await db.vencimentos.bulkAdd(resultado)
+    } catch (e) {
+      console.error('Erro ao salvar vencimentos no IndexedDB', e)
+    }
     return resultado
   }
 
@@ -159,6 +181,7 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     itens,
     analise,
     setores,
-    processarExcelVencimentos
+    processarExcelVencimentos,
+    carregarVencimentosPersistidos
   }
 })

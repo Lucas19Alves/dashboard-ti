@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
@@ -21,6 +21,13 @@ const inputRef = ref(null)
 const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
 const mostrarUpload = ref(true)
+
+onMounted(() => {
+  store.carregarVencimentosPersistidos()
+  if (store.itens.length > 0) {
+    mostrarUpload.value = false
+  }
+})
 
 const escolherArquivo = (e) => {
   arquivo.value = e.target.files?.[0] || null

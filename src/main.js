@@ -4,8 +4,21 @@ import './style.css'
 import App from './App.vue'
 import router from './router/index.js'
 import '@fortawesome/fontawesome-free/css/all.css'
+import { useAuditoriasStore } from './stores/auditoriasStore'
+import { useVencimentosStore } from './stores/vencimentosStore'
 
 const app = createApp(App)
-app.use(createPinia())
+const pinia = createPinia()
+
+app.use(pinia)
 app.use(router)
-app.mount('#app')
+
+const auditoriasStore = useAuditoriasStore(pinia)
+const vencimentosStore = useVencimentosStore(pinia)
+
+Promise.all([
+  auditoriasStore.carregarAuditoriasPersistidas(),
+  vencimentosStore.carregarVencimentosPersistidos()
+]).finally(() => {
+  app.mount('#app')
+})
