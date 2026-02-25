@@ -362,13 +362,12 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       }
       
       // Normalizar e filtrar dados
-      const dados = dadosCompletos
+      // primeiro faz a normalização e filtro de itens não auditáveis
+      const filtrados = dadosCompletos
         .map(item => {
-          // Normalizar dados usando as novas funções
           const temPresenca = temPresencaConfirmada(item)
           const estoque = extrairEstoque(item)
           const lidoNaoPertence = getLidoNaoPertence(item)
-          
           return {
             ...item,
             _temPresenca: temPresenca,
@@ -378,13 +377,39 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           }
         })
         .filter(item => {
-          // Filtrar itens não auditáveis: sem presença E sem estoque
-          // Itens auditáveis são: (sem presença + com estoque) OU (com presença + qualquer coisa)
           if (!item._temPresenca && !item._lidoNaoPertence && item._estoque === 0) {
             return false
           }
           return true
         })
+
+      // agora remove duplicatas por código, preferindo linha que contenha um local informado
+      const totalFiltrados = filtrados.length
+      const dados = filtrados.reduce((acc, item) => {
+        const codigo = (item['Código'] || item.Codigo || '').toString().trim()
+        if (!codigo) {
+          acc.push(item)
+          return acc
+        }
+        const existenteIndex = acc.findIndex(i => (i['Código'] || i.Codigo || '').toString().trim() === codigo)
+        if (existenteIndex === -1) {
+          acc.push(item)
+        } else {
+          const existente = acc[existenteIndex]
+          const locExistente = ((existente['Local'] || '').toString().trim())
+          const locAtual = ((item['Local'] || '').toString().trim())
+          if (!locExistente && locAtual) {
+            acc[existenteIndex] = item
+          }
+        }
+        return acc
+      }, [])
+
+      const duplicadosRemovidos = totalFiltrados - dados.length
+      if (duplicadosRemovidos > 0) {
+        console.log(`🗂️ Duplicados filtrados: ${duplicadosRemovidos} linha(s) com mesmo código sem local removidas`)
+        addToast(`Duplicados removidos: ${duplicadosRemovidos} item(ns) sem local descartado(s).`, 'info')
+      }
       
       const ignorados = dadosCompletos.length - dados.length
       console.log(`✅ Itens auditáveis: ${dados.length} linhas`)
@@ -399,6 +424,10 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       console.log(`   - Com presença: ${comPresenca}`)
       console.log(`   - Sem presença: ${semPresenca}`)
       console.log(`   - Com estoque: ${comEstoque}`)
+      console.log(`   - Sem estoque: ${semEstoque}`)
+      console.log(`   - Total auditável: ${dados.length}`)
+      
+      return dados
       console.log(`   - Sem estoque: ${semEstoque}`)
       console.log(`   - Total auditável: ${dados.length}`)
       
@@ -431,7 +460,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return await processarExcelPresenca(file)
         }
       }
-      const dados = dadosCompletos
+      // normaliza e filtra inicialmente
+      const filtrados = dadosCompletos
         .map(item => {
           const est = extrairEstoque(item)
           const st = statusEtiqueta(item)
@@ -449,6 +479,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           if (st.semEstoque && !st.lidoSemEstoque) return false
           return true
         })
+
+      const totalFiltrados = filtrados.length
+      const dados = filtrados.reduce((acc, item) => {
+        const codigo = (item['Código'] || item.Codigo || '').toString().trim()
+        if (!codigo) {
+          acc.push(item)
+          return acc
+        }
+        const existenteIndex = acc.findIndex(i => (i['Código'] || i.Codigo || '').toString().trim() === codigo)
+        if (existenteIndex === -1) {
+          acc.push(item)
+        } else {
+          const existente = acc[existenteIndex]
+          const locExistente = ((existente['Local'] || '').toString().trim())
+          const locAtual = ((item['Local'] || '').toString().trim())
+          if (!locExistente && locAtual) {
+            acc[existenteIndex] = item
+          }
+        }
+        return acc
+      }, [])
+
+      const duplicadosRemovidos = totalFiltrados - dados.length
+      if (duplicadosRemovidos > 0) {
+        console.log(`🗂️ Duplicados filtrados: ${duplicadosRemovidos} linha(s) com mesmo código sem local removidas`)
+        addToast(`Duplicados removidos: ${duplicadosRemovidos} item(ns) sem local descartado(s).`, 'info')
+      }
       const ignorados = dadosCompletos.length - dados.length
       console.log(`✅ Itens auditáveis: ${dados.length} linhas`)
       console.log(`↩️ Itens ignorados: ${ignorados}`)
