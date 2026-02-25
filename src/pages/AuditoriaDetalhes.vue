@@ -214,8 +214,12 @@ const metricasGerais = computed(() => {
     }, 0)
     if (soma > 0) desatualizados = soma
   }
-  const comProblema = (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0)
-  const totalLidos = (a.totalLidos != null) ? a.totalLidos : (atualizados + desatualizados + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const comProblema = a.itensLidosComProblema != null
+    ? a.itensLidosComProblema
+    : ((a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  const totalLidos = (a.totalLidos != null)
+    ? a.totalLidos
+    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
   const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao ?? (totalAuditaveis > 0 ? (totalLidos / totalAuditaveis) * 100 : 0)
   const percentualPendente = a.parcialPercentual ?? (totalAuditaveis > 0 ? ((a.itensPendentes || 0) / totalAuditaveis) * 100 : 0)
@@ -426,8 +430,12 @@ const horasEntre = (inicio, fim) => {
 const projecoes = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
-  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
-  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
+  const totalLidos = (a.totalLidos != null)
+    ? a.totalLidos
+    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
+  const totalAuditaveis = (a.totalItens != null)
+    ? a.totalItens
+    : (totalLidos + (a.itensPendentes || 0))
 
   const agora = new Date()
   const ini = parseHoraHoje(horarioInicio.value)
@@ -576,7 +584,9 @@ const improvementInsights = computed(() => {
   // 2. Análise de Problemas
   const a = auditoria.value?.analise
   if (a) {
-    const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+    const totalLidos = (a.totalLidos != null)
+      ? a.totalLidos
+      : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
     if (totalLidos > 0) {
       const percProblema = (a.itensLidosComProblema / totalLidos) * 100
       if (percProblema > 5) {
@@ -1423,8 +1433,12 @@ const dadosRelatorio = computed(() => {
   if (!auditoria.value?.analise) return null
   
   const a = auditoria.value.analise
-  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
-  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
+  const totalLidos = (a.totalLidos != null)
+    ? a.totalLidos
+    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
+  const totalAuditaveis = (a.totalItens != null)
+    ? a.totalItens
+    : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao || 0
   const percentualPendente = a.parcialPercentual || 0
   

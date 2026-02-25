@@ -602,6 +602,11 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const totalLidos = analise.itensLidosCorretamente + analise.itensLidosComProblema
     const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes + analise.itensLidosComProblema
     
+    // registrar campos adicionais para uso em UI/filtros
+    analise.totalLidos = totalLidos
+    analise.totalItens = totalAuditaveis
+    analise.comProblema = analise.itensLidosComProblema
+    
     // Percentual pendente (foco na meta de 3%)
     analise.parcialPercentual = totalAuditaveis > 0 
       ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2))
@@ -721,6 +726,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const totalAuditaveis = totalLidos + analise.itensPendentes
     analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
+    analise.comProblema = analise.itensLidosComProblema
     analise.parcialPercentual = totalAuditaveis > 0 ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2)) : 0
     analise.percentualConclusao = totalAuditaveis > 0 ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2)) : 0
     Object.entries(analise.porSetor).forEach(([setor, dados]) => {
