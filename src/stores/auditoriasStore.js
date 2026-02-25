@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, toRaw } from 'vue'
 import * as XLSX from 'xlsx'
 import { db } from '../db/appDb'
 
@@ -590,6 +590,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
             produto: item['Produto'],
+            setor: (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim(),
             usuario: item['Usuário'],
             local: item['Local'],
             fornecedor: item['Fornecedor']
@@ -601,6 +602,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           analise.itensLidoNaoPertenceDetalhes.push({
             codigo: item['Código'],
             produto: item['Produto'],
+            setor: (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim(),
             usuario: item['Usuário'],
             local: item['Local']
           })
@@ -745,6 +747,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
             produto: item['Produto'],
+            setor: (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim(),
             usuario: item['Usuário'],
             local: item['Local'],
             fornecedor: item['Fornecedor']
@@ -755,6 +758,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           analise.itensLidoNaoPertenceDetalhes.push({
             codigo: item['Código'],
             produto: item['Produto'],
+            setor: (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim(),
             usuario: item['Usuário'],
             local: item['Local']
           })
@@ -870,6 +874,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     Object.assign(auditoria, dados)
     if (dados.analise) {
       auditoria.metaAlcancada = (dados.analise.parcialPercentual || 0) <= 3.0
+    }
+    const toPlain = (valor) => {
+      try {
+        return JSON.parse(JSON.stringify(toRaw(valor)))
+      } catch {
+        try {
+          return JSON.parse(JSON.stringify(valor))
+        } catch {
+          return null
+        }
+      }
+    }
+    try {
+      await db.auditorias.put({
+        id: auditoria.id,
+        data: auditoria.data,
+        tipo: auditoria.tipo,
+        sku: auditoria.sku,
+        status: auditoria.status,
+        dados: toPlain(auditoria.dados) || [],
+        analise: toPlain(auditoria.analise),
+        parcial: auditoria.parcial || 0,
+        total: auditoria.total || 0,
+        metaAlcancada: auditoria.metaAlcancada || false
+      })
+    } catch (e) {
+      console.error('Erro ao atualizar auditoria no IndexedDB', e)
     }
     const statusMap = carregarStatusLocal()
     statusMap[auditoria.id] = auditoria.status

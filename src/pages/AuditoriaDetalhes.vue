@@ -54,16 +54,18 @@ const colunasUsuario = [
 ]
 
 const colunasRuptura = [
-  { chave: 'produto', titulo: 'Código / Produto', sortable: true },
+  { chave: 'codigo', titulo: 'Código', sortable: true },
+  { chave: 'produto', titulo: 'Produto', sortable: true },
   { chave: 'custo', titulo: 'Custo', sortable: true, alinhamento: 'right', format: (v) => 'R$ ' + parseFloat(v).toFixed(2) },
   { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true }
 ]
 
 const colunasFornecedor = [
+  { chave: 'codigo', titulo: 'Código', sortable: true },
   { chave: 'produto', titulo: 'Produto', sortable: true },
   { chave: 'setor', titulo: 'Setor', sortable: true },
   { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
-  { chave: 'status', titulo: 'Status', sortable: true, alinhamento: 'center' }
+  { chave: 'statusTexto', titulo: 'Status', sortable: true, alinhamento: 'center' }
 ]
 
 const colunasEstoqueZero = [
@@ -89,7 +91,8 @@ const colunasGrandeEstoque = [
 const colunasMuitoTempo = [
   { chave: 'codigo', titulo: 'Código', sortable: true },
   { chave: 'produto', titulo: 'Produto', sortable: true },
-  { chave: 'dias', titulo: 'Dias sem venda', sortable: true, alinhamento: 'right' }
+  { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
+  { chave: 'dias', titulo: 'Dias atrás', sortable: true, alinhamento: 'right' }
 ]
 
 const colunasDadosBase = [
@@ -130,6 +133,15 @@ const abaAtiva = ref('dashboard')
 const filtroUsuario = ref('')
 const filtroDados = ref('')
 const filtroFornecedor = ref('')
+const filtroStatusFornecedor = ref('todos')
+const filtroSetorFornecedor = ref('todos')
+const filtroSetorEstoqueZero = ref('todos')
+const filtroSetorLocalErrado = ref('todos')
+const filtroSetorGrandeEstoque = ref('todos')
+const filtroSetorMuitoTempo = ref('todos')
+const filtroSetorRuptura = ref('todos')
+const filtroUsuarioEstoqueZero = ref('todos')
+const filtroUsuarioLocalErrado = ref('todos')
 const modalMetricaAberto = ref(false)
 const metricaSelecionada = ref(null)
 const modalSetorLocalAberto = ref(false)
@@ -149,6 +161,7 @@ const itensModal = ref([])
 const tituloModalItens = ref('')
 const printAreaItens = ref(null)
 const tabelaItensRef = ref(null)
+const tabelaUsuariosRef = ref(null)
 const printAreaRelatorio = ref(null)
 const exibirTudoPDFItens = ref(false)
 
@@ -185,10 +198,10 @@ onMounted(() => {
   } catch {}
 })
 
-const handleUploadCompleto = ({ dados, analise }) => {
+const handleUploadCompleto = async ({ dados, analise }) => {
   if (auditoria.value) {
     // Atualizar SKU automaticamente baseado em itens auditáveis
-    store.updateAuditoria(auditoria.value.id, {
+    await store.updateAuditoria(auditoria.value.id, {
       dados: dados,
       analise: analise,
       sku: analise.totalItens, // SKU = total de itens auditáveis
@@ -397,7 +410,7 @@ const insights = computed(() => {
     insights.push({
       tipo: 'aviso',
       titulo: '⏳ Muito Tempo Sem Leitura',
-      mensagem: `${qtdMuitoTempo} item(ns) com muitos dias sem venda e sem leitura`,
+      mensagem: `${qtdMuitoTempo} item(ns) lidos há muito tempo`,
       detalhes: []
     })
   }
@@ -512,19 +525,6 @@ const leituraPorHora = computed(() => {
     return false
   }
 
-  const getHoraValor = (item) => {
-    let v = item['Auditado em'] || item['Data'] || item['Hora'] || item['Lido em'] || item['Carimbo de data/hora']
-    if (v == null) {
-      const key = Object.keys(item).find(k => {
-        const n = String(k).toLowerCase()
-        return (n.includes('audit') || n.includes('lido') || n.includes('hora')) && item[k]
-      })
-      if (key) v = item[key]
-    }
-    if (v == null) v = item['Presença confirmada'] || item['Presença'] || null
-    return v
-  }
-
   dados.forEach(item => {
     const lidoNaoPertence = isLidoNaoPertence(item)
     const efetivamenteTemPresenca = item._temPresenca || lidoNaoPertence
@@ -547,6 +547,58 @@ const leituraPorHora = computed(() => {
   const max = serie.reduce((m, p) => Math.max(m, p.valor), 0)
   return { serie, max }
 })
+
+const getHoraValor = (item) => {
+  let v = item['Auditado em'] || item['Data'] || item['Hora'] || item['Lido em'] || item['Carimbo de data/hora']
+  if (v == null) {
+    const key = Object.keys(item).find(k => {
+      const n = String(k).toLowerCase()
+      return (n.includes('audit') || n.includes('lido') || n.includes('hora')) && item[k]
+    })
+    if (key) v = item[key]
+  }
+  if (v == null) v = item['Presença confirmada'] || item['Presença'] || null
+  return v
+}
+
+const parseDataValor = (valor) => {
+  if (!valor) return null
+  if (valor instanceof Date) return valor
+  if (typeof valor === 'number') {
+    if (valor > 2000000000000) return new Date(valor) // Timestamp ms
+    return new Date(Date.UTC(1899, 11, 30) + valor * 864e5) // Excel serial
+  }
+  if (typeof valor === 'string') {
+    // Tentar formato DD/MM/YYYY HH:mm:ss
+    try {
+      const partesDataHora = valor.split(' ')
+      const partesData = partesDataHora[0].split('/')
+      if (partesData.length === 3) {
+        const dia = parseInt(partesData[0])
+        const mes = parseInt(partesData[1]) - 1
+        const ano = parseInt(partesData[2])
+        
+        let hora = 0, min = 0, seg = 0
+        if (partesDataHora[1]) {
+          const partesHora = partesDataHora[1].split(':')
+          if (partesHora.length >= 2) {
+            hora = parseInt(partesHora[0])
+            min = parseInt(partesHora[1])
+            seg = partesHora[2] ? parseInt(partesHora[2]) : 0
+          }
+        }
+        const d = new Date(ano, mes, dia, hora, min, seg)
+        if (!isNaN(d.getTime())) return d
+      }
+      // Fallback para construtor padrão
+      const d = new Date(valor)
+      if (!isNaN(d.getTime())) return d
+    } catch (e) {
+      return null
+    }
+  }
+  return null
+}
 
 const improvementInsights = computed(() => {
   if (auditoria.value?.status !== 'fechada') return null
@@ -940,6 +992,17 @@ const itensLidoNaoPertence = computed(() => {
   return auditoria.value.analise.itensLidoNaoPertenceDetalhes || []
 })
 
+const itensLidoNaoPertenceFiltrados = computed(() => {
+  let items = itensLidoNaoPertence.value || []
+  if (filtroSetorLocalErrado.value !== 'todos') {
+    items = items.filter(i => getSetorDetalhe(i) === filtroSetorLocalErrado.value)
+  }
+  if (filtroUsuarioLocalErrado.value !== 'todos') {
+    items = items.filter(i => String(i.usuario || '').trim() === filtroUsuarioLocalErrado.value)
+  }
+  return items
+})
+
 const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
   if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
   const root = tabelaRef.value.$el
@@ -1165,6 +1228,46 @@ const isPlaceholder = (valor) => {
   return false
 }
 
+const getSetorItem = (item) => {
+  const setor = item?.['Classe de Produto Raiz'] ?? item?.['Setor'] ?? 'Não especificado'
+  return String(setor || 'Não especificado').trim()
+}
+
+const setoresUnicosDados = computed(() => {
+  if (!auditoria.value?.dados) return []
+  const set = new Set()
+  auditoria.value.dados.forEach(item => {
+    const s = getSetorItem(item)
+    if (s) set.add(s)
+  })
+  return Array.from(set).sort()
+})
+
+const usuariosUnicosDados = computed(() => {
+  const base = auditoria.value?.analise?.usuarios || []
+  const set = new Set(base.map(u => String(u || '').trim()).filter(Boolean))
+  return Array.from(set).sort()
+})
+
+const setorPorCodigo = computed(() => {
+  const map = new Map()
+  const dados = auditoria.value?.dados || []
+  dados.forEach(item => {
+    const codigo = item?.['Código']
+    if (codigo == null) return
+    map.set(String(codigo).trim(), getSetorItem(item))
+  })
+  return map
+})
+
+const getSetorDetalhe = (detalhe) => {
+  const direto = detalhe?.setor
+  if (direto != null && String(direto).trim() !== '') return String(direto).trim()
+  const codigo = detalhe?.codigo
+  if (codigo == null) return 'Não especificado'
+  return setorPorCodigo.value.get(String(codigo).trim()) || 'Não especificado'
+}
+
 const extrairEstoque = (item) => {
   // Se já tem valor normalizado, usa ele
   if (item._estoque !== undefined) {
@@ -1245,12 +1348,24 @@ const itensLidosEstoqueZero = computed(() => {
   return (auditoria.value.analise.itensComEstoqueZeroDetalhes || [])
 })
 
+const itensLidosEstoqueZeroFiltrados = computed(() => {
+  let items = itensLidosEstoqueZero.value || []
+  if (filtroSetorEstoqueZero.value !== 'todos') {
+    items = items.filter(i => getSetorDetalhe(i) === filtroSetorEstoqueZero.value)
+  }
+  if (filtroUsuarioEstoqueZero.value !== 'todos') {
+    items = items.filter(i => String(i.usuario || '').trim() === filtroUsuarioEstoqueZero.value)
+  }
+  return items
+})
+
 const itensGrandeEstoqueNaoLidos = computed(() => {
   if (!auditoria.value?.dados) return []
   return auditoria.value.dados.filter(item => {
     const temPresenca = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
     const estoque = item._estoque !== undefined ? item._estoque : extrairEstoque(item)
-    return !temPresenca && estoque > 100
+    const setorOk = filtroSetorGrandeEstoque.value === 'todos' ? true : getSetorItem(item) === filtroSetorGrandeEstoque.value
+    return !temPresenca && estoque > 100 && setorOk
   })
     .sort((a, b) => {
       const estoqueA = a._estoque !== undefined ? a._estoque : extrairEstoque(a)
@@ -1261,16 +1376,28 @@ const itensGrandeEstoqueNaoLidos = computed(() => {
 
 const itensMuitoTempoNaoLidos = computed(() => {
   if (!auditoria.value?.dados) return []
-  return auditoria.value.dados.filter(item => {
-    const temPresenca = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
-    const diasSemVenda = parseInt(item['Dias sem venda']) || 0
-    return !temPresenca && diasSemVenda > 30
+  const agora = new Date()
+  
+  return auditoria.value.dados.map(item => {
+    const dataLeitura = parseDataValor(getHoraValor(item))
+    if (!dataLeitura) return null
+    
+    const diffTime = Math.abs(agora - dataLeitura)
+    const dias = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    
+    return {
+      ...item,
+      _dataLeitura: dataLeitura,
+      _diasLeitura: dias
+    }
   })
-    .sort((a, b) => {
-      const diasA = parseInt(a['Dias sem venda']) || 0
-      const diasB = parseInt(b['Dias sem venda']) || 0
-      return diasB - diasA
-    })
+  .filter(item => {
+    if (item === null) return false
+    if (item._diasLeitura <= 15) return false
+    if (filtroSetorMuitoTempo.value !== 'todos' && getSetorItem(item) !== filtroSetorMuitoTempo.value) return false
+    return true
+  })
+  .sort((a, b) => b._diasLeitura - a._diasLeitura)
 })
 
 const itensGrandeEstoqueFormatados = computed(() => {
@@ -1282,11 +1409,15 @@ const itensGrandeEstoqueFormatados = computed(() => {
 })
 
 const itensMuitoTempoFormatados = computed(() => {
-  return itensMuitoTempoNaoLidos.value.map(item => ({
-    codigo: item['Código'],
-    produto: item['Produto'],
-    dias: parseInt(item['Dias sem venda']) || 0
-  }))
+  return itensMuitoTempoNaoLidos.value.map(item => {
+    const estoque = item._estoque !== undefined ? item._estoque : extrairEstoque(item)
+    return {
+      codigo: item['Código'],
+      produto: item['Produto'],
+      estoque: estoque,
+      dias: item._diasLeitura
+    }
+  })
 })
 
 const isSemPresencaSemEstoque = (item) => {
@@ -1329,9 +1460,21 @@ const fornecedoresUnicos = computed(() => {
 
 const itensPorFornecedor = computed(() => {
   if (!auditoria.value?.dados || !filtroFornecedor.value) return []
-  return auditoria.value.dados.filter(item => 
-    item['Fornecedor'] === filtroFornecedor.value
-  )
+  return auditoria.value.dados.filter(item => {
+    // Filtro de Fornecedor
+    if (item['Fornecedor'] !== filtroFornecedor.value) return false
+
+    if (filtroSetorFornecedor.value !== 'todos' && getSetorItem(item) !== filtroSetorFornecedor.value) return false
+    
+    // Filtro de Status
+    if (filtroStatusFornecedor.value !== 'todos') {
+      const tem = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
+      if (filtroStatusFornecedor.value === 'lido' && !tem) return false
+      if (filtroStatusFornecedor.value === 'pendente' && tem) return false
+    }
+    
+    return true
+  })
 })
 
 // =========== ESTATÍSTICAS ===========
@@ -1604,13 +1747,24 @@ const itensModalFormatados = computed(() => {
   })
 })
 
+const itensRupturaFiltrados = computed(() => {
+  return itensRupturaMenorCusto.value.filter(item => {
+    const tem = item._temPresenca !== undefined ? item._temPresenca : temPresencaConfirmada(item)
+    if (tem) return false
+    if (filtroSetorRuptura.value !== 'todos' && getSetorItem(item) !== filtroSetorRuptura.value) return false
+    return true
+  })
+})
+
 const itensRupturaFormatados = computed(() => {
-  return itensRupturaMenorCusto.value.map(item => ({
-    produto: item['Produto'],
-    codigo: item['Código'],
-    custo: parseFloat(item['Custo Ruptura']),
-    fornecedor: item['Fornecedor']
-  }))
+  return itensRupturaFiltrados.value.map(item => {
+    return {
+      codigo: item['Código'],
+      produto: item['Produto'],
+      custo: parseFloat(item['Custo Ruptura']),
+      fornecedor: item['Fornecedor']
+    }
+  })
 })
 
 const itensFornecedorFormatados = computed(() => {
@@ -1628,6 +1782,44 @@ const itensFornecedorFormatados = computed(() => {
     }
   })
 })
+
+const handlePrintCard = (dados, colunas, tituloCard) => {
+  if (!dados || dados.length === 0) return
+  const titulo = `Relatório - ${tituloCard} - ${auditoria.value.tipo} - ${dataAuditoriaBR.value}`
+  printTableInNewWindow(dados, colunas, titulo)
+}
+
+const handlePrintUsuarios = () => {
+  // Tentar obter dados ordenados/filtrados da tabela se disponível
+  let dadosBase = null
+  const tabela = tabelaUsuariosRef.value
+  
+  if (tabela && tabela.dadosFiltrados) {
+    // Verificar se é uma ref (tem .value) ou já é o array
+    dadosBase = Array.isArray(tabela.dadosFiltrados) 
+      ? tabela.dadosFiltrados 
+      : tabela.dadosFiltrados.value
+  }
+  
+  // Fallback para dados originais se não conseguir extrair
+  if (!dadosBase) {
+    dadosBase = dadosUsuarios.value
+  }
+  
+  if (!dadosBase || dadosBase.length === 0) return
+  
+  // Filtrar colunas para remover 'acoes'
+  const colunasPrint = colunasUsuario.filter(c => c.chave !== 'acoes')
+  
+  // Preparar dados
+  const dadosPrint = dadosBase.map(u => ({
+    ...u,
+    // Formatar se necessário
+  }))
+  
+  const titulo = `Relatório de Usuários - ${auditoria.value.tipo} - ${dataAuditoriaBR.value}`
+  printTableInNewWindow(dadosPrint, colunasPrint, titulo)
+}
 
 const abrirRelatorio = () => {
   modalRelatorioAberto.value = true
@@ -2013,24 +2205,36 @@ const fecharRelatorio = () => {
       <!-- USUÁRIOS -->
       <div v-if="abaAtiva === 'usuarios'" class="space-y-6">
         <!-- Análises Rápidas -->
-        <div v-if="analiseUsuarios" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-white rounded-lg p-6 shadow">
-            <p class="text-gray-600 text-sm font-medium">Total de Usuários</p>
-            <p class="text-3xl font-bold text-blue-600 mt-2">{{ analiseUsuarios.totalUsuarios }}</p>
+        <div v-if="analiseUsuarios" class="flex flex-col gap-6">
+          <div class="flex justify-end">
+            <button
+              @click="handlePrintUsuarios"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm flex items-center gap-2"
+            >
+              <i class="fas fa-print"></i> Imprimir Lista
+            </button>
           </div>
-          <div class="bg-white rounded-lg p-6 shadow">
-            <p class="text-gray-600 text-sm font-medium">Média de Lidos/Usuário</p>
-            <p class="text-3xl font-bold text-green-600 mt-2">{{ analiseUsuarios.mediaLidasPorUsuario }}</p>
-          </div>
-          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-purple-500">
-            <p class="text-gray-600 text-sm font-medium">🌟 Melhor Desempenho</p>
-            <p class="text-2xl font-bold text-purple-600 mt-2">{{ analiseUsuarios.usuarioDestaque }}</p>
-            <p class="text-xs text-gray-500 mt-1">{{ analiseUsuarios.lidasDestaque }} lidos</p>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white rounded-lg p-6 shadow">
+              <p class="text-gray-600 text-sm font-medium">Total de Usuários</p>
+              <p class="text-3xl font-bold text-blue-600 mt-2">{{ analiseUsuarios.totalUsuarios }}</p>
+            </div>
+            <div class="bg-white rounded-lg p-6 shadow">
+              <p class="text-gray-600 text-sm font-medium">Média de Lidos/Usuário</p>
+              <p class="text-3xl font-bold text-green-600 mt-2">{{ analiseUsuarios.mediaLidasPorUsuario }}</p>
+            </div>
+            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-purple-500">
+              <p class="text-gray-600 text-sm font-medium">🌟 Melhor Desempenho</p>
+              <p class="text-2xl font-bold text-purple-600 mt-2">{{ analiseUsuarios.usuarioDestaque }}</p>
+              <p class="text-xs text-gray-500 mt-1">{{ analiseUsuarios.lidasDestaque }} lidos</p>
+            </div>
           </div>
         </div>
 
         <!-- Tabela de Usuários -->
         <TabelaInterativaAuditoria
+          ref="tabelaUsuariosRef"
           :dados="dadosUsuarios"
           :colunas="colunasUsuario"
           :itensPorPagina="10"
@@ -2097,36 +2301,86 @@ const fecharRelatorio = () => {
         </div>
 
         <!-- Filtro de Fornecedor -->
-        <div v-if="fornecedoresUnicos.length > 0">
-          <h3 class="text-xl font-bold text-gray-800 mb-4">
-            <i class="fas fa-truck text-blue-600 mr-2"></i>Filtrar por Fornecedor
-          </h3>
-          <select 
-            v-model="filtroFornecedor"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-          >
-            <option value="">Selecione um fornecedor...</option>
-            <option v-for="fornecedor in fornecedoresUnicos" :key="fornecedor" :value="fornecedor">
-              {{ fornecedor }}
-            </option>
-          </select>
+        <div v-if="fornecedoresUnicos.length > 0" class="bg-white rounded-lg p-6 shadow">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+             <h3 class="text-xl font-bold text-gray-800 flex items-center">
+               <i class="fas fa-truck text-blue-600 mr-2"></i>Filtrar por Fornecedor
+             </h3>
+             <button
+               v-if="filtroFornecedor && itensFornecedorFormatados.length > 0"
+               @click="handlePrintCard(itensFornecedorFormatados, colunasFornecedor, `Fornecedor ${filtroFornecedor}`)"
+               class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium shadow-sm flex items-center gap-2"
+             >
+               <i class="fas fa-print"></i> Imprimir Lista
+             </button>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
+              <select 
+                v-model="filtroFornecedor"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+              >
+                <option value="">Selecione um fornecedor...</option>
+                <option v-for="fornecedor in fornecedoresUnicos" :key="fornecedor" :value="fornecedor">
+                  {{ fornecedor }}
+                </option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+              <select 
+                v-model="filtroSetorFornecedor"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                :disabled="!filtroFornecedor"
+              >
+                <option value="todos">Todos os setores</option>
+                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">
+                  {{ setor }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select 
+                v-model="filtroStatusFornecedor"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+                :disabled="!filtroFornecedor"
+              >
+                <option value="todos">Todos os itens</option>
+                <option value="pendente">Apenas Pendentes</option>
+                <option value="lido">Apenas Lidos</option>
+              </select>
+            </div>
+          </div>
 
           <!-- Itens do Fornecedor Selecionado -->
-          <div v-if="filtroFornecedor && itensFornecedorFormatados.length > 0" class="mt-6">
-            <TabelaInterativaAuditoria
-              :dados="itensFornecedorFormatados"
-              :colunas="colunasFornecedor"
-              :itensPorPagina="10"
-              :mostrarBusca="true"
-            >
-              <template #cell-produto="{ item }">
-                <p class="font-bold text-gray-900">{{ item.codigo || '-' }}</p>
-                <p class="text-sm text-gray-600">{{ item.produto || '-' }}</p>
-              </template>
-              <template #cell-status="{ item }">
-                <span :class="item.statusClass">{{ item.statusTexto }}</span>
-              </template>
-            </TabelaInterativaAuditoria>
+          <div v-if="filtroFornecedor" class="mt-4">
+            <div v-if="itensFornecedorFormatados.length > 0">
+              <p class="text-sm text-gray-600 mb-3">
+                Exibindo <span class="font-bold">{{ itensFornecedorFormatados.length }}</span> itens 
+                <span v-if="filtroStatusFornecedor !== 'todos'">({{ filtroStatusFornecedor }})</span>
+              </p>
+              <TabelaInterativaAuditoria
+                :dados="itensFornecedorFormatados"
+                :colunas="colunasFornecedor"
+                :itensPorPagina="10"
+                :mostrarBusca="true"
+              >
+                <template #cell-statusTexto="{ item }">
+                  <span :class="item.statusClass">{{ item.statusTexto }}</span>
+                </template>
+              </TabelaInterativaAuditoria>
+            </div>
+            <div v-else class="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+              <p class="text-gray-500">Nenhum item encontrado com os filtros selecionados.</p>
+            </div>
+          </div>
+          <div v-else class="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <p class="text-gray-500">Selecione um fornecedor acima para ver os itens.</p>
           </div>
         </div>
 
@@ -2134,14 +2388,47 @@ const fecharRelatorio = () => {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Itens Lidos com Estoque Zero -->
           <div class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-red-600 mb-4">
-              <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ Lidos com Estoque Zero
-            </h4>
-            <p class="text-3xl font-bold text-red-600 mb-3">{{ auditoria.analise?.itensComEstoqueZero || 0 }}</p>
-            <p class="text-sm text-gray-600 mb-4">Itens com presença confirmada mas sem estoque no sistema</p>
+            <div class="flex justify-between items-start mb-4">
+                <h4 class="font-bold text-lg text-red-600">
+                  <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ Lidos com Estoque Zero
+                </h4>
+                <button
+                   v-if="itensLidosEstoqueZeroFiltrados.length > 0"
+                   @click="handlePrintCard(itensLidosEstoqueZeroFiltrados, colunasEstoqueZero, 'Lidos com Estoque Zero')"
+                   class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
+                 >
+                   <i class="fas fa-print"></i> Imprimir
+                 </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div>
+                <p class="text-3xl font-bold text-red-600 mb-1">{{ itensLidosEstoqueZeroFiltrados.length }}</p>
+                <p class="text-sm text-gray-600">Itens com presença confirmada mas sem estoque no sistema</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+                <select
+                  v-model="filtroSetorEstoqueZero"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
+                >
+                  <option value="todos">Todos os setores</option>
+                  <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
+                <select
+                  v-model="filtroUsuarioEstoqueZero"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
+                >
+                  <option value="todos">Todos os usuários</option>
+                  <option v-for="u in usuariosUnicosDados" :key="u" :value="u">{{ u }}</option>
+                </select>
+              </div>
+            </div>
             <TabelaInterativaAuditoria
-              v-if="itensLidosEstoqueZero.length > 0"
-              :dados="itensLidosEstoqueZero"
+              v-if="itensLidosEstoqueZeroFiltrados.length > 0"
+              :dados="itensLidosEstoqueZeroFiltrados"
               :colunas="colunasEstoqueZero"
               :itensPorPagina="5"
               :mostrarBusca="false"
@@ -2152,20 +2439,54 @@ const fecharRelatorio = () => {
                 <p class="font-medium text-red-900">{{ item.produto }}</p>
               </template>
             </TabelaInterativaAuditoria>
-            <div v-else class="text-green-600">
-              <p class="text-sm">✅ Nenhum item</p>
+            <div v-else class="text-gray-600">
+              <p class="text-sm">Nenhum item encontrado com os filtros selecionados.</p>
             </div>
           </div>
 
           <!-- Itens Lido Não Pertence -->
           <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-yellow-600 mb-4">
-              <i class="fas fa-map-marker-alt mr-2"></i>⚠️ Lido no Local Errado
-            </h4>
-            <p class="text-3xl font-bold text-yellow-600 mb-3">{{ auditoria.analise?.itensLidoNaoPertence || 0 }}</p>
-            <p class="text-sm text-gray-600 mb-4">Itens lidos mas no local incorreto</p>
+            <div class="flex justify-between items-start mb-4">
+                <h4 class="font-bold text-lg text-yellow-600">
+                  <i class="fas fa-map-marker-alt mr-2"></i>⚠️ Lido no Local Errado
+                </h4>
+                <button
+                   v-if="itensLidoNaoPertenceFiltrados.length > 0"
+                   @click="handlePrintCard(itensLidoNaoPertenceFiltrados, colunasLocalErrado, 'Lido no Local Errado')"
+                   class="px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
+                 >
+                   <i class="fas fa-print"></i> Imprimir
+                 </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div>
+                <p class="text-3xl font-bold text-yellow-600 mb-1">{{ itensLidoNaoPertenceFiltrados.length }}</p>
+                <p class="text-sm text-gray-600">Itens lidos mas no local incorreto</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+                <select
+                  v-model="filtroSetorLocalErrado"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500 bg-white"
+                >
+                  <option value="todos">Todos os setores</option>
+                  <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
+                <select
+                  v-model="filtroUsuarioLocalErrado"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500 bg-white"
+                >
+                  <option value="todos">Todos os usuários</option>
+                  <option v-for="u in usuariosUnicosDados" :key="u" :value="u">{{ u }}</option>
+                </select>
+              </div>
+            </div>
             <TabelaInterativaAuditoria
-              :dados="itensLidoNaoPertence"
+              v-if="itensLidoNaoPertenceFiltrados.length > 0"
+              :dados="itensLidoNaoPertenceFiltrados"
               :colunas="colunasLocalErrado"
               :itensPorPagina="5"
               :mostrarBusca="false"
@@ -2176,13 +2497,35 @@ const fecharRelatorio = () => {
                 <p class="font-medium text-yellow-900">{{ item.produto }}</p>
               </template>
             </TabelaInterativaAuditoria>
+            <div v-else class="text-gray-600">
+              <p class="text-sm">Nenhum item encontrado com os filtros selecionados.</p>
+            </div>
           </div>
 
           <!-- Grande Estoque não Lido -->
           <div class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-orange-600 mb-4">
-              <i class="fas fa-boxes mr-2"></i>Grande Estoque Não Lido
-            </h4>
+            <div class="flex justify-between items-start mb-4">
+                <h4 class="font-bold text-lg text-orange-600">
+                  <i class="fas fa-boxes mr-2"></i>Grande Estoque Não Lido
+                </h4>
+                <button
+                   v-if="itensGrandeEstoqueFormatados.length > 0"
+                   @click="handlePrintCard(itensGrandeEstoqueFormatados, colunasGrandeEstoque, 'Grande Estoque Não Lido')"
+                   class="px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
+                 >
+                   <i class="fas fa-print"></i> Imprimir
+                 </button>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+              <select
+                v-model="filtroSetorGrandeEstoque"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 bg-white"
+              >
+                <option value="todos">Todos os setores</option>
+                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+              </select>
+            </div>
             <p class="text-3xl font-bold text-orange-600 mb-3">{{ itensGrandeEstoqueNaoLidos.length }}</p>
             <p class="text-sm text-gray-600 mb-4">Produtos com estoque > 100 itens ainda não confirmados</p>
             <TabelaInterativaAuditoria
@@ -2202,11 +2545,30 @@ const fecharRelatorio = () => {
 
           <!-- Muito Tempo sem Leitura -->
           <div class="bg-white rounded-lg p-6 shadow">
-            <h4 class="font-bold text-lg text-red-600 mb-4">
-              <i class="fas fa-calendar-times mr-2"></i>Muito Tempo sem Leitura
-            </h4>
+            <div class="flex justify-between items-start mb-4">
+                <h4 class="font-bold text-lg text-red-600">
+                  <i class="fas fa-calendar-times mr-2"></i>Muito Tempo sem Leitura
+                </h4>
+                <button
+                   v-if="itensMuitoTempoFormatados.length > 0"
+                   @click="handlePrintCard(itensMuitoTempoFormatados, colunasMuitoTempo, 'Muito Tempo sem Leitura')"
+                   class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
+                 >
+                   <i class="fas fa-print"></i> Imprimir
+                 </button>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+              <select
+                v-model="filtroSetorMuitoTempo"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
+              >
+                <option value="todos">Todos os setores</option>
+                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+              </select>
+            </div>
             <p class="text-3xl font-bold text-red-600 mb-3">{{ itensMuitoTempoNaoLidos.length }}</p>
-            <p class="text-sm text-gray-600 mb-4">Itens não confirmados há mais de 30 dias</p>
+            <p class="text-sm text-gray-600 mb-4">Itens não confirmados há mais de 15 dias</p>
             <TabelaInterativaAuditoria
               v-if="itensMuitoTempoFormatados.length > 0"
               :dados="itensMuitoTempoFormatados"
@@ -2228,21 +2590,35 @@ const fecharRelatorio = () => {
 
         <!-- Itens Ruptura Menor Custo -->
         <div class="bg-white rounded-lg p-6 shadow">
-          <h4 class="font-bold text-lg text-blue-600 mb-4">
-            <i class="fas fa-coins mr-2"></i>Itens de Ruptura - Menor Custo
-          </h4>
+          <div class="flex justify-between items-start mb-4">
+              <h4 class="font-bold text-lg text-blue-600">
+                <i class="fas fa-coins mr-2"></i>Itens de Ruptura - Menor Custo
+              </h4>
+              <button
+                 v-if="itensRupturaFormatados.length > 0"
+                 @click="handlePrintCard(itensRupturaFormatados, colunasRuptura, 'Itens de Ruptura - Menor Custo')"
+                 class="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
+               >
+                 <i class="fas fa-print"></i> Imprimir
+               </button>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
+            <select
+              v-model="filtroSetorRuptura"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+            >
+              <option value="todos">Todos os setores</option>
+              <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+            </select>
+          </div>
           <TabelaInterativaAuditoria
             v-if="itensRupturaFormatados.length > 0"
             :dados="itensRupturaFormatados"
             :colunas="colunasRuptura"
             :itensPorPagina="5"
             :mostrarBusca="false"
-          >
-             <template #cell-produto="{ item }">
-                <p class="font-bold text-gray-900">{{ item.codigo }}</p>
-                <p class="text-sm text-gray-600">{{ item.produto }}</p>
-             </template>
-          </TabelaInterativaAuditoria>
+          />
           <div v-else class="text-gray-600">Nenhum item com custo de ruptura encontrado</div>
         </div>
       </div>

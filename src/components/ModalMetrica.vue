@@ -59,17 +59,29 @@
         <div v-if="tipo === 'lidos'" class="space-y-4">
           <div class="bg-green-50 p-4 rounded-lg">
             <p class="text-gray-600 text-sm">Status</p>
-            <p class="text-lg font-bold text-green-600 mt-2">✅ Completamente Auditados</p>
-            <p class="text-xs text-gray-600 mt-1">Com presença confirmada e estoque disponível</p>
+            <p class="text-lg font-bold text-green-600 mt-2">✅ Itens Lidos</p>
+            <p class="text-xs text-gray-600 mt-1">Total de itens com presença confirmada</p>
           </div>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white border border-gray-200 p-3 rounded-lg">
+              <p class="text-xs text-gray-500">Lidos Corretamente</p>
+              <p class="text-lg font-bold text-green-600">{{ dados.itensLidosCorretamente }}</p>
+            </div>
+            <div class="bg-white border border-gray-200 p-3 rounded-lg">
+              <p class="text-xs text-gray-500">Com Problema</p>
+              <p class="text-lg font-bold text-red-600">{{ dados.itensLidosComProblema }}</p>
+            </div>
+          </div>
+
           <div class="bg-gray-50 p-4 rounded-lg">
             <div class="flex justify-between items-center mb-2">
               <p class="text-gray-600 text-sm font-medium">Percentual do Total</p>
-              <span class="text-xs font-semibold text-gray-600">{{ dados.itensLidosCorretamente }}/{{ dados.totalItens }} itens</span>
+              <span class="text-xs font-semibold text-gray-600">{{ dados.totalLidos }}/{{ dados.totalItens }} itens</span>
             </div>
             <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
-                :style="{ width: Math.round((dados.itensLidosCorretamente / (dados.totalItens || 1)) * 100) + '%' }"
+                :style="{ width: Math.round((dados.totalLidos / (dados.totalItens || 1)) * 100) + '%' }"
                 class="h-full bg-linear-to-r from-green-500 to-green-600"
               />
             </div>
@@ -234,7 +246,7 @@ const filtroProblema = ref('')
 const titulo = computed(() => {
   const titulos = {
     'total': 'Total de Itens da Auditoria',
-    'lidos': 'Itens Lidos Corretamente',
+    'lidos': 'Total de Itens Lidos',
     'pendentes': 'Itens Pendentes - Não Lidos',
     'problema': 'Itens Lidos Com Problema',
     'desatualizado': 'Itens Lidos Desatualizados'
@@ -245,7 +257,7 @@ const titulo = computed(() => {
 const subtitulo = computed(() => {
   const subtitulos = {
     'total': 'Total de itens auditáveis (excluindo: sem leitura e sem estoque)',
-    'lidos': 'Itens com presença confirmada e estoque disponível',
+    'lidos': 'Todos os itens com presença confirmada (incluindo com problemas)',
     'pendentes': 'Itens sem presença confirmada mas com estoque',
     'problema': 'Itens com presença mas estoque zerado ou lido no local errado',
     'desatualizado': 'Itens lidos com informação desatualizada em relação ao sistema'
@@ -257,7 +269,7 @@ const valor = computed(() => {
   if (!props.dados) return '-'
   const valores = {
     'total': props.dados.totalItens || 0,
-    'lidos': props.dados.itensLidosCorretamente || 0,
+    'lidos': props.dados.totalLidos || 0,
     'pendentes': props.dados.itensPendentes || 0,
     'problema': props.dados.itensLidosComProblema || 0,
     'desatualizado': props.dados.itensDesatualizados || 0
@@ -335,7 +347,7 @@ const baseLista = computed(() => {
     return items.filter(i => !temPresencaEfetiva(i) && (i._estoque || 0) > 0)
   }
   if (props.tipo === 'lidos') {
-    return items.filter(i => temPresencaEfetiva(i) && (i._estoque || 0) > 0)
+    return items.filter(i => temPresencaEfetiva(i))
   }
   if (props.tipo === 'problema') {
     const codsZ = new Set((props.dados.itensComEstoqueZeroDetalhes || []).map(d => d.codigo))

@@ -303,4 +303,8 @@ const ordenar = (coluna) => {
     ordenacao.value.direcao = 'asc'
   }
 }
+defineExpose({
+  dadosFiltrados,
+  ordenacao
+})
 </script>
