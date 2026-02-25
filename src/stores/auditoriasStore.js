@@ -383,7 +383,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return true
         })
 
-      // agora remove duplicatas por código, preferindo linha que contenha um local informado
+      // deduplicar preferindo sempre o registro SEM Local
+      // quando há duplicata de código, manter linha que não possui Local
       const totalFiltrados = filtrados.length
       const dados = filtrados.reduce((acc, item) => {
         const codigo = (item['Código'] || item.Codigo || '').toString().trim()
@@ -391,24 +392,30 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
           return acc
         }
-        const existenteIndex = acc.findIndex(i => (i['Código'] || i.Codigo || '').toString().trim() === codigo)
+        const locAtual = ((item['Local'] || '').toString().trim())
+        const existenteIndex = acc.findIndex(i => {
+          const cod = (i['Código'] || i.Codigo || '').toString().trim()
+          return cod === codigo
+        })
         if (existenteIndex === -1) {
           acc.push(item)
         } else {
           const existente = acc[existenteIndex]
           const locExistente = ((existente['Local'] || '').toString().trim())
-          const locAtual = ((item['Local'] || '').toString().trim())
-          if (!locExistente && locAtual) {
+          // se o novo não tem local e o existente tem, substitui para preservar sem local
+          if (!locAtual && locExistente) {
             acc[existenteIndex] = item
           }
+          // caso contrário mantemos o existente (se ele não tiver local, ele continua;
+          // se ambos tiverem local, descartamos o novo)
         }
         return acc
       }, [])
 
       const duplicadosRemovidos = totalFiltrados - dados.length
       if (duplicadosRemovidos > 0) {
-        console.log(`🗂️ Duplicados filtrados: ${duplicadosRemovidos} linha(s) com mesmo código sem local removidas`)
-        addToast(`Duplicados removidos: ${duplicadosRemovidos} item(ns) sem local descartado(s).`, 'info')
+        console.log(`🗂️ Duplicados descartados: ${duplicadosRemovidos} item(ns) com Local quando havia registro sem Local`)
+        addToast(`Itens com Local descartados em favor de registros sem Local: ${duplicadosRemovidos}`, 'info')
       }
       
       const ignorados = dadosCompletos.length - dados.length
@@ -487,24 +494,29 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
           return acc
         }
-        const existenteIndex = acc.findIndex(i => (i['Código'] || i.Codigo || '').toString().trim() === codigo)
+        const locAtual = ((item['Local'] || '').toString().trim())
+        const existenteIndex = acc.findIndex(i => {
+          const cod = (i['Código'] || i.Codigo || '').toString().trim()
+          return cod === codigo
+        })
         if (existenteIndex === -1) {
           acc.push(item)
         } else {
           const existente = acc[existenteIndex]
           const locExistente = ((existente['Local'] || '').toString().trim())
-          const locAtual = ((item['Local'] || '').toString().trim())
-          if (!locExistente && locAtual) {
+          if (!locAtual && locExistente) {
+            // novo item sem local substitui existente com local
             acc[existenteIndex] = item
           }
+          // caso contrário mantemos o existente (que já não tem local ou já foi preferido)
         }
         return acc
       }, [])
 
       const duplicadosRemovidos = totalFiltrados - dados.length
       if (duplicadosRemovidos > 0) {
-        console.log(`🗂️ Duplicados filtrados: ${duplicadosRemovidos} linha(s) com mesmo código sem local removidas`)
-        addToast(`Duplicados removidos: ${duplicadosRemovidos} item(ns) sem local descartado(s).`, 'info')
+        console.log(`🗂️ Duplicados descartados: ${duplicadosRemovidos} item(ns) com Local quando havia registro sem Local`)
+        addToast(`Itens com Local descartados em favor de registros sem Local: ${duplicadosRemovidos}`, 'info')
       }
       const ignorados = dadosCompletos.length - dados.length
       console.log(`✅ Itens auditáveis: ${dados.length} linhas`)
