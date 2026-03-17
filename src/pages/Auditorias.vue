@@ -131,12 +131,9 @@ const submeterAuditoria = async () => {
       store.addToast('Arquivo vazio ou inválido!', 'warning')
       return
     }
-    
-    // Detectar tipo efetivo pelos dados e analisar
-    const tipoEfetivo = typeof store.detectarTipoDados === 'function' ? store.detectarTipoDados(dados) : tipo
-    if (tipoEfetivo !== tipo) {
-      store.addToast(`Tipo detectado: ${tipoEfetivo}. Ajustando a análise.`, 'info')
-    }
+
+    // Usar o tipo que foi selecionado no formulário
+    const tipoEfetivo = formulario.value.tipo
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
     const analise = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados)
@@ -483,6 +480,8 @@ const abrirDia = (dia) => {
   const label = dia && dia.label ? dia.label : ''
   const mapa = auditoriasPorDiaTipo.value || {}
   const porData = mapa[data]
+
+  // Se há auditorias existentes, navega para uma
   if (porData) {
     const preferencia = ['Presença', 'Etiqueta', 'Ruptura']
     for (const t of preferencia) {
@@ -498,7 +497,17 @@ const abrirDia = (dia) => {
       return
     }
   }
-  criarAPartirCalendario(data, formulario.value.tipo, label)
+
+  // Se não há auditorias, simula clicar no primeiro botão disponível
+  const tiposDodia = tiposPlanejados.value[dia.dayIndex] || []
+
+  if (tiposDodia.length > 0) {
+    // Chama exatamente como o primeiro botão de tipo planejado faria
+    criarAPartirCalendario(data, tiposDodia[0], label)
+  } else {
+    // Chama exatamente como o botão genérico faria
+    criarAPartirCalendario(data, formulario.value.tipo, label)
+  }
 }
 
 const parcialRestante = (a) => {
