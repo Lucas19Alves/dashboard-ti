@@ -257,6 +257,14 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return { atualizado, desatualizado, naoLidoEstoque, lidoSemEstoque, semEstoque, lidoNaoPertence }
   }
 
+  // Obter tipo de auditoria baseado na data selecionada
+  const obterTipoAuditoriaParaData = (dataStr) => {
+    const data = new Date(dataStr)
+    const diaSemana = data.getDay()
+    const tipos = tiposAuditoriaPorDia[diaSemana] || []
+    return tipos.length > 0 ? tipos[0] : 'Presença' // fallback para Presença
+  }
+
   const detectarTipoArquivo = async (file) => {
     const buffer = await file.arrayBuffer()
     const data = new Uint8Array(buffer)
@@ -951,6 +959,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     analisarDadosPresenca,
     analisarDadosEtiqueta,
     detectarTipoDados,
+    obterTipoAuditoriaParaData,
     carregarAuditoriasPersistidas,
     addAuditoria,
     updateAuditoria,

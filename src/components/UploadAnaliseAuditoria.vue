@@ -331,12 +331,10 @@ const processar = async () => {
       store.addToast('Arquivo vazio ou inválido!', 'warning')
       return
     }
-    
+
     console.log('✅ Dados recebidos:', dados.length, 'linhas')
-    const tipoEfetivo = typeof store.detectarTipoDados === 'function' ? store.detectarTipoDados(dados) : tipo
-    if (tipoEfetivo !== tipo) {
-      store.addToast(`Tipo detectado: ${tipoEfetivo}. Ajustando a análise.`, 'info')
-    }
+    // Usar o tipo definido na auditoria (já foi selecionado no formulário)
+    const tipoEfetivo = props.auditoria?.tipo || 'Etiqueta'
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
     analise.value = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados)
