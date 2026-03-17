@@ -406,6 +406,13 @@ const formatISO = (d) => {
   return `${y}-${m}-${day}`
 }
 
+// Formata data ISO (YYYY-MM-DD) para formato local (DD/MM/YYYY) sem problemas de fuso horário
+const formatarDataISO = (dataISO) => {
+  if (!dataISO) return ''
+  const [ano, mes, dia] = dataISO.split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
 const semanaAtual = computed(() => {
   const hoje = new Date()
   const inicio = startOfWeek(hoje)
@@ -1146,7 +1153,7 @@ const classesCardDia = (d) => {
                 <h3 class="text-2xl font-bold text-gray-800 leading-tight truncate" :title="auditoria.sku">
                   {{ auditoria.sku }}
                 </h3>
-                <span class="text-xs text-gray-400 mt-0.5">Criado em {{ new Date(auditoria.data).toLocaleDateString('pt-BR') }}</span>
+                <span class="text-xs text-gray-400 mt-0.5">Criado em {{ formatarDataISO(auditoria.data) }}</span>
               </div>
 
               <!-- Progress Section -->
