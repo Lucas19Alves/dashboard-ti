@@ -2822,89 +2822,111 @@ const fecharRelatorio = () => {
         </div>
 
         <!-- Content - Compacto para Print -->
-        <div class="overflow-y-auto p-4 space-y-3 text-sm">
-          <!-- Resultado Geral com Destaque para % Pendente -->
-          <div class="bg-linear-to-r from-orange-50 to-red-50 rounded-lg p-4 border-l-4 border-orange-600">
-            <div class="grid grid-cols-5 gap-3 mb-3">
-              <div>
-                <p class="text-xs text-gray-600">Total Auditável</p>
-                <p class="text-lg font-bold text-blue-600">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
+        <div class="overflow-y-auto p-6 space-y-6 text-sm bg-slate-50">
+          <!-- Grid Principal 2x2 -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- CARD 1: Números Gerais (Topo Esquerdo) -->
+            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+              <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white px-6 py-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                  <i class="fas fa-chart-bar"></i>
+                  Resultado Geral
+                </h3>
               </div>
-              <div>
-                <p class="text-xs text-gray-600">Total Lidos</p>
-                <p class="text-lg font-bold text-green-600">{{ dadosRelatorio?.resultadoGeral.totalLidos }}</p>
-              </div>
-              <div>
-                <p class="text-xs text-gray-600">Pendentes</p>
-                <p class="text-lg font-bold text-orange-600">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
-              </div>
-              <div>
-                <p class="text-xs text-gray-600">Desatualizados</p>
-                <p class="text-lg font-bold text-yellow-600">{{ dadosRelatorio?.resultadoGeral.desatualizados || 0 }}</p>
-              </div>
-              <div class="bg-white rounded p-2 border-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-500' : 'border-orange-500'">
-                <p class="text-xs font-bold text-gray-700">% PENDENTE</p>
-                <p class="text-2xl font-bold" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
-                  {{ dadosRelatorio?.resultadoGeral.percentualPendente.toFixed(2) }}%
-                </p>
-                <p class="text-xs" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
-                  Meta: 3%
-                </p>
-              </div>
-            </div>
-            <div class="bg-white rounded p-2 text-xs">
-              <p class="font-semibold text-gray-800">
-                <span v-if="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0" class="text-red-600">
-                  ⚠️ Faltam {{ dadosRelatorio?.resultadoGeral.faltaParaMeta.toFixed(2) }}% ({{ dadosRelatorio?.resultadoGeral.itensFaltam }} itens) para meta
-                </span>
-                <span v-else class="text-green-600 font-bold">
-                  ✅ Meta atingida!
-                </span>
-              </p>
-            </div>
-          </div>
+              <div class="p-6">
+                <!-- Status Geral -->
+                <div class="mb-6 pb-6 border-b border-slate-200">
+                  <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-blue-50 rounded-lg p-3">
+                      <p class="text-xs font-semibold text-gray-600 mb-1">Total Auditável</p>
+                      <p class="text-2xl font-bold text-blue-700">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-3">
+                      <p class="text-xs font-semibold text-gray-600 mb-1">Total Lidos</p>
+                      <p class="text-2xl font-bold text-green-700">{{ dadosRelatorio?.resultadoGeral.totalLidos }}</p>
+                    </div>
+                    <div class="bg-orange-50 rounded-lg p-3">
+                      <p class="text-xs font-semibold text-gray-600 mb-1">Pendentes</p>
+                      <p class="text-2xl font-bold text-orange-700">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
+                    </div>
+                    <div class="bg-yellow-50 rounded-lg p-3">
+                      <p class="text-xs font-semibold text-gray-600 mb-1">Desatualizados</p>
+                      <p class="text-2xl font-bold text-yellow-700">{{ dadosRelatorio?.resultadoGeral.desatualizados || 0 }}</p>
+                    </div>
+                  </div>
+                </div>
 
-          <!-- Grid lado a lado para Setores e Top Locais -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <!-- Setores - Tabela Compacta -->
-            <div>
-              <h3 class="text-sm font-bold text-gray-800 mb-2">Análise por Setor</h3>
-              <div class="bg-white rounded border overflow-hidden">
+                <!-- Destaque: % Pendente e Meta -->
+                <div class="space-y-3">
+                  <div class="rounded-lg border-2 p-4" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-400 bg-green-50' : 'border-orange-400 bg-orange-50'">
+                    <p class="text-xs font-bold uppercase tracking-wide mb-1" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-700' : 'text-orange-700'">% Pendente</p>
+                    <p class="text-4xl font-bold" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                      {{ dadosRelatorio?.resultadoGeral.percentualPendente.toFixed(2) }}%
+                    </p>
+                    <p class="text-xs mt-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600 font-semibold' : 'text-orange-600 font-semibold'">
+                      Meta: 3%
+                    </p>
+                  </div>
+
+                  <!-- Status da Meta -->
+                  <div class="rounded-lg p-3" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'">
+                    <p class="text-xs font-semibold" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'text-red-700' : 'text-green-700'">
+                      <i :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'" class="mr-1"></i>
+                      <span v-if="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0">
+                        Faltam {{ dadosRelatorio?.resultadoGeral.faltaParaMeta.toFixed(2) }}% ({{ dadosRelatorio?.resultadoGeral.itensFaltam }} itens) para meta
+                      </span>
+                      <span v-else>
+                        Meta atingida!
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CARD 2: Análise por Setor (Topo Direito) -->
+            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+              <div class="bg-linear-to-r from-purple-600 to-purple-800 text-white px-6 py-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                  <i class="fas fa-building"></i>
+                  Análise por Setor
+                </h3>
+              </div>
+              <div class="overflow-hidden">
                 <table class="w-full text-xs">
-                  <thead class="bg-gray-100 border-b">
-                    <tr>
-                      <th class="px-2 py-2 text-left font-semibold text-gray-700">Setor</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">Pendentes</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">Desat.</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">% Pend</th>
-                      <th class="px-2 py-2 text-center font-semibold text-gray-700">Classif</th>
+                  <thead>
+                    <tr class="bg-slate-100 border-b border-slate-200">
+                      <th class="px-4 py-3 text-left font-bold text-gray-700">Setor</th>
+                      <th class="px-3 py-3 text-right font-bold text-gray-700">Pend.</th>
+                      <th class="px-3 py-3 text-right font-bold text-gray-700">%</th>
+                      <th class="px-3 py-3 text-center font-bold text-gray-700">Classif</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y">
+                  <tbody class="divide-y divide-slate-200">
                     <tr
                       v-for="setor in dadosRelatorio?.setores"
                       :key="setor.nome"
-                      class="hover:bg-blue-50"
                       :class="[
                         setor.classificacao === 'Excelente'
-                          ? 'bg-green-50'
+                          ? 'bg-green-50 hover:bg-green-100'
                           : setor.classificacao === 'Bom'
-                            ? 'bg-green-50/60'
+                            ? 'bg-emerald-50 hover:bg-emerald-100'
                             : setor.classificacao === 'Regular'
-                              ? 'bg-yellow-50'
-                              : 'bg-red-50'
+                              ? 'bg-yellow-50 hover:bg-yellow-100'
+                              : 'bg-red-50 hover:bg-red-100'
                       ]"
                     >
-                      <td class="px-2 py-2 font-medium text-gray-800 text-xs">{{ setor.nome }}</td>
-                      <td class="px-2 py-2 text-right font-semibold">{{ setor.pendentes }}</td>
-                      <td class="px-2 py-2 text-right font-semibold text-yellow-600">{{ setor.desatualizados || 0 }}</td>
-                      <td class="px-2 py-2 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
-                        {{ setor.percentualPendente.toFixed(2) }}%
-                        <div class="text-[10px] font-normal text-gray-500">SKU: {{ setor.total }}</div>
-                      </td>
-                      <td class="px-2 py-2 text-center">
-                        <span class="px-2 py-0.5 rounded text-xs font-semibold" :class="setor.classificacaoClass + ' bg-opacity-20'">
-                          {{ setor.classificacao }}
+                      <td class="px-4 py-3 font-medium text-gray-800 truncate">{{ setor.nome }}</td>
+                      <td class="px-3 py-3 text-right font-bold" :class="setor.pendentes > 0 ? 'text-orange-600' : 'text-green-600'">{{ setor.pendentes }}</td>
+                      <td class="px-3 py-3 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">{{ setor.percentualPendente.toFixed(1) }}%</td>
+                      <td class="px-3 py-3 text-center">
+                        <span class="px-2 py-1 rounded text-xs font-semibold" :class="[
+                          setor.classificacao === 'Excelente' ? 'bg-green-200 text-green-800' :
+                          setor.classificacao === 'Bom' ? 'bg-emerald-200 text-emerald-800' :
+                          setor.classificacao === 'Regular' ? 'bg-yellow-200 text-yellow-800' :
+                          'bg-red-200 text-red-800'
+                        ]">
+                          {{ setor.classificacao.substring(0, 3) }}
                         </span>
                       </td>
                     </tr>
@@ -2912,46 +2934,60 @@ const fecharRelatorio = () => {
                 </table>
               </div>
             </div>
+          </div>
 
-            <!-- Top 20 Locais - Tabela Compacta -->
-            <div>
-              <h3 class="text-sm font-bold text-gray-800 mb-2">Top 20 Locais com Mais Pendentes</h3>
-              <div class="bg-white rounded border overflow-hidden">
-                <table class="w-full text-xs">
-                  <thead class="bg-gray-100 border-b">
-                    <tr>
-                      <th class="px-2 py-2 text-center font-semibold text-gray-700">#</th>
-                      <th class="px-2 py-2 text-left font-semibold text-gray-700">Local</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">Pend</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">Total</th>
-                      <th class="px-2 py-2 text-right font-semibold text-gray-700">% Pend</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y">
-                    <tr v-for="(local, i) in dadosRelatorio?.topLocaisPendentes" :key="local.nome" class="hover:bg-orange-50">
-                      <td class="px-2 py-2 text-center font-bold text-gray-400">{{ i + 1 }}</td>
-                      <td class="px-2 py-2 font-medium text-gray-800">{{ local.nome }}</td>
-                      <td class="px-2 py-2 text-right font-semibold text-orange-600">{{ local.pendentes }}</td>
-                      <td class="px-2 py-2 text-right text-gray-600">{{ local.total }}</td>
-                      <td class="px-2 py-2 text-right font-bold text-orange-600">{{ local.percentualPendente.toFixed(2) }}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+          <!-- CARD 3: Top 10 Locais com Mais Pendentes (Inferior Esquerda) -->
+          <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="bg-linear-to-r from-orange-600 to-orange-800 text-white px-6 py-4">
+              <h3 class="text-lg font-bold flex items-center gap-2">
+                <i class="fas fa-map-marker-alt"></i>
+                Top 10 Locais com Mais Pendentes
+              </h3>
+              <p class="text-xs text-orange-100 mt-1">Focos de ação prioritária</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-slate-100 border-b border-slate-200">
+                    <th class="px-4 py-3 text-center font-bold text-gray-700">#</th>
+                    <th class="px-4 py-3 text-left font-bold text-gray-700">Local</th>
+                    <th class="px-4 py-3 text-right font-bold text-gray-700">Pendentes</th>
+                    <th class="px-4 py-3 text-right font-bold text-gray-700">Total</th>
+                    <th class="px-4 py-3 text-right font-bold text-gray-700">% Pend</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                  <tr v-for="(local, i) in (dadosRelatorio?.topLocaisPendentes || []).slice(0, 10)" :key="local.nome" class="hover:bg-orange-50">
+                    <td class="px-4 py-3 text-center font-bold text-gray-400">{{ i + 1 }}</td>
+                    <td class="px-4 py-3 font-medium text-gray-800">{{ local.nome }}</td>
+                    <td class="px-4 py-3 text-right font-bold text-orange-600">{{ local.pendentes }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600">{{ local.total }}</td>
+                    <td class="px-4 py-3 text-right font-bold text-orange-600">{{ local.percentualPendente.toFixed(1) }}%</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- Locais Sem Leitura -->
-          <div v-if="dadosRelatorio?.locaisSemLeitura.length > 0" class="bg-red-50 border-l-4 border-red-500 rounded p-2">
-            <h3 class="text-xs font-bold text-gray-800 mb-2">Locais Sem Leitura</h3>
-            <div class="flex flex-wrap gap-1">
-              <span 
-                v-for="local in dadosRelatorio.locaisSemLeitura" 
-                :key="local"
-                class="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs"
-              >
-                {{ local }}
-              </span>
+          <!-- CARD 4: Locais Sem Leitura (Abaixo de Tudo) -->
+          <div v-if="dadosRelatorio?.locaisSemLeitura.length > 0" class="bg-white rounded-xl shadow-md border border-red-300 overflow-hidden">
+            <div class="bg-linear-to-r from-red-600 to-red-800 text-white px-6 py-4">
+              <h3 class="text-lg font-bold flex items-center gap-2">
+                <i class="fas fa-exclamation-triangle"></i>
+                Locais Sem Leitura ({{ dadosRelatorio?.locaisSemLeitura.length }} locais)
+              </h3>
+              <p class="text-xs text-red-100 mt-1">Esses locais ainda não tiveram nenhuma leitura nesta auditoria</p>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <span
+                  v-for="local in dadosRelatorio?.locaisSemLeitura"
+                  :key="local"
+                  class="px-3 py-2 bg-red-100 border border-red-300 text-red-800 rounded-lg text-xs font-medium text-center hover:bg-red-200 transition"
+                >
+                  {{ local }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
