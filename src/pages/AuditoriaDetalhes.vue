@@ -1931,42 +1931,6 @@ const fecharRelatorio = () => {
 
         <div v-else-if="!readOnly" class="mb-4"></div>
 
-        <div 
-          v-if="mostrarUploadSubstituir && !readOnly"
-          class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          @click.stop="mostrarUploadSubstituir = false"
-        >
-          <div 
-            class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6"
-            @click.stop
-          >
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-xl font-bold text-gray-800">Substituir Planilha</h3>
-              <button
-                @click="mostrarUploadSubstituir = false"
-                class="text-gray-500 hover:text-gray-700"
-              >
-                <i class="fas fa-times text-xl"></i>
-              </button>
-            </div>
-            <p class="text-gray-600 mb-4">
-              Ao carregar uma nova planilha, os dados atuais serão substituídos completamente.
-            </p>
-            <UploadAnaliseAuditoria 
-              :auditoria="auditoria"
-              @analiseCompleta="handleUploadCompleto"
-            />
-            <div class="mt-4 flex justify-end">
-              <button
-                @click="mostrarUploadSubstituir = false"
-                class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-
         <!-- Métricas Gerais -->
         <template v-else>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2251,6 +2215,43 @@ const fecharRelatorio = () => {
         </TabelaInterativaAuditoria>
 
         
+      </div>
+
+      <!-- Modal de Atualizar Dados (Disponível em Todas as Abas) -->
+      <div
+        v-if="mostrarUploadSubstituir && !readOnly"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        @click.stop="mostrarUploadSubstituir = false"
+      >
+        <div
+          class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6"
+          @click.stop
+        >
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-800">Substituir Planilha</h3>
+            <button
+              @click="mostrarUploadSubstituir = false"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <p class="text-gray-600 mb-4">
+            Ao carregar uma nova planilha, os dados atuais serão substituídos completamente.
+          </p>
+          <UploadAnaliseAuditoria
+            :auditoria="auditoria"
+            @analiseCompleta="handleUploadCompleto"
+          />
+          <div class="mt-4 flex justify-end">
+            <button
+              @click="mostrarUploadSubstituir = false"
+              class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- DADOS -->
