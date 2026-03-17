@@ -2898,7 +2898,7 @@ const fecharRelatorio = () => {
                       <th class="px-4 py-3 text-left font-bold text-gray-700">Setor</th>
                       <th class="px-3 py-3 text-right font-bold text-gray-700">Pend.</th>
                       <th class="px-3 py-3 text-right font-bold text-gray-700">%</th>
-                      <th class="px-3 py-3 text-center font-bold text-gray-700">Classif</th>
+                      <th class="px-3 py-3 text-center font-bold text-gray-700">Classificação</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-200">
@@ -2925,7 +2925,7 @@ const fecharRelatorio = () => {
                           setor.classificacao === 'Regular' ? 'bg-yellow-200 text-yellow-800' :
                           'bg-red-200 text-red-800'
                         ]">
-                          {{ setor.classificacao.substring(0, 3) }}
+                          {{ setor.classificacao }}
                         </span>
                       </td>
                     </tr>
