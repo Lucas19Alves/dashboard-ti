@@ -939,6 +939,190 @@ const setoresComUsuarios = computed(() => {
     .sort((a, b) => b.totalLidos - a.totalLidos)
 })
 
+// Dashboard Enhancement: Top 3 Users Performance
+const userPerformanceTop3 = computed(() => {
+  if (!auditoria.value?.analise || !dadosUsuarios.value) return []
+  const sorted = [...dadosUsuarios.value].sort((a, b) => b.totalLidos - a.totalLidos)
+  return sorted.slice(0, 3).map((user, idx) => ({
+    ranking: idx + 1,
+    nome: user.nome,
+    totalLidos: user.totalLidos,
+    percentualAuditoria: user.percentualAuditoria,
+    ritmoItensHora: user.totalLidos > 0 ? (user.totalLidos / Math.max(0.5, (projecoes.value?.horasDecorridas || 1))).toFixed(1) : 0
+  }))
+})
+
+// Dashboard Enhancement: Estimated Completion Time
+const estimativaFinalizacao = computed(() => {
+  if (!auditoria.value?.analise || !projecoes.value) return null
+  const proj = projecoes.value
+  const itensPendentes = proj.totalAuditaveis - proj.totalLidos
+  const minutosRestantes = Math.max(0, (itensPendentes / Math.max(0.5, proj.ritmoHora)) * 60)
+  const agora = new Date()
+  const estimado = new Date(agora.getTime() + minutosRestantes * 60000)
+  const horas = String(estimado.getHours()).padStart(2, '0')
+  const minutos = String(estimado.getMinutes()).padStart(2, '0')
+
+  // Check confidence (compare last 2 hours pace)
+  let confianca = 2 // medium confidence by default
+  if (proj.horasDecorridas >= 2) confianca = 3 // high confidence if 2+ hours
+
+
+  const horaFimObj = parseHoraHoje(horarioFim.value)
+  const estaAtrasado = estimado > horaFimObj
+
+  return {
+    horaEstimada: `${horas}:${minutos}`,
+    minutosRestantes: Math.round(minutosRestantes),
+    horaSaida: `${String(horaFimObj.getHours()).padStart(2, '0')}:${String(horaFimObj.getMinutes()).padStart(2, '0')}`,
+    estaAtrasado,
+    confianca,
+    temHorarioFim: horarioFim.value && horarioFim.value.trim() !== ''
+  }
+})
+
+// Dashboard Enhancement: Sector Risk Indicator
+const setoresComRiscoIndicador = computed(() => {
+  if (!auditoria.value?.analise) return []
+  const porSetor = auditoria.value.analise.porSetor || {}
+
+  return Object.entries(porSetor)
+    .map(([setor, dados]) => {
+      const total = (dados.lidos || 0) + (dados.pendentes || 0) + (dados.comProblema || 0)
+      if (total === 0) return null
+      const pendentes = dados.pendentes || 0
+      const percentualPendente = (pendentes / total) * 100
+      let nivelRisco = 'BAIXO'
+      let cor = 'green'
+      if (percentualPendente > 50) {
+        nivelRisco = 'CRÍTICO'
+        cor = 'red'
+      } else if (percentualPendente > 30) {
+        nivelRisco = 'ALTO'
+        cor = 'orange'
+      } else if (percentualPendente > 10) {
+        nivelRisco = 'MÉDIO'
+        cor = 'yellow'
+      }
+      return {
+        setor,
+        nivelRisco,
+        cor,
+        percentualPendente: Math.round(percentualPendente * 100) / 100,
+        lidos: dados.lidos || 0,
+        pendentes,
+        comProblema: dados.comProblema || 0,
+        total
+      }
+    })
+    .filter(x => x !== null)
+    .sort((a, b) => {
+      const orden = { 'CRÍTICO': 0, 'ALTO': 1, 'MÉDIO': 2, 'BAIXO': 3 }
+      return orden[a.nivelRisco] - orden[b.nivelRisco]
+    })
+})
+
+// Dashboard Enhancement: Critical Issues
+const questoesCriticas = computed(() => {
+  if (!auditoria.value?.analise) return null
+  const a = auditoria.value.analise
+  const estoqueZero = (a.itensComEstoqueZeroDetalhes || []).length
+  const lidoWrongLocation = (a.itensLidoNaoPertenceDetalhes || []).length
+  const setoresParados = (a.setoresParados || []).length
+  const total = estoqueZero + lidoWrongLocation + setoresParados
+
+  if (total === 0) return null
+
+  return {
+    total,
+    estoqueZero,
+    lidoWrongLocation,
+    setoresParados,
+    itensEstoqueZeroTop5: (a.itensComEstoqueZeroDetalhes || []).slice(0, 5),
+    itensLidoWrongTop5: (a.itensLidoNaoPertenceDetalhes || []).slice(0, 5),
+    setoresParadosList: a.setoresParados || []
+  }
+})
+
+// Dashboard Enhancement: Problem Details
+const detalheProblemas = computed(() => {
+  if (!auditoria.value?.analise) return null
+  const a = auditoria.value.analise
+  const estoqueZero = (a.itensComEstoqueZeroDetalhes || []).length
+  const lidoWrongLocation = (a.itensLidoNaoPertenceDetalhes || []).length
+  const total = estoqueZero + lidoWrongLocation
+
+  if (total === 0) return null
+
+  // Group by sector
+  const porSetor = {}
+  ;(a.itensComEstoqueZeroDetalhes || []).forEach(item => {
+    const s = item.setor || 'Não especificado'
+    if (!porSetor[s]) porSetor[s] = { estoqueZero: 0, lidoWrong: 0 }
+    porSetor[s].estoqueZero++
+  })
+  ;(a.itensLidoNaoPertenceDetalhes || []).forEach(item => {
+    const s = item.setor || 'Não especificado'
+    if (!porSetor[s]) porSetor[s] = { estoqueZero: 0, lidoWrong: 0 }
+    porSetor[s].lidoWrong++
+  })
+
+  // Group by user
+  const porUsuario = {}
+  ;(a.itensComEstoqueZeroDetalhes || []).forEach(item => {
+    const u = item.usuario || 'Não especificado'
+    if (!porUsuario[u]) porUsuario[u] = { estoqueZero: 0, lidoWrong: 0 }
+    porUsuario[u].estoqueZero++
+  })
+  ;(a.itensLidoNaoPertenceDetalhes || []).forEach(item => {
+    const u = item.usuario || 'Não especificado'
+    if (!porUsuario[u]) porUsuario[u] = { estoqueZero: 0, lidoWrong: 0 }
+    porUsuario[u].lidoWrong++
+  })
+
+  return {
+    total,
+    estoqueZero,
+    lidoWrongLocation,
+    percentualEstoqueZero: total > 0 ? Math.round((estoqueZero / total) * 100) : 0,
+    percentualLidoWrong: total > 0 ? Math.round((lidoWrongLocation / total) * 100) : 0,
+    porSetor,
+    porUsuario,
+    topSetores: Object.entries(porSetor)
+      .sort((a, b) => (b[1].estoqueZero + b[1].lidoWrong) - (a[1].estoqueZero + a[1].lidoWrong))
+      .slice(0, 5)
+  }
+})
+
+// Dashboard Enhancement: Problem Distribution by Sector
+const problemasDistribuidosPorSetor = computed(() => {
+  if (!auditoria.value?.analise) return []
+  const a = auditoria.value.analise
+
+  const mapa = {}
+  ;(a.itensComEstoqueZeroDetalhes || []).forEach(item => {
+    const s = item.setor || 'Não especificado'
+    if (!mapa[s]) mapa[s] = { estoqueZero: 0, lidoWrong: 0 }
+    mapa[s].estoqueZero++
+  })
+  ;(a.itensLidoNaoPertenceDetalhes || []).forEach(item => {
+    const s = item.setor || 'Não especificado'
+    if (!mapa[s]) mapa[s] = { estoqueZero: 0, lidoWrong: 0 }
+    mapa[s].lidoWrong++
+  })
+
+  return Object.entries(mapa)
+    .map(([setor, dados]) => ({
+      setor,
+      estoqueZero: dados.estoqueZero,
+      lidoWrong: dados.lidoWrong,
+      total: dados.estoqueZero + dados.lidoWrong,
+      percentualEstoque: ((dados.estoqueZero / (dados.estoqueZero + dados.lidoWrong)) * 100).toFixed(1)
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6)
+})
+
 const leiturasPorUsuarioHora = computed(() => {
   if (!auditoria.value?.dados || !auditoria.value?.analise) return null
   const usuarios = auditoria.value.analise.usuarios || []
@@ -2205,6 +2389,236 @@ const fecharRelatorio = () => {
                   <p class="text-xs text-gray-600 mt-1">
                     Percentual final: {{ projecoes?.projPercentualFinal?.toFixed(2) || 0 }}%
                   </p>
+                </div>
+              </div>
+
+              <!-- 🏆 Top 3 Users Performance -->
+              <div v-if="userPerformanceTop3.length > 0">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-trophy text-yellow-500 mr-2"></i>Melhores Desempenhos
+                </h4>
+                <div class="grid grid-cols-3 md:grid-cols-3 gap-3">
+                  <div
+                    v-for="user in userPerformanceTop3"
+                    :key="user.nome"
+                    class="bg-white rounded-lg p-4 shadow text-center border-t-4"
+                    :class="user.ranking === 1 ? 'border-yellow-500' : user.ranking === 2 ? 'border-gray-400' : 'border-orange-600'"
+                  >
+                    <div class="text-2xl mb-2">
+                      {{ user.ranking === 1 ? '🥇' : user.ranking === 2 ? '🥈' : '🥉' }}
+                    </div>
+                    <p class="font-bold text-gray-800 text-sm">{{ user.nome }}</p>
+                    <p class="text-2xl font-bold mt-2" :class="user.ranking === 1 ? 'text-yellow-500' : user.ranking === 2 ? 'text-gray-500' : 'text-orange-600'">
+                      {{ user.totalLidos }}
+                    </p>
+                    <p class="text-xs text-gray-600 mt-1">{{ user.percentualAuditoria }}% do total</p>
+                    <p class="text-xs text-gray-500 mt-1">{{ user.ritmoItensHora }} itens/h</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ⏱️ Estimated Completion Time -->
+              <div v-if="estimativaFinalizacao">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-hourglass-end text-indigo-600 mr-2"></i>Tempo Estimado
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="bg-white rounded-lg p-6 shadow border-l-4" :class="!estimativaFinalizacao.estaAtrasado ? 'border-green-500' : 'border-red-500'">
+                    <p class="text-gray-600 text-sm mb-2">Finalização Estimada</p>
+                    <p class="text-4xl font-bold" :class="!estimativaFinalizacao.estaAtrasado ? 'text-green-600' : 'text-red-600'">
+                      {{ estimativaFinalizacao.horaEstimada }}
+                    </p>
+                    <p class="text-xs text-gray-600 mt-2">
+                      {{ !estimativaFinalizacao.estaAtrasado ? '✅ No horário' : '🔴 Atrasado' }}
+                    </p>
+                  </div>
+                  <div class="bg-white rounded-lg p-6 shadow">
+                    <p class="text-gray-600 text-sm mb-2">Comparação com Horário Programado</p>
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <p class="text-xs text-gray-600">Saída programada:</p>
+                        <p class="text-2xl font-bold text-gray-800">{{ estimativaFinalizacao.horaSaida }}</p>
+                      </div>
+                      <div class="text-center">
+                        <div class="text-xl" v-if="!estimativaFinalizacao.estaAtrasado">✅</div>
+                        <div class="text-xl" v-else>⚠️</div>
+                      </div>
+                    </div>
+                    <p class="text-xs text-gray-600 mt-2">Tempo restante: {{ estimativaFinalizacao.minutosRestantes }}min</p>
+                    <p class="text-xs text-gray-500 mt-1" v-if="!estimativaFinalizacao.temHorarioFim">
+                      (Estimativa baseada no ritmo atual)
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status dos Setores -->
+              <div v-if="setoresComRiscoIndicador.length > 0">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>Status dos Setores
+                </h4>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div
+                    v-for="setor in setoresComRiscoIndicador"
+                    :key="setor.setor"
+                    class="bg-white rounded-lg p-3 shadow border-l-4"
+                    :class="setor.cor === 'red' ? 'border-red-500' : setor.cor === 'orange' ? 'border-orange-500' : setor.cor === 'yellow' ? 'border-yellow-500' : 'border-green-500'"
+                  >
+                    <div class="flex justify-between items-start mb-2">
+                      <p class="text-xs font-bold text-gray-700 flex-1">{{ setor.setor }}</p>
+                      <span
+                        class="px-2 py-0.5 rounded text-xs font-bold whitespace-nowrap ml-1"
+                        :class="setor.cor === 'red' ? 'bg-red-100 text-red-800' :
+                                 setor.cor === 'orange' ? 'bg-orange-100 text-orange-800' :
+                                 setor.cor === 'yellow' ? 'bg-yellow-100 text-yellow-800' :
+                                 'bg-green-100 text-green-800'"
+                      >
+                        {{ setor.nivelRisco }}
+                      </span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-200 rounded mb-2">
+                      <div
+                        :style="{ width: setor.percentualPendente + '%' }"
+                        class="h-2 rounded"
+                        :class="setor.cor === 'red' ? 'bg-red-500' : setor.cor === 'orange' ? 'bg-orange-500' : setor.cor === 'yellow' ? 'bg-yellow-500' : 'bg-green-500'"
+                      />
+                    </div>
+                    <p class="text-xs text-gray-600">{{ setor.pendentes }} pendentes</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 🚨 Critical Issues Panel -->
+              <div v-if="questoesCriticas">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-exclamation-circle text-red-600 mr-2"></i>Atenção Requerida ({{ questoesCriticas.total }} problemas)
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <!-- Estoque Zero -->
+                  <div class="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                      <i class="fas fa-box text-red-600 mr-2"></i>
+                      <span class="font-bold text-red-800">Estoque Zero</span>
+                    </div>
+                    <p class="text-2xl font-bold text-red-700">{{ questoesCriticas.estoqueZero }}</p>
+                    <p class="text-xs text-gray-600 mt-1">itens com presença mas sem estoque</p>
+                    <div v-if="questoesCriticas.itensEstoqueZeroTop5.length > 0" class="mt-3 space-y-1">
+                      <p class="text-xs font-semibold text-gray-700">Top afetados:</p>
+                      <p v-for="item in questoesCriticas.itensEstoqueZeroTop5.slice(0, 2)" :key="item.codigo" class="text-xs text-gray-700">
+                        • {{ item.codigo }} - {{ item.setor }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Local Errado -->
+                  <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                      <i class="fas fa-map-marker-alt text-yellow-600 mr-2"></i>
+                      <span class="font-bold text-yellow-800">Local Errado</span>
+                    </div>
+                    <p class="text-2xl font-bold text-yellow-700">{{ questoesCriticas.lidoWrongLocation }}</p>
+                    <p class="text-xs text-gray-600 mt-1">itens lidos no local incorreto</p>
+                    <div v-if="questoesCriticas.itensLidoWrongTop5.length > 0" class="mt-3 space-y-1">
+                      <p class="text-xs font-semibold text-gray-700">Top afetados:</p>
+                      <p v-for="item in questoesCriticas.itensLidoWrongTop5.slice(0, 2)" :key="item.codigo" class="text-xs text-gray-700">
+                        • {{ item.codigo }} - {{ item.setor }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Setores Parados -->
+                  <div class="bg-red-50 border-2 border-red-200 rounded-lg p-4" v-if="questoesCriticas.setoresParados > 0">
+                    <div class="flex items-center mb-2">
+                      <i class="fas fa-pause-circle text-red-600 mr-2"></i>
+                      <span class="font-bold text-red-800">Setores Parados</span>
+                    </div>
+                    <p class="text-2xl font-bold text-red-700">{{ questoesCriticas.setoresParados }}</p>
+                    <p class="text-xs text-gray-600 mt-1">setores sem nenhuma leitura</p>
+                    <div v-if="questoesCriticas.setoresParadosList.length > 0" class="mt-3 space-y-1">
+                      <p v-for="setor in questoesCriticas.setoresParadosList.slice(0, 2)" :key="setor" class="text-xs text-gray-700">
+                        • {{ setor }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Problemas Identificados -->
+              <div v-if="detalheProblemas">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-exclamation text-orange-500 mr-2"></i>Problemas Identificados
+                </h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Breakdown Visual -->
+                  <div class="bg-white rounded-lg p-6 shadow">
+                    <p class="text-sm text-gray-600 mb-4 font-semibold">Distribuição por Tipo</p>
+                    <div class="space-y-3">
+                      <!-- Estoque Zero -->
+                      <div>
+                        <div class="flex justify-between mb-1">
+                          <span class="text-sm text-gray-700">Estimativas Zero</span>
+                          <span class="text-sm font-bold text-red-600">{{ detalheProblemas.estoqueZero }} ({{ detalheProblemas.percentualEstoqueZero }}%)</span>
+                        </div>
+                        <div class="w-full h-3 bg-gray-200 rounded">
+                          <div class="h-3 bg-red-500 rounded" :style="{ width: detalheProblemas.percentualEstoqueZero + '%' }"></div>
+                        </div>
+                      </div>
+
+                      <!-- Local Errado -->
+                      <div>
+                        <div class="flex justify-between mb-1">
+                          <span class="text-sm text-gray-700">Local Errado</span>
+                          <span class="text-sm font-bold text-yellow-600">{{ detalheProblemas.lidoWrongLocation }} ({{ detalheProblemas.percentualLidoWrong }}%)</span>
+                        </div>
+                        <div class="w-full h-3 bg-gray-200 rounded">
+                          <div class="h-3 bg-yellow-500 rounded" :style="{ width: detalheProblemas.percentualLidoWrong + '%' }"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Top Affected Sectors -->
+                  <div class="bg-white rounded-lg p-6 shadow">
+                    <p class="text-sm text-gray-600 mb-4 font-semibold">Top Setores com Problemas</p>
+                    <div class="space-y-2">
+                      <div v-for="(setor, idx) in detalheProblemas.topSetores" :key="setor[0]" class="flex items-center justify-between text-sm">
+                        <div class="flex-1">
+                          <p class="text-gray-700 font-medium">{{ setor[0] }}</p>
+                          <p class="text-xs text-gray-500">{{ setor[1].estoqueZero || 0 }} 🔴 | {{ setor[1].lidoWrong || 0 }} 🟡</p>
+                        </div>
+                        <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold">
+                          {{ setor[1].estoqueZero + setor[1].lidoWrong }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Distribuição de Problemas por Setor -->
+              <div v-if="problemasDistribuidosPorSetor.length > 0">
+                <h4 class="font-semibold text-gray-800 mb-3 text-lg">
+                  <i class="fas fa-chart-bar text-purple-500 mr-2"></i>Distribuição de Problemas por Setor
+                </h4>
+                <div class="space-y-2">
+                  <div v-for="setor in problemasDistribuidosPorSetor" :key="setor.setor" class="flex items-center gap-3">
+                    <div class="w-40 text-sm font-medium text-gray-700 truncate">{{ setor.setor }}</div>
+                    <div class="flex-1 h-4 bg-gray-200 rounded overflow-hidden flex">
+                      <div
+                        class="h-4 bg-red-500"
+                        :style="{ width: (setor.estoqueZero / setor.total * 100) + '%' }"
+                        :title="`Estoque Zero: ${setor.estoqueZero}`"
+                      />
+                      <div
+                        class="h-4 bg-yellow-500"
+                        :style="{ width: (setor.lidoWrong / setor.total * 100) + '%' }"
+                        :title="`Local Errado: ${setor.lidoWrong}`"
+                      />
+                    </div>
+                    <div class="w-16 text-right text-sm text-gray-600">
+                      {{ setor.estoqueZero }}🔴 {{ setor.lidoWrong }}🟡
+                    </div>
+                  </div>
                 </div>
               </div>
 
