@@ -568,32 +568,21 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Usar valores normalizados do processamento
       const temPresenca = item._temPresenca || false
       const estoque = item._estoque || 0
-      
+
       // Verificar "Lido não pertence" - pode não existir na planilha
       // Pode estar em diferentes formatos ou inferido da situação
       const lidoNaoPertence = item._lidoNaoPertence !== undefined
         ? item._lidoNaoPertence
         : getLidoNaoPertence(item)
-      
+
       // Se "Lido não pertence" é verdadeiro, assumimos que o item TEM presença,
       // mesmo que as outras colunas digam que não.
       const efetivamenteTemPresenca = temPresenca || lidoNaoPertence
 
-      // Categorizar o item (cada item cai em apenas UMA categoria)
-      let itemProblema = false
-      
-      if (efetivamenteTemPresenca && estoque > 0 && !lidoNaoPertence) {
-        // ✅ Lido Corretamente: tem presença + tem estoque + não está no local errado
-        analise.itensLidosCorretamente++
-      } else if (!efetivamenteTemPresenca && estoque > 0) {
-        // ⏳ Pendente (não lido): sem presença mas tem estoque
-        analise.itensPendentes++
-      } else if (efetivamenteTemPresenca && (estoque === 0 || lidoNaoPertence)) {
-        // ⚠️ Lido com Problema: tem presença mas (sem estoque OU no local errado)
-        analise.itensLidosComProblema++
-        itemProblema = true
-        
-        if (estoque === 0) {
+      // ❌ EXCLUI DO SKU (não contam no total auditável)
+      // Itens com estoque <= 0 ou lidos em local errado não entram na auditoria
+      if (estoque <= 0 || lidoNaoPertence) {
+        if (estoque <= 0) {
           analise.itensComEstoqueZero++
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
@@ -604,7 +593,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             fornecedor: item['Fornecedor']
           })
         }
-        
+
         if (lidoNaoPertence) {
           analise.itensLidoNaoPertence++
           analise.itensLidoNaoPertenceDetalhes.push({
@@ -615,25 +604,34 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             local: item['Local']
           })
         }
+
+        return // Pular para o próximo item
+      }
+
+      // Categorizar o item (cada item cai em apenas UMA categoria)
+      let itemProblema = false
+
+      if (efetivamenteTemPresenca && estoque > 0 && !lidoNaoPertence) {
+        // ✅ Lido Corretamente: tem presença + tem estoque + não está no local errado
+        analise.itensLidosCorretamente++
+      } else if (!efetivamenteTemPresenca && estoque > 0) {
+        // ⏳ Pendente (não lido): sem presença mas tem estoque
+        analise.itensPendentes++
       }
 
       // Agrupar por USUÁRIO (ignora em branco)
       const usuario = (item['Usuário'] || '').trim()
       if (usuario && usuario !== '' && usuario !== 'undefined') {
         if (!analise.porUsuario[usuario]) {
-          analise.porUsuario[usuario] = { 
+          analise.porUsuario[usuario] = {
             lidos: 0,      // Com presença e sem problemas
-            pendentes: 0,  // Sem presença
-            comProblema: 0 // Com presença mas com problemas
+            pendentes: 0   // Sem presença
           }
           analise.usuarios.push(usuario)
         }
-        
-      if (efetivamenteTemPresenca) {
+
+        if (efetivamenteTemPresenca) {
           analise.porUsuario[usuario].lidos++
-          if (itemProblema) {
-            analise.porUsuario[usuario].comProblema++
-          }
         } else {
           analise.porUsuario[usuario].pendentes++
         }
@@ -642,17 +640,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Agrupar por SETOR
       const setor = (item['Classe de Produto Raiz'] || 'Não especificado').trim()
       if (!analise.porSetor[setor]) {
-        analise.porSetor[setor] = { 
-          lidos: 0, 
-          pendentes: 0,
-          comProblema: 0
+        analise.porSetor[setor] = {
+          lidos: 0,
+          pendentes: 0
         }
       }
       if (efetivamenteTemPresenca) {
         analise.porSetor[setor].lidos++
-        if (itemProblema) {
-          analise.porSetor[setor].comProblema++
-        }
       } else {
         analise.porSetor[setor].pendentes++
       }
@@ -660,26 +654,24 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Agrupar por LOCAL
       const local = (item['Local'] || 'Não especificado').trim()
       if (!analise.porLocal[local]) {
-        analise.porLocal[local] = { 
-          lidos: 0, 
-          pendentes: 0,
-          comProblema: 0
+        analise.porLocal[local] = {
+          lidos: 0,
+          pendentes: 0
         }
       }
       if (efetivamenteTemPresenca) {
         analise.porLocal[local].lidos++
-        if (itemProblema) {
-          analise.porLocal[local].comProblema++
-        }
       } else {
         analise.porLocal[local].pendentes++
       }
     })
 
     // Calcular percentuais
-    // Itens lidos = lidos corretamente + lidos com problema (ambos contam como lidos)
-    const totalLidos = analise.itensLidosCorretamente + analise.itensLidosComProblema
-    const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes + analise.itensLidosComProblema
+    // Agora que excluímos itens com estoque <= 0 e "lido não pertence" do SKU:
+    // - Itens lidos = apenas itens com presença confirmada
+    // - Total auditável (SKU) = itens lidos + itens pendentes (ambos com estoque > 0)
+    const totalLidos = analise.itensLidosCorretamente
+    const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes
     
     // registrar campos adicionais para uso em UI/filtros
     analise.totalLidos = totalLidos
@@ -738,19 +730,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
     dados.forEach(item => {
       const st = statusEtiqueta(item)
+      const estoque = item._estoque || 0
       const efetivamenteTem = !!item._temPresenca || st.lidoNaoPertence
-      let itemProblema = false
-      if (st.naoLidoEstoque) {
-        analise.itensPendentes++
-      } else if (st.atualizado && !st.lidoNaoPertence) {
-        analise.itensLidosCorretamente++
-        analise.itensAtualizados++
-      } else if (st.desatualizado) {
-        analise.itensDesatualizados++
-      } else if (st.lidoSemEstoque || st.lidoNaoPertence) {
-        analise.itensLidosComProblema++
-        itemProblema = true
-        if (st.lidoSemEstoque) {
+
+      // ❌ EXCLUI DO SKU (não contam no total auditável)
+      // Itens com estoque <= 0 ou lidos em local errado não entram na auditoria
+      if (estoque <= 0 || st.lidoNaoPertence) {
+        if (estoque <= 0 && st.lidoSemEstoque) {
           analise.itensComEstoqueZero++
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
@@ -761,6 +747,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             fornecedor: item['Fornecedor']
           })
         }
+
         if (st.lidoNaoPertence) {
           analise.itensLidoNaoPertence++
           analise.itensLidoNaoPertenceDetalhes.push({
@@ -771,43 +758,55 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             local: item['Local']
           })
         }
+
+        return // Pular para o próximo item
+      }
+
+      // Categorizar o item (cada item cai em apenas UMA categoria)
+      if (st.naoLidoEstoque) {
+        analise.itensPendentes++
+      } else if (st.atualizado && !st.lidoNaoPertence) {
+        analise.itensLidosCorretamente++
+        analise.itensAtualizados++
+      } else if (st.desatualizado) {
+        analise.itensDesatualizados++
       }
       const usuario = (item['Usuário'] || '').trim()
       if (usuario && usuario !== '' && usuario !== 'undefined') {
         if (!analise.porUsuario[usuario]) {
-          analise.porUsuario[usuario] = { lidos: 0, pendentes: 0, comProblema: 0 }
+          analise.porUsuario[usuario] = { lidos: 0, pendentes: 0 }
           analise.usuarios.push(usuario)
         }
         if (efetivamenteTem) {
           analise.porUsuario[usuario].lidos++
-          if (itemProblema) analise.porUsuario[usuario].comProblema++
         } else {
           analise.porUsuario[usuario].pendentes++
         }
       }
       const setor = (item['Classe de Produto Raiz'] || 'Não especificado').trim()
-      if (!analise.porSetor[setor]) analise.porSetor[setor] = { lidos: 0, pendentes: 0, comProblema: 0, desatualizados: 0 }
+      if (!analise.porSetor[setor]) analise.porSetor[setor] = { lidos: 0, pendentes: 0, desatualizados: 0 }
       if (efetivamenteTem) {
         analise.porSetor[setor].lidos++
-        if (itemProblema) analise.porSetor[setor].comProblema++
         if (st.desatualizado) analise.porSetor[setor].desatualizados++
       } else {
         analise.porSetor[setor].pendentes++
       }
       const local = (item['Local'] || 'Não especificado').trim()
-      if (!analise.porLocal[local]) analise.porLocal[local] = { lidos: 0, pendentes: 0, comProblema: 0 }
+      if (!analise.porLocal[local]) analise.porLocal[local] = { lidos: 0, pendentes: 0 }
       if (efetivamenteTem) {
         analise.porLocal[local].lidos++
-        if (itemProblema) analise.porLocal[local].comProblema++
       } else {
         analise.porLocal[local].pendentes++
       }
     })
-    const totalLidos = analise.itensAtualizados + analise.itensDesatualizados + analise.itensLidoNaoPertence + analise.itensComEstoqueZero
-    const totalAuditaveis = totalLidos + analise.itensPendentes
+    // Calcular percentuais
+    // Agora que excluímos itens com estoque <= 0 e "lido não pertence" do SKU:
+    // - Itens lidos = apenas itens atualizados (sem problemas)
+    // - Total auditável (SKU) = itens atualizados + itens pendentes (ambos com estoque > 0)
+    const totalLidos = analise.itensLidosCorretamente
+    const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes
     analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
-    analise.comProblema = analise.itensLidosComProblema
     analise.parcialPercentual = totalAuditaveis > 0 ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2)) : 0
     analise.percentualConclusao = totalAuditaveis > 0 ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2)) : 0
     Object.entries(analise.porSetor).forEach(([setor, dados]) => {
