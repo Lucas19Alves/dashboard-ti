@@ -50,6 +50,7 @@ const colunasUsuario = [
   { chave: 'lidos', titulo: 'Lidos Corretamente', sortable: true, alinhamento: 'right', classeCell: 'text-green-600 font-semibold' },
   { chave: 'comProblema', titulo: 'Com Problema', sortable: true, alinhamento: 'right', classeCell: 'text-red-600 font-semibold' },
   { chave: 'totalLidos', titulo: 'Total Lidos', sortable: true, alinhamento: 'right', classeCell: 'text-blue-600 font-semibold' },
+  { chave: 'percentualAuditoria', titulo: '% Auditoria', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(1) + '%' },
   { chave: 'acoes', titulo: 'Detalhes', sortable: false, alinhamento: 'center' }
 ]
 
@@ -760,7 +761,10 @@ const dadosUsuarios = computed(() => {
           performanceClass = 'text-red-600'
         }
       }
-      
+
+      // Get overall % contribution from percentualPorUsuario
+      const percentualAuditoria = percentualPorUsuario.value[u]?.percentualGeral || 0
+
       return {
         nome: u,
         lidos,
@@ -769,7 +773,8 @@ const dadosUsuarios = computed(() => {
         total,
         performance,
         performanceClass,
-        score
+        score,
+        percentualAuditoria
       }
     })
 })
@@ -781,7 +786,7 @@ const analiseUsuarios = computed(() => {
 
   const totalLidos = usuarios.reduce((sum, u) => sum + (auditoria.value.analise.porUsuario[u]?.lidos || 0), 0)
   const mediaLidosPorUsuario = Math.round(totalLidos / usuarios.length)
-  const usuarioMaisProdutivo = usuarios.sort((a, b) => 
+  const usuarioMaisProdutivo = usuarios.sort((a, b) =>
     (auditoria.value.analise.porUsuario[b]?.lidos || 0) - (auditoria.value.analise.porUsuario[a]?.lidos || 0)
   )[0]
 
@@ -791,6 +796,147 @@ const analiseUsuarios = computed(() => {
     usuarioDestaque: usuarioMaisProdutivo,
     lidasDestaque: auditoria.value.analise.porUsuario[usuarioMaisProdutivo]?.lidos || 0
   }
+})
+
+// User-Sector Matrix: For each user, track performance in each sector
+const porUsuarioSetor = computed(() => {
+  if (!auditoria.value?.dados || !auditoria.value?.analise) return {}
+
+  const usuarios = auditoria.value.analise.usuarios || []
+  const setores = Object.keys(auditoria.value.analise.porSetor || {})
+  const matriz = {}
+
+  // Initialize matrix
+  usuarios.forEach(u => {
+    matriz[u] = {}
+    setores.forEach(s => {
+      matriz[u][s] = { lidos: 0, pendentes: 0, comProblema: 0, total: 0 }
+    })
+  })
+
+  // Helper to check presence
+  const temPresenca = (item) => {
+    if (item._temPresenca !== undefined) return !!item._temPresenca
+    const val = item['Presença confirmada']
+    if (val === undefined || val === null) return false
+    if (val === true) return true
+    if (typeof val === 'string') return val.toLowerCase().includes('sim')
+    return false
+  }
+
+  // Helper to check problems
+  const temProblema = (item) => {
+    const estoque = item._estoque ?? parseFloat(item['Estoque atual'] || 0)
+    const lnp = item._lidoNaoPertence ?? (item['Lido não pertence'] === true ||
+      (typeof item['Lido não pertence'] === 'string' && item['Lido não pertence'].toLowerCase().includes('sim')))
+    return estoque <= 0 || lnp
+  }
+
+  // Count items by user and sector
+  auditoria.value.dados.forEach(item => {
+    const usuario = (item['Usuário'] || '').toString().trim()
+    if (!usuario || !matriz[usuario]) return
+
+    const setor = (item['Classe de Produto Raiz'] || item['Setor'] || 'Outro').toString().trim()
+    if (!setores.includes(setor)) return
+
+    const presence = temPresenca(item)
+    matriz[usuario][setor].total++
+
+    if (presence) {
+      if (temProblema(item)) {
+        matriz[usuario][setor].comProblema++
+      } else {
+        matriz[usuario][setor].lidos++
+      }
+    } else {
+      matriz[usuario][setor].pendentes++
+    }
+  })
+
+  // Calculate percentages and filter empty entries
+  const resultado = {}
+  usuarios.forEach(u => {
+    resultado[u] = {}
+    setores.forEach(s => {
+      const dados = matriz[u][s]
+      if (dados.total === 0) return // Skip empty combinations
+
+      const totalLidos = dados.lidos + dados.comProblema
+      const percentualConclusao = dados.total > 0 ? (totalLidos / dados.total) * 100 : 0
+
+      // Calculate what % of this sector was done by this user
+      const totalSetorGlobal = auditoria.value.analise.porSetor[s]?.lidos +
+                              auditoria.value.analise.porSetor[s]?.comProblema || 1
+      const percentualDoSetor = (totalLidos / totalSetorGlobal) * 100
+
+      resultado[u][s] = {
+        ...dados,
+        percentualConclusao: Math.round(percentualConclusao * 100) / 100,
+        percentualDoSetor: Math.round(percentualDoSetor * 100) / 100
+      }
+    })
+  })
+
+  return resultado
+})
+
+// Overall % contribution per user
+const percentualPorUsuario = computed(() => {
+  if (!auditoria.value?.analise) return {}
+
+  const usuarios = auditoria.value.analise.usuarios || []
+  const totalLidosGlobal = usuarios.reduce((sum, u) =>
+    sum + (auditoria.value.analise.porUsuario[u]?.lidos || 0), 0
+  )
+
+  const resultado = {}
+  usuarios.forEach(u => {
+    const lidos = auditoria.value.analise.porUsuario[u]?.lidos || 0
+    const percentual = totalLidosGlobal > 0 ? (lidos / totalLidosGlobal) * 100 : 0
+    resultado[u] = {
+      totalLidos: lidos,
+      percentualGeral: Math.round(percentual * 100) / 100
+    }
+  })
+
+  return resultado
+})
+
+// Sectors with user breakdown for pie charts
+const setoresComUsuarios = computed(() => {
+  if (!auditoria.value?.analise) return []
+
+  const porSetor = auditoria.value.analise.porSetor || {}
+  const usuarios = auditoria.value.analise.usuarios || []
+
+  return Object.entries(porSetor)
+    .filter(([_, dados]) => (dados.lidos || 0) + (dados.comProblema || 0) > 0)
+    .map(([setor, dadosSetor]) => {
+      const totalLidosNoSetor = (dadosSetor.lidos || 0) + (dadosSetor.comProblema || 0)
+
+      // Get user breakdown for this sector from porUsuarioSetor
+      const usuariosDoSetor = usuarios
+        .filter(u => porUsuarioSetor.value[u] && porUsuarioSetor.value[u][setor])
+        .map(u => {
+          const dados = porUsuarioSetor.value[u][setor]
+          const lidos = dados.lidos + dados.comProblema
+          const percentual = totalLidosNoSetor > 0 ? (lidos / totalLidosNoSetor) * 100 : 0
+          return {
+            usuario: u,
+            lidos,
+            percentual: Math.round(percentual * 100) / 100
+          }
+        })
+        .sort((a, b) => b.lidos - a.lidos)
+
+      return {
+        setor,
+        totalLidos: totalLidosNoSetor,
+        usuarios: usuariosDoSetor
+      }
+    })
+    .sort((a, b) => b.totalLidos - a.totalLidos)
 })
 
 const leiturasPorUsuarioHora = computed(() => {
@@ -2212,6 +2358,61 @@ const fecharRelatorio = () => {
           </template>
         </TabelaInterativaAuditoria>
 
+        <!-- Contribuição por Setor -->
+        <div v-if="setoresComUsuarios.length > 0" class="mt-8">
+          <h3 class="text-2xl font-bold text-gray-800 mb-6">
+            <i class="fas fa-chart-pie text-indigo-600 mr-2"></i>Contribuição por Setor
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div
+              v-for="setorData in setoresComUsuarios"
+              :key="setorData.setor"
+              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition"
+            >
+              <h4 class="text-lg font-bold text-gray-800 mb-4">{{ setorData.setor }}</h4>
+              <p class="text-sm text-gray-600 mb-4">Total: {{ setorData.totalLidos }} itens lidos</p>
+
+              <!-- Stacked Progress Bar -->
+              <div class="mb-4">
+                <div class="flex h-8 rounded-lg overflow-hidden border border-gray-200">
+                  <div
+                    v-for="(usuario, idx) in setorData.usuarios"
+                    :key="usuario.usuario"
+                    :style="{ width: usuario.percentual + '%' }"
+                    class="transition-all duration-300"
+                    :class="[
+                      'flex items-center justify-center text-xs font-bold text-white',
+                      ['bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500'][idx % 8]
+                    ]"
+                    :title="`${usuario.usuario}: ${usuario.percentual}%`"
+                  >
+                    <span v-if="usuario.percentual > 8">{{ usuario.lidos }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Legend -->
+              <div class="space-y-2">
+                <div
+                  v-for="(usuario, idx) in setorData.usuarios"
+                  :key="usuario.usuario"
+                  class="flex items-center gap-2 justify-between text-xs"
+                >
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <div
+                      class="w-3 h-3 rounded-full flex-shrink-0"
+                      :class="[
+                        'bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500'
+                      ][idx % 8]"
+                    />
+                    <span class="font-semibold text-gray-700 truncate">{{ usuario.usuario }}</span>
+                  </div>
+                  <span class="text-gray-600 flex-shrink-0 ml-2">{{ usuario.percentual }}% ({{ usuario.lidos }})</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
       </div>
 
