@@ -342,6 +342,8 @@ const colunas = computed(() => {
 const baseLista = computed(() => {
   const items = props.dadosCompletos || []
   if (!props.dados || items.length === 0) return []
+
+  const normCodigo = (v) => String(v ?? '').trim()
   
   if (props.tipo === 'pendentes') {
     return items.filter(i => !temPresencaEfetiva(i) && (i._estoque || 0) > 0)
@@ -350,14 +352,18 @@ const baseLista = computed(() => {
     return items.filter(i => temPresencaEfetiva(i))
   }
   if (props.tipo === 'problema') {
-    const codsZ = new Set((props.dados.itensComEstoqueZeroDetalhes || []).map(d => d.codigo))
-    const codsN = new Set((props.dados.itensLidoNaoPertenceDetalhes || []).map(d => d.codigo))
+    // Normaliza código para evitar mismatch string vs number
+    const codsZ = new Set((props.dados.itensComEstoqueZeroDetalhes || []).map(d => normCodigo(d.codigo)))
+    const codsN = new Set((props.dados.itensLidoNaoPertenceDetalhes || []).map(d => normCodigo(d.codigo)))
     return items
-      .filter(i => codsZ.has(i['Código']) || codsN.has(i['Código']))
+      .filter(i => {
+        const codigo = normCodigo(i['Código'])
+        return codsZ.has(codigo) || codsN.has(codigo)
+      })
       .map(i => ({
         ...i,
-        _problema: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado',
-        Motivo: codsZ.has(i['Código']) ? 'Estoque Zero' : 'Local Errado'
+        _problema: codsZ.has(normCodigo(i['Código'])) ? 'Estoque Zero' : 'Local Errado',
+        Motivo: codsZ.has(normCodigo(i['Código'])) ? 'Estoque Zero' : 'Local Errado'
       }))
   }
   if (props.tipo === 'desatualizado') {

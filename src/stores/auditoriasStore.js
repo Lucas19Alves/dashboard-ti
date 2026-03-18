@@ -391,8 +391,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return true
         })
 
-      // deduplicar preferindo sempre o registro SEM Local
-      // quando há duplicata de código, manter linha que não possui Local
+      // deduplicar preferindo sempre o registro SEM "Lido não pertence" e depois SEM Local
+      // quando há duplicata de código, preferir: sem "lido não pertence" > depois sem Local
       const totalFiltrados = filtrados.length
       const dados = filtrados.reduce((acc, item) => {
         const codigo = (item['Código'] || item.Codigo || '').toString().trim()
@@ -401,6 +401,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return acc
         }
         const locAtual = ((item['Local'] || '').toString().trim())
+        const lidoNaoPertenceAtual = item._lidoNaoPertence
         const existenteIndex = acc.findIndex(i => {
           const cod = (i['Código'] || i.Codigo || '').toString().trim()
           return cod === codigo
@@ -410,20 +411,27 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         } else {
           const existente = acc[existenteIndex]
           const locExistente = ((existente['Local'] || '').toString().trim())
-          // se o novo não tem local e o existente tem, substitui para preservar sem local
-          if (!locAtual && locExistente) {
+          const lidoNaoPertenceExistente = existente._lidoNaoPertence
+
+          // Prioridade 1: Preferir item SEM "Lido não pertence"
+          if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) {
             acc[existenteIndex] = item
           }
-          // caso contrário mantemos o existente (se ele não tiver local, ele continua;
-          // se ambos tiverem local, descartamos o novo)
+          // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
+          else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
+            if (!locAtual && locExistente) {
+              acc[existenteIndex] = item
+            }
+          }
+          // caso contrário mantemos o existente
         }
         return acc
       }, [])
 
       const duplicadosRemovidos = totalFiltrados - dados.length
       if (duplicadosRemovidos > 0) {
-        console.log(`🗂️ Duplicados descartados: ${duplicadosRemovidos} item(ns) com Local quando havia registro sem Local`)
-        addToast(`Itens com Local descartados em favor de registros sem Local: ${duplicadosRemovidos}`, 'info')
+        console.log(`🗂️ Duplicados descartados: ${duplicadosRemovidos} item(ns)`)
+        addToast(`Itens com leitura em local errado agrupados: ${duplicadosRemovidos}`, 'info')
       }
       
       const ignorados = dadosCompletos.length - dados.length
@@ -676,6 +684,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     // registrar campos adicionais para uso em UI/filtros
     analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
+    // "Com problema" = itens com estoque zero + itens lidos no local errado
+    // Mesmo excluídos do SKU (totalItens), ainda devem aparecer no card/modal
+    analise.itensLidosComProblema = (analise.itensComEstoqueZero || 0) + (analise.itensLidoNaoPertence || 0)
     analise.comProblema = analise.itensLidosComProblema
     
     // Percentual pendente (foco na meta de 3%)
@@ -807,6 +818,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes
     analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
+    // "Com problema" = itens com estoque zero (quando aplicável) + itens lidos no local errado
+    analise.itensLidosComProblema = (analise.itensComEstoqueZero || 0) + (analise.itensLidoNaoPertence || 0)
     analise.parcialPercentual = totalAuditaveis > 0 ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2)) : 0
     analise.percentualConclusao = totalAuditaveis > 0 ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2)) : 0
     Object.entries(analise.porSetor).forEach(([setor, dados]) => {
