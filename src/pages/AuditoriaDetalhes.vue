@@ -51,6 +51,7 @@ const colunasUsuario = [
   { chave: 'comProblema', titulo: 'Com Problema', sortable: true, alinhamento: 'right', classeCell: 'text-red-600 font-semibold' },
   { chave: 'totalLidos', titulo: 'Total Lidos', sortable: true, alinhamento: 'right', classeCell: 'text-blue-600 font-semibold' },
   { chave: 'percentualAuditoria', titulo: '% Auditoria', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(1) + '%' },
+  { chave: 'statusBadge', titulo: 'Status', sortable: false, alinhamento: 'center' },
   { chave: 'acoes', titulo: 'Detalhes', sortable: false, alinhamento: 'center' }
 ]
 
@@ -165,6 +166,20 @@ const tabelaItensRef = ref(null)
 const tabelaUsuariosRef = ref(null)
 const printAreaRelatorio = ref(null)
 const exibirTudoPDFItens = ref(false)
+
+// UI/UX Improvements - Collapse states
+const collapsedSections = ref({
+  resumoHistorico: true, // Dashboard: Resumo Histórico starts collapsed
+  estoqueZero: false,    // Data: Estoque Zero starts expanded
+  lidoWrong: false,      // Data: Local Errado starts expanded
+  grandeEstoque: true,   // Data: Grande Estoque starts collapsed
+  tempoSemLeitura: true  // Data: Tempo sem Leitura starts collapsed
+})
+
+// UI/UX Improvements - Filter states
+const filtroPerformanceUser = ref('all')   // Users tab performance filter
+const filtroSetorStats = ref('all')        // Statistics tab sector filter
+const filtroStatusStats = ref('all')       // Statistics tab status filter
 
 const abas = ['dashboard', 'usuarios', 'dados', 'estatisticas']
 const abasDisplay = { dashboard: 'Dashboard', usuarios: 'Usuários', dados: 'Dados', estatisticas: 'Estatísticas' }
@@ -1717,6 +1732,47 @@ const locaisComAnalise = computed(() => {
   return locais
 })
 
+// Statistics Tab: KPI Cards
+const kpiStatistics = computed(() => {
+  if (!auditoria.value?.analise) return null
+  const a = auditoria.value.analise
+  const setoresLista = setoresComAnalise.value || []
+  const locaisLista = locaisComAnalise.value || []
+
+  return {
+    totalSetores: setoresLista.length,
+    mediaCompletacao: setoresLista.length > 0
+      ? (setoresLista.reduce((sum, s) => sum + s.percentualConclusao, 0) / setoresLista.length).toFixed(1)
+      : 0,
+    setoresCriticos: setoresLista.filter(s => s.percentualConclusao < 50).length,
+    topSetor: setoresLista.length > 0 ? setoresLista[0] : null
+  }
+})
+
+// Statistics Tab: Filtered Data for Tables
+const setoresComAnaliseFiltered = computed(() => {
+  if (!auditoria.value?.analise) return []
+  let dados = setoresComAnalise.value || []
+
+  // Filter by sector if selected
+  if (filtroSetorStats.value !== 'all') {
+    dados = dados.filter(s => s.nome === filtroSetorStats.value)
+  }
+
+  // Filter by status if selected
+  if (filtroStatusStats.value !== 'all') {
+    dados = dados.filter(s => {
+      const percentual = s.percentualConclusao
+      if (filtroStatusStats.value === 'excellent') return percentual >= 75
+      if (filtroStatusStats.value === 'good') return percentual >= 50 && percentual < 75
+      if (filtroStatusStats.value === 'needswork') return percentual < 50
+      return true
+    })
+  }
+
+  return dados
+})
+
 // Dados para o relatório
 const dadosRelatorio = computed(() => {
   if (!auditoria.value?.analise) return null
@@ -2262,8 +2318,17 @@ const fecharRelatorio = () => {
               </div>
             </template>
 
-            <!-- Resumo Histórico -->
-            <div v-if="historicoResumo" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Resumo Histórico (Collapsible) -->
+            <div v-if="historicoResumo" class="mt-8">
+              <button
+                @click="collapsedSections.resumoHistorico = !collapsedSections.resumoHistorico"
+                class="flex items-center gap-2 mb-4 text-gray-800 font-semibold hover:text-blue-600 transition"
+              >
+                <i :class="collapsedSections.resumoHistorico ? 'fas fa-chevron-right' : 'fas fa-chevron-down'"></i>
+                <span>📊 Métricas Avançadas</span>
+              </button>
+
+              <div v-show="!collapsedSections.resumoHistorico" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div class="bg-gray-50 rounded p-4">
                 <p class="text-sm text-gray-600">Média de conclusão em outras auditorias</p>
                 <p class="text-3xl font-bold text-gray-800 mt-1">
@@ -2283,28 +2348,6 @@ const fecharRelatorio = () => {
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Insights -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div 
-              v-for="(insight, i) in insights"
-              :key="i"
-              :class="[
-                'rounded-lg p-6 shadow transition hover:shadow-lg',
-                insight.tipo === 'critico' ? 'bg-red-50 border-l-4 border-red-500' :
-                insight.tipo === 'sucesso' ? 'bg-green-50 border-l-4 border-green-500' :
-                insight.tipo === 'aviso' ? 'bg-yellow-50 border-l-4 border-yellow-500' :
-                'bg-blue-50 border-l-4 border-blue-500'
-              ]"
-            >
-              <h4 class="font-bold text-lg mb-2 text-gray-800">{{ insight.titulo }}</h4>
-              <p class="text-gray-700 mb-3">{{ insight.mensagem }}</p>
-              <div v-if="insight.detalhes && insight.detalhes.length > 0" class="space-y-1">
-                <div v-for="detalhe in insight.detalhes" :key="detalhe" class="text-sm text-gray-600">
-                  • {{ detalhe }}
-                </div>
-              </div>
             </div>
           </div>
         </template>
@@ -2825,14 +2868,77 @@ const fecharRelatorio = () => {
 
       <!-- ESTATÍSTICAS -->
       <div v-if="abaAtiva === 'estatisticas'" class="space-y-8">
+        <!-- KPI Summary Cards -->
+        <div v-if="kpiStatistics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-blue-500">
+            <p class="text-gray-600 text-sm font-medium">Total de Setores</p>
+            <p class="text-3xl font-bold text-blue-600 mt-2">{{ kpiStatistics.totalSetores }}</p>
+          </div>
+          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-green-500">
+            <p class="text-gray-600 text-sm font-medium">Média de Conclusão</p>
+            <p class="text-3xl font-bold text-green-600 mt-2">{{ kpiStatistics.mediaCompletacao }}%</p>
+          </div>
+          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-red-500">
+            <p class="text-gray-600 text-sm font-medium">Setores Críticos</p>
+            <p class="text-3xl font-bold text-red-600 mt-2">{{ kpiStatistics.setoresCriticos }}</p>
+          </div>
+          <div v-if="kpiStatistics.topSetor" class="bg-white rounded-lg p-6 shadow border-l-4 border-purple-500">
+            <p class="text-gray-600 text-sm font-medium">Melhor Setor</p>
+            <p class="text-lg font-bold text-purple-600 mt-2">{{ kpiStatistics.topSetor.nome }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ kpiStatistics.topSetor.percentualConclusao }}% completo</p>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-lg p-6 shadow">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-filter text-blue-600 mr-2"></i>Filtros
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Sector Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Setor</label>
+              <select
+                v-model="filtroSetorStats"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+              >
+                <option value="all">Todos os setores</option>
+                <option v-for="setor in (setoresComAnalise || [])" :key="setor.nome" :value="setor.nome">
+                  {{ setor.nome }}
+                </option>
+              </select>
+              <span v-if="filtroSetorStats !== 'all'" class="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-semibold">
+                1 ativo
+              </span>
+            </div>
+
+            <!-- Status Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select
+                v-model="filtroStatusStats"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
+              >
+                <option value="all">Todos os status</option>
+                <option value="excellent">Excelente (≥75%)</option>
+                <option value="good">Bom (50-75%)</option>
+                <option value="needswork">Precisa atenção (<50%)</option>
+              </select>
+              <span v-if="filtroStatusStats !== 'all'" class="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-semibold">
+                1 ativo
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- Setores com Análise -->
         <div>
           <h2 class="text-2xl font-bold text-gray-800 mb-6">
             <i class="fas fa-chart-pie text-blue-600 mr-2"></i>Parcial por Setor
           </h2>
-          <TabelaInterativaAuditoria 
-            :dados="setoresComAnalise" 
-            :colunas="colunasSetor" 
+          <TabelaInterativaAuditoria
+            :dados="setoresComAnaliseFiltered"
+            :colunas="colunasSetor"
             :itensPorPagina="5"
             clickable
             @click-row="abrirModalSetorLocal('setor', [$event])"
