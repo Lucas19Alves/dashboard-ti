@@ -268,17 +268,10 @@ const subtitulo = computed(() => {
 
 const valor = computed(() => {
   if (!props.dados) return '-'
-  const comProblema = props.dados.itensLidosComProblema != null
-    ? (props.dados.itensLidosComProblema || 0)
-    : ((props.dados.itensLidoNaoPertence || 0) + (props.dados.itensComEstoqueZero || 0))
-  const pendentesBase = props.dados.itensPendentes || 0
-  const pendentesExibidos = props.tipoAuditoria === 'Ruptura'
-    ? Math.max(0, pendentesBase - comProblema)
-    : pendentesBase
   const valores = {
     'total': props.dados.totalItens || 0,
     'lidos': props.dados.totalLidos || 0,
-    'pendentes': pendentesExibidos,
+    'pendentes': props.dados.itensPendentes || 0,
     'problema': props.dados.itensLidosComProblema || 0,
     'desatualizado': props.dados.itensDesatualizados || 0
   }
@@ -287,11 +280,7 @@ const valor = computed(() => {
 
 const pendentesExibidos = computed(() => {
   if (!props.dados) return 0
-  const comProblema = props.dados.itensLidosComProblema != null
-    ? (props.dados.itensLidosComProblema || 0)
-    : ((props.dados.itensLidoNaoPertence || 0) + (props.dados.itensComEstoqueZero || 0))
-  const pendentesBase = props.dados.itensPendentes || 0
-  return Math.max(0, pendentesBase - comProblema)
+  return props.dados.itensPendentes || 0
 })
 
 const corFundo = computed(() => {

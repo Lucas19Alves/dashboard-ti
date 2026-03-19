@@ -280,23 +280,17 @@ const desempenhoSetoresBase = computed(() => {
   })
 })
 
-const getComProblema = (analise) => {
-  if (!analise) return 0
-  if (typeof analise.itensLidosComProblema === 'number') return analise.itensLidosComProblema || 0
-  return (analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0)
-}
-
 const getPendentesExibidos = (auditoria) => {
   const analise = auditoria?.analise || {}
-  const pend = analise.itensPendentes || 0
-  return Math.max(0, pend - getComProblema(analise))
+  return analise.itensPendentes || 0
 }
 
 const getParcialExibido = (auditoria) => {
   const analise = auditoria?.analise || {}
-  const total = analise.totalItens ?? auditoria?.total ?? 0
+  if (typeof analise.parcialPercentual === 'number') return analise.parcialPercentual
+  const total = analise.totalItens ?? auditoria?.sku ?? auditoria?.total ?? 0
   if (!total || total <= 0) return 0
-  return (getPendentesExibidos(auditoria) / total) * 100
+  return ((analise.itensPendentes || 0) / total) * 100
 }
 
 const auditoriasParaTabelaBase = computed(() => {

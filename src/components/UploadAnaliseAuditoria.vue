@@ -250,11 +250,7 @@ const erroUpload = ref('')
 const pendentesExibidos = computed(() => {
   const a = analise.value
   if (!a) return 0
-  const pend = a.itensPendentes || 0
-  const comProblema = a.itensLidosComProblema != null
-    ? (a.itensLidosComProblema || 0)
-    : ((a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
-  return Math.max(0, pend - comProblema)
+  return a.itensPendentes || 0
 })
 
 const handleFileChange = (event) => {
@@ -346,12 +342,13 @@ const processar = async () => {
     console.log('✅ Dados recebidos:', dados.length, 'linhas')
     // Usar o tipo definido na auditoria (já foi selecionado no formulário)
     const tipoEfetivo = props.auditoria?.tipo || 'Etiqueta'
+    const skuValor = props.auditoria?.sku || 0
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
     analise.value = tipoEfetivo === 'Presença'
-      ? store.analisarDadosPresenca(dados)
+      ? store.analisarDadosPresenca(dados, skuValor)
       : tipoEfetivo === 'Etiqueta'
-        ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados) : store.analisarDadosPresenca(dados))
-        : store.analisarDadosPresenca(dados)
+        ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
+        : store.analisarDadosPresenca(dados, skuValor)
     
     emit('analiseCompleta', {
       dados,

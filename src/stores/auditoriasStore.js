@@ -545,21 +545,21 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
   }
 
-  const analisarDadosPresenca = (dados) => {
+  const analisarDadosPresenca = (dados, sku = 0) => {
     const analise = {
       // Totais da auditoria
-      totalItens: dados.length, // Total de itens auditáveis (já filtrado: exclui sem presença E sem estoque)
-      itensIgnorados: 0, // Será calculado depois
+      totalItens: 0, // Será definido como SKU após o loop
+      itensIgnorados: 0,
       
       // Categorias principais de auditáveis
-      itensLidosCorretamente: 0, // Com presença + Com estoque
-      itensPendentes: 0,          // Sem presença + Com estoque
-      itensLidosComProblema: 0,   // Com presença + Sem estoque OU Lido não pertence
-      itensComEstoqueZero: 0,     // Com presença + Sem estoque
-      itensLidoNaoPertence: 0,    // Lido não pertence
+      itensLidosCorretamente: 0, // Será derivado do SKU: SKU - itensPendentes
+      itensPendentes: 0,          // Não lidos com estoque (lido da planilha)
+      itensLidosComProblema: 0,   // Lidos sem estoque + Lido não pertence (apenas exibição)
+      itensComEstoqueZero: 0,     // Lidos sem estoque (apenas exibição)
+      itensLidoNaoPertence: 0,    // Lido não pertence (apenas exibição)
       
-      // Pour análise
-      parcialPercentual: 0, // % de itens não lidos em relação aos auditáveis
+      // Para análise
+      parcialPercentual: 0, // % pendentes em relação ao SKU
       porUsuario: {},
       porSetor: {},
       porLocal: {},
@@ -616,14 +616,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         return // Pular para o próximo item
       }
 
-      // Categorizar o item (cada item cai em apenas UMA categoria)
-      let itemProblema = false
-
-      if (efetivamenteTemPresenca && estoque > 0 && !lidoNaoPertence) {
-        // ✅ Lido Corretamente: tem presença + tem estoque + não está no local errado
-        analise.itensLidosCorretamente++
-      } else if (!efetivamenteTemPresenca && estoque > 0) {
-        // ⏳ Pendente (não lido): sem presença mas tem estoque
+      // Categorizar o item
+      if (!efetivamenteTemPresenca && estoque > 0) {
+        // ⏳ Não lido com estoque: conta como pendente (Não lidos com estoque)
         analise.itensPendentes++
       }
 
@@ -674,27 +669,38 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       }
     })
 
-    // Calcular percentuais
-    // Agora que excluímos itens com estoque <= 0 e "lido não pertence" do SKU:
-    // - Itens lidos = apenas itens com presença confirmada
-    // - Total auditável (SKU) = itens lidos + itens pendentes (ambos com estoque > 0)
-    const totalLidos = analise.itensLidosCorretamente
-    const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes
+    // Calcular percentuais usando SKU
+    // - Total auditável (totalItens) = SKU informado pelo usuário
+    // - Total lidos = SKU - Não lidos com estoque (itensPendentes)
+    // - Itens com problema (lidos sem estoque + lido não pertence) são apenas para exibição
+    // Fallback quando SKU não foi informado: conta os itens lidos corretamente na planilha
+    let totalAuditaveis
+    if (sku > 0) {
+      totalAuditaveis = sku
+    } else {
+      const lidosNaPlanilha = dados.filter(i => {
+        const temP = i._temPresenca || false
+        const lnp = i._lidoNaoPertence !== undefined ? i._lidoNaoPertence : getLidoNaoPertence(i)
+        const est = i._estoque || 0
+        return temP && !lnp && est > 0
+      }).length
+      totalAuditaveis = analise.itensPendentes + lidosNaPlanilha
+    }
+    const totalLidos = Math.max(0, totalAuditaveis - analise.itensPendentes)
     
-    // registrar campos adicionais para uso em UI/filtros
-    analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
-    // "Com problema" = itens com estoque zero + itens lidos no local errado
-    // Mesmo excluídos do SKU (totalItens), ainda devem aparecer no card/modal
+    analise.totalLidos = totalLidos
+    analise.itensLidosCorretamente = totalLidos
+    // Itens com problema = lidos sem estoque + lido não pertence (apenas exibição, não entra no cálculo)
     analise.itensLidosComProblema = (analise.itensComEstoqueZero || 0) + (analise.itensLidoNaoPertence || 0)
     analise.comProblema = analise.itensLidosComProblema
     
-    // Percentual pendente (foco na meta de 3%)
+    // Percentual pendente = pendentes / SKU
     analise.parcialPercentual = totalAuditaveis > 0 
       ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2))
       : 0
     
-    // Percentual concluído (lidos corretamente + com problema)
+    // Percentual concluído = totalLidos / SKU
     analise.percentualConclusao = totalAuditaveis > 0
       ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2))
       : 0
@@ -716,7 +722,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return analise
   }
 
-  const analisarDadosEtiqueta = (dados) => {
+  const analisarDadosEtiqueta = (dados, sku = 0) => {
     const analise = {
       totalItens: 0,
       itensIgnorados: 0,
@@ -739,6 +745,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       itensComEstoqueZeroDetalhes: [],
       itensLidoNaoPertenceDetalhes: []
     }
+    let lidosRawEtiqueta = 0
     dados.forEach(item => {
       const st = statusEtiqueta(item)
       const estoque = item._estoque || 0
@@ -773,14 +780,16 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         return // Pular para o próximo item
       }
 
-      // Categorizar o item (cada item cai em apenas UMA categoria)
+      // Categorizar o item: contar Não lidos com estoque (pendentes) e Desatualizados da planilha
       if (st.naoLidoEstoque) {
         analise.itensPendentes++
-      } else if (st.atualizado && !st.lidoNaoPertence) {
-        analise.itensLidosCorretamente++
-        analise.itensAtualizados++
       } else if (st.desatualizado) {
+        // Desatualizados lidos da planilha (usados para derivar Atualizados)
         analise.itensDesatualizados++
+        lidosRawEtiqueta++
+      } else if (st.atualizado && !st.lidoNaoPertence) {
+        // Atualizado: conta como lidos brutos para fallback quando SKU não informado
+        lidosRawEtiqueta++
       }
       const usuario = (item['Usuário'] || '').trim()
       if (usuario && usuario !== '' && usuario !== 'undefined') {
@@ -810,15 +819,19 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         analise.porLocal[local].pendentes++
       }
     })
-    // Calcular percentuais
-    // Agora que excluímos itens com estoque <= 0 e "lido não pertence" do SKU:
-    // - Itens lidos = apenas itens atualizados (sem problemas)
-    // - Total auditável (SKU) = itens atualizados + itens pendentes (ambos com estoque > 0)
-    const totalLidos = analise.itensLidosCorretamente
-    const totalAuditaveis = analise.itensLidosCorretamente + analise.itensPendentes
+    // Calcular percentuais usando SKU
+    // - Total auditável (totalItens) = SKU informado pelo usuário
+    // - Total lidos = SKU - Não lidos com estoque (itensPendentes)
+    // - Atualizados = Total lidos - Desatualizados
+    // - Itens com problema (lidos sem estoque + lido não pertence) são apenas para exibição
+    const totalAuditaveis = sku > 0 ? sku : (lidosRawEtiqueta + analise.itensPendentes)
+    const totalLidos = Math.max(0, totalAuditaveis - analise.itensPendentes)
+    const itensAtualizados = Math.max(0, totalLidos - analise.itensDesatualizados)
     analise.totalLidos = totalLidos
     analise.totalItens = totalAuditaveis
-    // "Com problema" = itens com estoque zero (quando aplicável) + itens lidos no local errado
+    analise.itensAtualizados = itensAtualizados
+    analise.itensLidosCorretamente = itensAtualizados
+    // Itens com problema = lidos sem estoque + lido não pertence (apenas exibição, não entra no cálculo)
     analise.itensLidosComProblema = (analise.itensComEstoqueZero || 0) + (analise.itensLidoNaoPertence || 0)
     analise.parcialPercentual = totalAuditaveis > 0 ? parseFloat(((analise.itensPendentes / totalAuditaveis) * 100).toFixed(2)) : 0
     analise.percentualConclusao = totalAuditaveis > 0 ? parseFloat(((totalLidos / totalAuditaveis) * 100).toFixed(2)) : 0
