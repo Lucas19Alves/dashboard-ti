@@ -95,9 +95,7 @@ const resumoGeral = computed(() => {
     }
     if (a.status === 'fechada' && a.metaAlcancada) dentroMeta++
     const analise = a.analise || {}
-    const parcial = typeof analise.parcialPercentual === 'number'
-      ? analise.parcialPercentual
-      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    const parcial = getParcialExibido(a)
     const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
     somaParcial += Number.isFinite(parcial) ? parcial : 0
     somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
@@ -143,9 +141,7 @@ const agrupadoPorMesBase = computed(() => {
       if (a.metaAlcancada) grupo.dentroMeta++
     }
     const analise = a.analise || {}
-    const parcial = typeof analise.parcialPercentual === 'number'
-      ? analise.parcialPercentual
-      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    const parcial = getParcialExibido(a)
     const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
     grupo.somaParcial += Number.isFinite(parcial) ? parcial : 0
     grupo.somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
@@ -189,9 +185,7 @@ const desempenhoTiposBase = computed(() => {
       if (a.metaAlcancada) grupo.dentroMeta++
     }
     const analise = a.analise || {}
-    const parcial = typeof analise.parcialPercentual === 'number'
-      ? analise.parcialPercentual
-      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    const parcial = getParcialExibido(a)
     const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
     grupo.somaParcial += Number.isFinite(parcial) ? parcial : 0
     grupo.somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
@@ -286,12 +280,29 @@ const desempenhoSetoresBase = computed(() => {
   })
 })
 
+const getComProblema = (analise) => {
+  if (!analise) return 0
+  if (typeof analise.itensLidosComProblema === 'number') return analise.itensLidosComProblema || 0
+  return (analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0)
+}
+
+const getPendentesExibidos = (auditoria) => {
+  const analise = auditoria?.analise || {}
+  const pend = analise.itensPendentes || 0
+  return Math.max(0, pend - getComProblema(analise))
+}
+
+const getParcialExibido = (auditoria) => {
+  const analise = auditoria?.analise || {}
+  const total = analise.totalItens ?? auditoria?.total ?? 0
+  if (!total || total <= 0) return 0
+  return (getPendentesExibidos(auditoria) / total) * 100
+}
+
 const auditoriasParaTabelaBase = computed(() => {
   return auditoriasFiltradas.value.map(a => {
     const analise = a.analise || {}
-    const parcial = typeof analise.parcialPercentual === 'number'
-      ? analise.parcialPercentual
-      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    const parcial = getParcialExibido(a)
     const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
     const parcialValor = Number.isFinite(parcial) ? parcial : null
     const conclusaoValor = Number.isFinite(conclusao) ? conclusao : null
@@ -304,7 +315,7 @@ const auditoriasParaTabelaBase = computed(() => {
       parcial: parcialValor,
       conclusao: conclusaoValor,
       totalItens: analise.totalItens ?? a.total ?? '',
-      pendentes: analise.itensPendentes ?? '',
+      pendentes: a.analise ? getPendentesExibidos(a) : '',
       lidos: analise.totalLidos ?? ''
     }
   })
@@ -603,7 +614,7 @@ const gerarRelatorioPDF = () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+  <div class="min-h-[calc(100vh-4rem)] bg-linear-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="h-12 w-12 rounded-xl bg-indigo-600/10 flex items-center justify-center">

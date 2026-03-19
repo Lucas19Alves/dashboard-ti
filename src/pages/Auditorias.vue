@@ -7,6 +7,28 @@ const store = useAuditoriasStore()
 const router = useRouter()
 const abaAtiva = ref('calendario')
 
+const getComProblema = (analise) => {
+  if (!analise) return 0
+  if (typeof analise.itensLidosComProblema === 'number') return analise.itensLidosComProblema || 0
+  return (analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0)
+}
+
+const getPendentesExibidos = (auditoria) => {
+  const a = auditoria?.analise
+  if (!a) return 0
+  const pend = a.itensPendentes || 0
+  return Math.max(0, pend - getComProblema(a))
+}
+
+const getPercentualPendenteExibido = (auditoria) => {
+  const a = auditoria?.analise
+  if (!a) return 0
+  const total = a.totalItens || auditoria?.total || 0
+  if (total <= 0) return 0
+  const pend = getPendentesExibidos(auditoria)
+  return (pend / total) * 100
+}
+
 // Filtros e Paginação
 const filtroTexto = ref('')
 const ordenacao = ref('data_desc') // data_desc, data_asc, progresso_desc, progresso_asc
@@ -321,9 +343,16 @@ const parcialMediaGeral = computed(() => {
   const lista = Array.isArray(store.auditorias) ? store.auditorias.filter(a => a) : []
   if (!lista.length) return 0
   const soma = lista.reduce((acc, a) => {
-    const v = a.analise && typeof a.analise.parcialPercentual === 'number'
-      ? a.analise.parcialPercentual
-      : (typeof a.parcial === 'number' ? a.parcial : 0)
+    if (!a.analise) return acc
+    const analise = a.analise
+    const total = analise.totalItens ?? a.total ?? 0
+    if (!total || total <= 0) return acc
+    const comProblema = typeof analise.itensLidosComProblema === 'number'
+      ? (analise.itensLidosComProblema || 0)
+      : ((analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0))
+    const pendentesBrutos = analise.itensPendentes || 0
+    const pendentesExibidos = Math.max(0, pendentesBrutos - comProblema)
+    const v = (pendentesExibidos / total) * 100
     return acc + (Number.isFinite(v) ? v : 0)
   }, 0)
   return soma / lista.length
@@ -553,7 +582,7 @@ const classesCardDia = (d) => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+  <div class="min-h-[calc(100vh-4rem)] bg-linear-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="flex items-center gap-3">
           <div class="h-12 w-12 rounded-xl bg-blue-600/10 flex items-center justify-center">
@@ -1185,13 +1214,19 @@ const classesCardDia = (d) => {
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
                     <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Pendentes</p>
                     <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ auditoria.analise?.itensPendentes || 0 }}
+                      {{ getPendentesExibidos(auditoria) }}
                     </p>
                   </div>
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
                     <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Restante</p>
                     <p class="text-base font-bold text-orange-600 leading-none">
-                      {{ (100 - (auditoria.analise?.percentualConclusao || 0)).toFixed(1) }}%
+                      {{
+                        (
+                          auditoria.tipo === 'Ruptura' || auditoria.tipo === 'Presença' || auditoria.tipo === 'Etiqueta'
+                            ? getPercentualPendenteExibido(auditoria)
+                            : (100 - (auditoria.analise?.percentualConclusao || 0))
+                        ).toFixed(1)
+                      }}%
                     </p>
                   </div>
                 </div>

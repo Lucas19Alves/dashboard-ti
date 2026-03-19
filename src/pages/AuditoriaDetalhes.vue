@@ -250,13 +250,15 @@ const metricasGerais = computed(() => {
     ? a.totalLidos
     : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
   const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
+  const pendentesBrutos = a.itensPendentes || 0
+  const pendentes = Math.max(0, pendentesBrutos - comProblema)
   const percentualConclusao = a.percentualConclusao ?? (totalAuditaveis > 0 ? (totalLidos / totalAuditaveis) * 100 : 0)
-  const percentualPendente = a.parcialPercentual ?? (totalAuditaveis > 0 ? ((a.itensPendentes || 0) / totalAuditaveis) * 100 : 0)
+  const percentualPendente = (totalAuditaveis > 0 ? (pendentes / totalAuditaveis) * 100 : 0)
   
   return {
     totalItens: totalAuditaveis,
     lidosCorretamente: a.itensLidosCorretamente,
-    pendentes: a.itensPendentes,
+    pendentes,
     comProblema: comProblema,
     totalLidos: totalLidos,
     atualizados,
@@ -340,14 +342,14 @@ const insights = computed(() => {
       tipo: 'info',
       titulo: '⚡ Bom Progresso',
       mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
-      detalhes: [`Ainda restam ${a.itensPendentes} itens pendentes`]
+      detalhes: [`Ainda restam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens pendentes`]
     })
   } else {
     insights.push({
       tipo: 'aviso',
       titulo: '📊 Progresso em Andamento',
       mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
-      detalhes: [`Faltam ${a.itensPendentes} itens para completar`]
+      detalhes: [`Faltam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens para completar`]
     })
   }
 
@@ -1785,7 +1787,8 @@ const dadosRelatorio = computed(() => {
     ? a.totalItens
     : (totalLidos + (a.itensPendentes || 0))
   const percentualConclusao = a.percentualConclusao || 0
-  const percentualPendente = a.parcialPercentual || 0
+  const percentualPendente = metricasGerais.value?.percentualPendente ?? (a.parcialPercentual || 0)
+  const pendentesExibidos = metricasGerais.value?.pendentes ?? (a.itensPendentes || 0)
   
   // Top 20 locais com mais itens pendentes
   const topLocaisPendentes = locaisComAnalise.value
@@ -1806,7 +1809,7 @@ const dadosRelatorio = computed(() => {
     resultadoGeral: {
       totalAuditaveis: totalAuditaveis,
       totalLidos: totalLidos,
-      pendentes: a.itensPendentes,
+      pendentes: pendentesExibidos,
       desatualizados: (a.itensDesatualizados || (Array.isArray(auditoria.value?.dados) ? auditoria.value.dados.reduce((acc, item) => {
         const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
         return acc + (s.includes('desatualizad') ? 1 : 0)
@@ -2079,16 +2082,22 @@ const fecharRelatorio = () => {
             </button>
           </div>
           <div>
-            <div class="text-5xl font-bold">{{ (auditoria.analise?.parcialPercentual || 0).toFixed(2) }}%</div>
+            <div class="text-5xl font-bold">{{ (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0).toFixed(2) }}%</div>
             <p class="text-blue-100">Pendente</p>
             <div class="mt-2">
               <span
                 :class="[
                   'px-3 py-1 rounded-full text-xs font-semibold',
-                  (auditoria.analise?.parcialPercentual || 0) <= 3.0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0) <= 3.0
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
                 ]"
               >
-                {{ (auditoria.analise?.parcialPercentual || 0) <= 3.0 ? 'Dentro da Meta' : 'Fora da Meta' }}
+                {{
+                  (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0) <= 3.0
+                    ? 'Dentro da Meta'
+                    : 'Fora da Meta'
+                }}
               </span>
             </div>
           </div>
@@ -2443,14 +2452,14 @@ const fecharRelatorio = () => {
                 >
                   <div class="flex items-center gap-2 flex-1 min-w-0">
                     <div
-                      class="w-3 h-3 rounded-full flex-shrink-0"
+                      class="w-3 h-3 rounded-full shrink-0"
                       :class="[
                         'bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-red-500', 'bg-purple-500', 'bg-pink-500', 'bg-cyan-500', 'bg-orange-500'
                       ][idx % 8]"
                     />
                     <span class="font-semibold text-gray-700 truncate">{{ usuario.usuario }}</span>
                   </div>
-                  <span class="text-gray-600 flex-shrink-0 ml-2">{{ usuario.percentual }}% ({{ usuario.lidos }})</span>
+                  <span class="text-gray-600 shrink-0 ml-2">{{ usuario.percentual }}% ({{ usuario.lidos }})</span>
                 </div>
               </div>
             </div>
@@ -2996,6 +3005,7 @@ const fecharRelatorio = () => {
       :tipo="metricaSelecionada"
       :dados="auditoria.analise"
       :dadosCompletos="auditoria.dados"
+      :tipoAuditoria="auditoria.tipo"
       @fechar="fecharModalMetrica"
     />
 
