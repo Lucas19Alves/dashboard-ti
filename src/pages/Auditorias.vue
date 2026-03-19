@@ -7,26 +7,19 @@ const store = useAuditoriasStore()
 const router = useRouter()
 const abaAtiva = ref('calendario')
 
-const getComProblema = (analise) => {
-  if (!analise) return 0
-  if (typeof analise.itensLidosComProblema === 'number') return analise.itensLidosComProblema || 0
-  return (analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0)
-}
-
 const getPendentesExibidos = (auditoria) => {
   const a = auditoria?.analise
   if (!a) return 0
-  const pend = a.itensPendentes || 0
-  return Math.max(0, pend - getComProblema(a))
+  return a.itensPendentes || 0
 }
 
 const getPercentualPendenteExibido = (auditoria) => {
   const a = auditoria?.analise
   if (!a) return 0
-  const total = a.totalItens || auditoria?.total || 0
+  if (typeof a.parcialPercentual === 'number') return a.parcialPercentual
+  const total = a.totalItens || auditoria?.sku || auditoria?.total || 0
   if (total <= 0) return 0
-  const pend = getPendentesExibidos(auditoria)
-  return (pend / total) * 100
+  return ((a.itensPendentes || 0) / total) * 100
 }
 
 // Filtros e Paginação
@@ -106,6 +99,7 @@ const formulario = ref({
   arquivo: null,
   tipo: 'Etiqueta',
   data: new Date().toISOString().split('T')[0],
+  sku: ''
 })
 const diaSelecionado = ref(null)
 const mostrarModalExclusao = ref(false)
@@ -129,6 +123,11 @@ const submeterAuditoria = async () => {
   
   if (!formulario.value.tipo) {
     store.addToast('Selecione o tipo de auditoria!', 'warning')
+    return
+  }
+
+  if (!formulario.value.sku || parseInt(formulario.value.sku) <= 0) {
+    store.addToast('Informe a quantidade total de itens a auditar (SKU)!', 'warning')
     return
   }
   
@@ -156,16 +155,17 @@ const submeterAuditoria = async () => {
 
     // Usar o tipo que foi selecionado no formulário
     const tipoEfetivo = formulario.value.tipo
+    const skuValor = parseInt(formulario.value.sku) || 0
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
     const analise = tipoEfetivo === 'Presença'
-      ? store.analisarDadosPresenca(dados)
+      ? store.analisarDadosPresenca(dados, skuValor)
       : tipoEfetivo === 'Etiqueta'
-        ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados) : store.analisarDadosPresenca(dados))
-        : store.analisarDadosPresenca(dados)
+        ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
+        : store.analisarDadosPresenca(dados, skuValor)
     
     // Criar auditoria com dados já processados
     const novaAuditoria = store.addAuditoria({
-      sku: analise.totalItens, // SKU = total de itens auditáveis
+      sku: skuValor || analise.totalItens,
       tipo: tipoEfetivo,
       data: formulario.value.data,
       dados: dados,
@@ -184,6 +184,7 @@ const submeterAuditoria = async () => {
       arquivo: null,
       tipo: 'Etiqueta',
       data: new Date().toISOString().split('T')[0],
+      sku: ''
     }
   } catch (erro) {
     console.error('Erro ao processar:', erro)
@@ -345,14 +346,7 @@ const parcialMediaGeral = computed(() => {
   const soma = lista.reduce((acc, a) => {
     if (!a.analise) return acc
     const analise = a.analise
-    const total = analise.totalItens ?? a.total ?? 0
-    if (!total || total <= 0) return acc
-    const comProblema = typeof analise.itensLidosComProblema === 'number'
-      ? (analise.itensLidosComProblema || 0)
-      : ((analise.itensLidoNaoPertence || 0) + (analise.itensComEstoqueZero || 0))
-    const pendentesBrutos = analise.itensPendentes || 0
-    const pendentesExibidos = Math.max(0, pendentesBrutos - comProblema)
-    const v = (pendentesExibidos / total) * 100
+    const v = typeof analise.parcialPercentual === 'number' ? analise.parcialPercentual : 0
     return acc + (Number.isFinite(v) ? v : 0)
   }, 0)
   return soma / lista.length
@@ -952,7 +946,7 @@ const classesCardDia = (d) => {
             </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Auditoria</label>
               <select
@@ -976,12 +970,24 @@ const classesCardDia = (d) => {
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">SKU <span class="text-red-500">*</span></label>
+              <input
+                v-model="formulario.sku"
+                type="number"
+                min="1"
+                placeholder="Total de itens a auditar"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p class="text-xs text-gray-500 mt-1">Quantidade total de itens do inventário</p>
+            </div>
           </div>
 
           <div class="flex justify-end">
             <button
               @click="submeterAuditoria"
-              :disabled="processando || !formulario.arquivo"
+              :disabled="processando || !formulario.arquivo || !formulario.sku"
               class="inline-flex items-center justify-center px-6 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               <i :class="processando ? 'fas fa-spinner fa-spin' : 'fas fa-play'" class="mr-2"></i>
@@ -1208,7 +1214,7 @@ const classesCardDia = (d) => {
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
                     <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Lidos</p>
                     <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ (auditoria.analise?.itensLidosCorretamente || 0) + (auditoria.analise?.itensLidosComProblema || 0) }}
+                      {{ auditoria.analise?.totalLidos || 0 }}
                     </p>
                   </div>
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
