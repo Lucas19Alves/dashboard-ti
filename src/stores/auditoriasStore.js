@@ -471,6 +471,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
           return acc
         }
+        const locAtual = ((item['Local'] || '').toString().trim())
+        const lidoNaoPertenceAtual = item._lidoNaoPertence
         const existenteIndex = acc.findIndex(i => {
           const cod = (i['Código'] || i.Codigo || '').toString().trim()
           return cod === codigo
@@ -479,6 +481,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
         } else {
           const existente = acc[existenteIndex]
+          const locExistente = ((existente['Local'] || '').toString().trim())
+          const lidoNaoPertenceExistente = existente._lidoNaoPertence
 
           // Regra específica de Ruptura: para código duplicado, prioriza item auditado no dia da auditoria.
           if (ehRuptura && auditoriaDiaISO) {
@@ -504,12 +508,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             if (!locAtual && locExistente) {
               acc[existenteIndex] = item
             }
-            // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
-            else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
-              if (!locAtual && locExistente) {
-                acc[existenteIndex] = item
-              }
-            }
           }
         }
         return acc
@@ -534,10 +532,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       console.log(`   - Com presença: ${comPresenca}`)
       console.log(`   - Sem presença: ${semPresenca}`)
       console.log(`   - Com estoque: ${comEstoque}`)
-      console.log(`   - Sem estoque: ${semEstoque}`)
-      console.log(`   - Total auditável: ${dados.length}`)
-      
-      return dados
       console.log(`   - Sem estoque: ${semEstoque}`)
       console.log(`   - Total auditável: ${dados.length}`)
       
