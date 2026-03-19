@@ -203,6 +203,76 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return String(valor).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
   }
 
+  const paraDataISO = (valor) => {
+    if (valor === undefined || valor === null || valor === '') return ''
+
+    // Serial de data do Excel
+    if (typeof valor === 'number' && isFinite(valor)) {
+      const serial = Math.floor(valor)
+      if (serial > 0) {
+        const ms = (serial - 25569) * 86400 * 1000
+        const d = new Date(ms)
+        if (!isNaN(d.getTime())) {
+          const yyyy = d.getUTCFullYear()
+          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const dd = String(d.getUTCDate()).padStart(2, '0')
+          return `${yyyy}-${mm}-${dd}`
+        }
+      }
+    }
+
+    if (valor instanceof Date && !isNaN(valor.getTime())) {
+      const yyyy = valor.getFullYear()
+      const mm = String(valor.getMonth() + 1).padStart(2, '0')
+      const dd = String(valor.getDate()).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    const texto = String(valor).trim()
+    if (!texto) return ''
+
+    // dd/mm/yyyy ou dd-mm-yyyy
+    let m = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/)
+    if (m) {
+      const dd = String(parseInt(m[1], 10)).padStart(2, '0')
+      const mm = String(parseInt(m[2], 10)).padStart(2, '0')
+      let yyyy = String(parseInt(m[3], 10))
+      if (yyyy.length === 2) yyyy = `20${yyyy}`
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    // yyyy-mm-dd ou yyyy/mm/dd
+    m = texto.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/)
+    if (m) {
+      const yyyy = m[1]
+      const mm = String(parseInt(m[2], 10)).padStart(2, '0')
+      const dd = String(parseInt(m[3], 10)).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    const data = new Date(texto)
+    if (!isNaN(data.getTime())) {
+      const yyyy = data.getFullYear()
+      const mm = String(data.getMonth() + 1).padStart(2, '0')
+      const dd = String(data.getDate()).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    return ''
+  }
+
+  const dataItemAuditadoEmISO = (item) => {
+    if (!item || typeof item !== 'object') return ''
+    return paraDataISO(item['Auditado em'] || item['Auditado Em'] || item['auditado em'] || item['Data'])
+  }
+
+  const temMarcadorNaoLidoComEstoque = (valor) => {
+    const s = normalizarTexto(valor)
+    if (!s) return false
+    if ((s.includes('nao lido') || s.includes('nao lidos')) && s.includes('estoq')) return true
+    return false
+  }
+
   const getLidoNaoPertence = (item) => {
     if (!item) return false
     let valor = undefined
@@ -250,7 +320,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const temAtual = s.includes('atualizad') && !temDesatual // evita colisão com "desatualizado"
     const atualizado = temAtual
     const desatualizado = temDesatual
-    const naoLidoEstoque = s.includes('nao lidos com estoque') || s.includes('não lidos com estoque')
+    const naoLidoEstoque = temMarcadorNaoLidoComEstoque(s)
     const lidoSemEstoque = s.includes('lido sem estoque')
     const semEstoque = !lidoSemEstoque && s.includes('sem estoque')
     const lidoNaoPertence = getLidoNaoPertence(item)
@@ -282,7 +352,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const sRaw = row['Situação'] || row['Situação atual da auditoria'] || ''
       const s = normalizarTexto(sRaw)
       // Etiqueta: status / leituras específicas
-      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || getLidoNaoPertence(row)) {
+      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s) || getLidoNaoPertence(row)) {
         etiquetaScore++
       }
       // Presença: menções explícitas
@@ -316,7 +386,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     for (let i = 0; i < n; i++) {
       const item = dados[i] || {}
       const s = normalizarTexto((item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '').toString())
-      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || s.includes('nao lidos com estoque') || s.includes('não lidos com estoque') || item._lidoNaoPertence) {
+      if (s.includes('atualizad') || s.includes('desatualizad') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s) || item._lidoNaoPertence) {
         etiquetaScore++
       }
       if (s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen') || s.includes('com presenca') || s.includes('sem presenca') || s.includes('com presença') || s.includes('sem presença')) {
@@ -334,7 +404,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return 'Presença'
   }
 
-  const processarExcelPresenca = async (file) => {
+  const processarExcelPresenca = async (file, opts = {}) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
       // Ler arquivo como array buffer
@@ -355,7 +425,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
       if (dadosCompletos.length > 0) {
         const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
-        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('não lidos com estoque') || s.includes('nao lidos com estoque')
+        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s)
         const indicPresenca = s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen')
         if (indicEtiqueta && !indicPresenca) {
           addToast('Arquivo detectado como Etiqueta. Ajustando interpretação.', 'info')
@@ -394,6 +464,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // deduplicar preferindo sempre o registro SEM "Lido não pertence" e depois SEM Local
       // quando há duplicata de código, preferir: sem "lido não pertence" > depois sem Local
       const totalFiltrados = filtrados.length
+      const auditoriaDiaISO = paraDataISO(opts?.dataAuditoria)
+      const ehRuptura = normalizarTexto(opts?.tipoAuditoria || '') === 'ruptura'
       const dados = filtrados.reduce((acc, item) => {
         const codigo = (item['Código'] || item.Codigo || '').toString().trim()
         if (!codigo) {
@@ -412,6 +484,21 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           const existente = acc[existenteIndex]
           const locExistente = ((existente['Local'] || '').toString().trim())
           const lidoNaoPertenceExistente = existente._lidoNaoPertence
+
+          // Regra específica de Ruptura: para código duplicado, prioriza item auditado no dia da auditoria.
+          if (ehRuptura && auditoriaDiaISO) {
+            const dataAtual = dataItemAuditadoEmISO(item)
+            const dataExistente = dataItemAuditadoEmISO(existente)
+            const atualNoDia = dataAtual === auditoriaDiaISO
+            const existenteNoDia = dataExistente === auditoriaDiaISO
+            if (atualNoDia && !existenteNoDia) {
+              acc[existenteIndex] = item
+              return acc
+            }
+            if (existenteNoDia && !atualNoDia) {
+              return acc
+            }
+          }
 
           // Prioridade 1: Preferir item SEM "Lido não pertence"
           if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) {
@@ -476,7 +563,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       }
       if (dadosCompletos.length > 0) {
         const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
-        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || s.includes('não lidos com estoque') || s.includes('nao lidos com estoque')
+        const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s)
         const indicPresenca = s.includes('com prese') || s.includes('sem prese') || s.includes('com presen') || s.includes('sem presen')
         if (indicPresenca && !indicEtiqueta) {
           addToast('Arquivo detectado como Presença. Ajustando interpretação.', 'info')
@@ -520,11 +607,25 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         } else {
           const existente = acc[existenteIndex]
           const locExistente = ((existente['Local'] || '').toString().trim())
-          if (!locAtual && locExistente) {
-            // novo item sem local substitui existente com local
+          const statusAtual = statusEtiqueta(item)
+          const statusExistente = statusEtiqueta(existente)
+
+          // Prioridade 1: preservar registro que NÃO é "Lido não pertence"
+          if (statusExistente.lidoNaoPertence && !statusAtual.lidoNaoPertence) {
             acc[existenteIndex] = item
           }
-          // caso contrário mantemos o existente (que já não tem local ou já foi preferido)
+          // Prioridade 2: entre itens equivalentes, preservar "Não lido(s) com estoque"
+          else if (statusExistente.lidoNaoPertence === statusAtual.lidoNaoPertence) {
+            if (!statusExistente.naoLidoEstoque && statusAtual.naoLidoEstoque) {
+              acc[existenteIndex] = item
+            }
+            // Prioridade 3: preferir item sem Local
+            else if (statusExistente.naoLidoEstoque === statusAtual.naoLidoEstoque) {
+              if (!locAtual && locExistente) {
+                acc[existenteIndex] = item
+              }
+            }
+          }
         }
         return acc
       }, [])
@@ -543,6 +644,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       addToast('Erro: ' + erro.message, 'error')
       throw erro
     }
+  }
+
+  const processarExcelRuptura = async (file, opts = {}) => {
+    return processarExcelPresenca(file, {
+      ...opts,
+      tipoAuditoria: 'Ruptura'
+    })
   }
 
   const analisarDadosPresenca = (dados, sku = 0) => {
@@ -678,13 +786,15 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     if (sku > 0) {
       totalAuditaveis = sku
     } else {
-      const lidosNaPlanilha = dados.filter(i => {
+      // Fallback sem SKU: mantém coerência da regra principal usando base planilha mínima
+      // (pendentes + itens com presença e estoque) apenas para não zerar total.
+      const lidosBase = dados.filter(i => {
         const temP = i._temPresenca || false
         const lnp = i._lidoNaoPertence !== undefined ? i._lidoNaoPertence : getLidoNaoPertence(i)
         const est = i._estoque || 0
         return temP && !lnp && est > 0
       }).length
-      totalAuditaveis = analise.itensPendentes + lidosNaPlanilha
+      totalAuditaveis = analise.itensPendentes + lidosBase
     }
     const totalLidos = Math.max(0, totalAuditaveis - analise.itensPendentes)
     
@@ -720,6 +830,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     })
 
     return analise
+  }
+
+  const analisarDadosRuptura = (dados, sku = 0) => {
+    // Regra de Ruptura segue o mesmo cálculo-base de Presença:
+    // pendentes = "Sem Presença e Com Estoque"; totalLidos = SKU - pendentes;
+    // problemas apenas para exibição.
+    return analisarDadosPresenca(dados, sku)
   }
 
   const analisarDadosEtiqueta = (dados, sku = 0) => {
@@ -980,8 +1097,10 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     removeToast,
     detectarTipoArquivo,
     processarExcelPresenca,
+    processarExcelRuptura,
     processarExcelEtiqueta,
     analisarDadosPresenca,
+    analisarDadosRuptura,
     analisarDadosEtiqueta,
     detectarTipoDados,
     obterTipoAuditoriaParaData,

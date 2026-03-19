@@ -324,8 +324,17 @@ const processar = async () => {
     let dados = []
     const tipo = props.auditoria?.tipo || 'Etiqueta'
     const temEtiqueta = typeof store.processarExcelEtiqueta === 'function'
+    const temRuptura = typeof store.processarExcelRuptura === 'function'
+    const optsRuptura = {
+      dataAuditoria: props.auditoria?.data,
+      tipoAuditoria: tipo
+    }
     if (tipo === 'Presença') {
       dados = await store.processarExcelPresenca(arquivoSelecionado.value)
+    } else if (tipo === 'Ruptura') {
+      dados = temRuptura
+        ? await store.processarExcelRuptura(arquivoSelecionado.value, optsRuptura)
+        : await store.processarExcelPresenca(arquivoSelecionado.value, optsRuptura)
     } else if (tipo === 'Etiqueta') {
       dados = temEtiqueta
         ? await store.processarExcelEtiqueta(arquivoSelecionado.value)
@@ -344,8 +353,11 @@ const processar = async () => {
     const tipoEfetivo = props.auditoria?.tipo || 'Etiqueta'
     const skuValor = props.auditoria?.sku || 0
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
+    const temAnaliseRuptura = typeof store.analisarDadosRuptura === 'function'
     analise.value = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados, skuValor)
+      : tipoEfetivo === 'Ruptura'
+        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
       : tipoEfetivo === 'Etiqueta'
         ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
         : store.analisarDadosPresenca(dados, skuValor)
