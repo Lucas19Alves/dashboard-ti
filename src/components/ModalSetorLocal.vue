@@ -115,7 +115,11 @@ const colunas = computed(() => {
 })
 
 const getPercentual = (item) => {
-  return item.percentualPendente || item.percentualLido || 0
+  if (item == null) return 0
+  if (item.percentualPendente != null) return Number(item.percentualPendente) || 0
+  if (item.percentualLido != null) return Number(item.percentualLido) || 0
+  if (item.percentualConclusao != null) return Number(item.percentualConclusao) || 0
+  return 0
 }
 
 const handleRowClick = (item) => {
