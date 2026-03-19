@@ -334,7 +334,52 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return 'Presença'
   }
 
-  const processarExcelPresenca = async (file) => {
+  // Função auxiliar para extrair a data (apenas dia) de um valor "Auditado em"
+  // Retorna string no formato 'YYYY-MM-DD' ou null
+  const extrairDataAuditado = (valor) => {
+    if (!valor) return null
+    if (typeof valor === 'number') {
+      // Serial do Excel: dias desde 1900-01-01 (com bug do Lotus 1-2-3)
+      const d = new Date(Date.UTC(1899, 11, 30) + valor * 864e5)
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0]
+      }
+      return null
+    }
+    if (valor instanceof Date) {
+      return valor.toISOString().split('T')[0]
+    }
+    if (typeof valor === 'string') {
+      // Tentar formato DD/MM/YYYY [HH:mm:ss]
+      const partes = valor.trim().split(' ')[0].split('/')
+      if (partes.length === 3) {
+        const dia = parseInt(partes[0])
+        const mes = parseInt(partes[1])
+        const ano = parseInt(partes[2])
+        if (dia > 0 && mes > 0 && ano > 0) {
+          const pad = (n) => String(n).padStart(2, '0')
+          return `${ano}-${pad(mes)}-${pad(dia)}`
+        }
+      }
+      // Tentar formato ISO YYYY-MM-DD
+      const isoMatch = valor.match(/(\d{4})-(\d{2})-(\d{2})/)
+      if (isoMatch) {
+        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+      }
+      // Fallback: Date constructor
+      try {
+        const d = new Date(valor)
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0]
+        }
+      } catch {
+        // ignorar
+      }
+    }
+    return null
+  }
+
+  const processarExcelPresenca = async (file, opcoes = {}) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
       // Ler arquivo como array buffer
@@ -391,17 +436,17 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return true
         })
 
-      // deduplicar preferindo sempre o registro SEM "Lido não pertence" e depois SEM Local
-      // quando há duplicata de código, preferir: sem "lido não pertence" > depois sem Local
+      // deduplicar itens por código
       const totalFiltrados = filtrados.length
+      const tipoProcessamento = opcoes.tipo || ''
+      const dataAuditoria = opcoes.dataAuditoria || ''
+
       const dados = filtrados.reduce((acc, item) => {
         const codigo = (item['Código'] || item.Codigo || '').toString().trim()
         if (!codigo) {
           acc.push(item)
           return acc
         }
-        const locAtual = ((item['Local'] || '').toString().trim())
-        const lidoNaoPertenceAtual = item._lidoNaoPertence
         const existenteIndex = acc.findIndex(i => {
           const cod = (i['Código'] || i.Codigo || '').toString().trim()
           return cod === codigo
@@ -410,20 +455,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
         } else {
           const existente = acc[existenteIndex]
-          const locExistente = ((existente['Local'] || '').toString().trim())
-          const lidoNaoPertenceExistente = existente._lidoNaoPertence
 
-          // Prioridade 1: Preferir item SEM "Lido não pertence"
-          if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) {
-            acc[existenteIndex] = item
-          }
-          // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
-          else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
-            if (!locAtual && locExistente) {
+          if (tipoProcessamento === 'Ruptura' && dataAuditoria) {
+            // Ruptura: preferir item cujo "Auditado em" seja = dia da auditoria
+            const dataAtual = extrairDataAuditado(item['Auditado em'])
+            const dataExistente = extrairDataAuditado(existente['Auditado em'])
+            if (dataAtual === dataAuditoria && dataExistente !== dataAuditoria) {
               acc[existenteIndex] = item
             }
+            // caso contrário mantemos o existente (ou ambos batem, ou nenhum bate)
+          } else {
+            // Presença / padrão: preferir SEM "Lido não pertence" > depois SEM Local
+            const locAtual = ((item['Local'] || '').toString().trim())
+            const lidoNaoPertenceAtual = item._lidoNaoPertence
+            const locExistente = ((existente['Local'] || '').toString().trim())
+            const lidoNaoPertenceExistente = existente._lidoNaoPertence
+
+            // Prioridade 1: Preferir item SEM "Lido não pertence"
+            if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) {
+              acc[existenteIndex] = item
+            }
+            // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
+            else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
+              if (!locAtual && locExistente) {
+                acc[existenteIndex] = item
+              }
+            }
           }
-          // caso contrário mantemos o existente
         }
         return acc
       }, [])
@@ -588,9 +646,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const efetivamenteTemPresenca = temPresenca || lidoNaoPertence
 
       // ❌ EXCLUI DO SKU (não contam no total auditável)
-      // Itens com estoque <= 0 ou lidos em local errado não entram na auditoria
-      if (estoque <= 0 || lidoNaoPertence) {
-        if (estoque <= 0) {
+      // Itens "Com Presença e sem Estoque" ou "Lido não pertence" são apenas para exibição em "Itens com problema"
+      if ((temPresenca && estoque <= 0) || lidoNaoPertence) {
+        if (temPresenca && estoque <= 0) {
           analise.itensComEstoqueZero++
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
