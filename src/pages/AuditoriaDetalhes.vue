@@ -203,8 +203,6 @@ const collapsedSections = ref({
 
 // UI/UX Improvements - Filter states
 const filtroPerformanceUser = ref('all')   // Users tab performance filter
-const filtroSetorStats = ref('all')        // Statistics tab sector filter
-const filtroStatusStats = ref('all')       // Statistics tab status filter
 
 const abas = ['dashboard', 'usuarios', 'dados', 'estatisticas']
 const abasDisplay = { dashboard: 'Dashboard', usuarios: 'Usuários', dados: 'Dados', estatisticas: 'Estatísticas' }
@@ -1152,14 +1150,22 @@ const mapaSeteores = computed(() => {
   const setores = {}
 
   Object.entries(analise.porSetor).forEach(([setor, dados]) => {
+    const lidos = Number(dados?.lidos || 0)
+    const pendentes = Number(dados?.pendentes || 0)
+    const comProblema = Number(dados?.comProblema || 0)
+    const total = lidos + pendentes + comProblema
+    const percentualConclusao = total > 0 ? Math.round((lidos / total) * 100) : 0
+    const percentualPendente = total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0
+
     setores[setor] = {
       nome: setor,
-      lidos: dados.lidos,
-      pendentes: dados.pendentes,
-      comProblema: dados.comProblema,
-      total: dados.lidos + dados.pendentes + dados.comProblema,
-      percentualConclusao: (dados.lidos + dados.pendentes + dados.comProblema) > 0 ? 
-        Math.round((dados.lidos / (dados.lidos + dados.pendentes + dados.comProblema)) * 100) : 0
+      lidos,
+      pendentes,
+      comProblema,
+      total,
+      percentualConclusao,
+      percentualPendente,
+      percentualLido: percentualConclusao
     }
   })
 
@@ -1753,47 +1759,6 @@ const locaisComAnalise = computed(() => {
     .sort((a, b) => b.pendentes - a.pendentes)
   
   return locais
-})
-
-// Statistics Tab: KPI Cards
-const kpiStatistics = computed(() => {
-  if (!auditoria.value?.analise) return null
-  const a = auditoria.value.analise
-  const setoresLista = setoresComAnalise.value || []
-  const locaisLista = locaisComAnalise.value || []
-
-  return {
-    totalSetores: setoresLista.length,
-    mediaCompletacao: setoresLista.length > 0
-      ? (setoresLista.reduce((sum, s) => sum + s.percentualConclusao, 0) / setoresLista.length).toFixed(1)
-      : 0,
-    setoresCriticos: setoresLista.filter(s => s.percentualConclusao < 50).length,
-    topSetor: setoresLista.length > 0 ? setoresLista[0] : null
-  }
-})
-
-// Statistics Tab: Filtered Data for Tables
-const setoresComAnaliseFiltered = computed(() => {
-  if (!auditoria.value?.analise) return []
-  let dados = setoresComAnalise.value || []
-
-  // Filter by sector if selected
-  if (filtroSetorStats.value !== 'all') {
-    dados = dados.filter(s => s.nome === filtroSetorStats.value)
-  }
-
-  // Filter by status if selected
-  if (filtroStatusStats.value !== 'all') {
-    dados = dados.filter(s => {
-      const percentual = s.percentualConclusao
-      if (filtroStatusStats.value === 'excellent') return percentual >= 75
-      if (filtroStatusStats.value === 'good') return percentual >= 50 && percentual < 75
-      if (filtroStatusStats.value === 'needswork') return percentual < 50
-      return true
-    })
-  }
-
-  return dados
 })
 
 // Dados para o relatório
@@ -2911,78 +2876,26 @@ const fecharRelatorio = () => {
 
       <!-- ESTATÍSTICAS -->
       <div v-if="abaAtiva === 'estatisticas'" class="space-y-8">
-        <!-- KPI Summary Cards -->
-        <div v-if="kpiStatistics" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-blue-500">
-            <p class="text-gray-600 text-sm font-medium">Total de Setores</p>
-            <p class="text-3xl font-bold text-blue-600 mt-2">{{ kpiStatistics.totalSetores }}</p>
-          </div>
-          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-green-500">
-            <p class="text-gray-600 text-sm font-medium">Média de Conclusão</p>
-            <p class="text-3xl font-bold text-green-600 mt-2">{{ kpiStatistics.mediaCompletacao }}%</p>
-          </div>
-          <div class="bg-white rounded-lg p-6 shadow border-l-4 border-red-500">
-            <p class="text-gray-600 text-sm font-medium">Setores Críticos</p>
-            <p class="text-3xl font-bold text-red-600 mt-2">{{ kpiStatistics.setoresCriticos }}</p>
-          </div>
-          <div v-if="kpiStatistics.topSetor" class="bg-white rounded-lg p-6 shadow border-l-4 border-purple-500">
-            <p class="text-gray-600 text-sm font-medium">Melhor Setor</p>
-            <p class="text-lg font-bold text-purple-600 mt-2">{{ kpiStatistics.topSetor.nome }}</p>
-            <p class="text-xs text-gray-500 mt-1">{{ kpiStatistics.topSetor.percentualConclusao }}% completo</p>
-          </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="bg-white rounded-lg p-6 shadow">
-          <h3 class="text-lg font-semibold text-gray-800 mb-4">
-            <i class="fas fa-filter text-blue-600 mr-2"></i>Filtros
-          </h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Sector Filter -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Setor</label>
-              <select
-                v-model="filtroSetorStats"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-              >
-                <option value="all">Todos os setores</option>
-                <option v-for="setor in (setoresComAnalise || [])" :key="setor.nome" :value="setor.nome">
-                  {{ setor.nome }}
-                </option>
-              </select>
-              <span v-if="filtroSetorStats !== 'all'" class="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-semibold">
-                1 ativo
+        <!-- Setores -->
+        <div class="bg-white rounded-2xl p-5 md:p-6 shadow border border-gray-100">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+            <h2 class="text-2xl font-bold text-gray-800">
+              <i class="fas fa-chart-pie text-blue-600 mr-2"></i>Setores
+            </h2>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                {{ setoresComAnalise.length }} setores
               </span>
-            </div>
-
-            <!-- Status Filter -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-              <select
-                v-model="filtroStatusStats"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-              >
-                <option value="all">Todos os status</option>
-                <option value="excellent">Excelente (≥75%)</option>
-                <option value="good">Bom (50-75%)</option>
-                <option value="needswork">Precisa atenção (<50%)</option>
-              </select>
-              <span v-if="filtroStatusStats !== 'all'" class="inline-block mt-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-semibold">
-                1 ativo
+              <span class="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 font-semibold border border-orange-100">
+                {{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta
               </span>
             </div>
           </div>
-        </div>
 
-        <!-- Setores com Análise -->
-        <div>
-          <h2 class="text-2xl font-bold text-gray-800 mb-6">
-            <i class="fas fa-chart-pie text-blue-600 mr-2"></i>Parcial por Setor
-          </h2>
           <TabelaInterativaAuditoria
-            :dados="setoresComAnaliseFiltered"
+            :dados="setoresComAnalise"
             :colunas="colunasSetor"
-            :itensPorPagina="5"
+            :itensPorPagina="8"
             clickable
             @click-row="abrirModalSetorLocal('setor', [$event])"
           >
@@ -3005,15 +2918,26 @@ const fecharRelatorio = () => {
           </TabelaInterativaAuditoria>
         </div>
 
-        <!-- Locais com Mais Itens para Ler -->
-        <div>
-          <h2 class="text-2xl font-bold text-gray-800 mb-6">
-            <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais com Mais Itens para Ler
-          </h2>
+        <!-- Locais -->
+        <div class="bg-white rounded-2xl p-5 md:p-6 shadow border border-gray-100">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+            <h2 class="text-2xl font-bold text-gray-800">
+              <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais
+            </h2>
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="px-3 py-1.5 rounded-full bg-red-50 text-red-700 font-semibold border border-red-100">
+                {{ locaisComAnalise.length }} locais
+              </span>
+              <span class="px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700 font-semibold border border-yellow-100">
+                {{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência
+              </span>
+            </div>
+          </div>
+
           <TabelaInterativaAuditoria 
             :dados="locaisComAnalise" 
             :colunas="colunasLocal" 
-            :itensPorPagina="10"
+            :itensPorPagina="12"
             clickable
             @click-row="abrirModalSetorLocal('local', [$event])"
           >
