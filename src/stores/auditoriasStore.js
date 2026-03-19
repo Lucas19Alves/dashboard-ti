@@ -461,8 +461,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           return true
         })
 
-      // deduplicar preferindo sempre o registro SEM "Lido não pertence" e depois SEM Local
-      // quando há duplicata de código, preferir: sem "lido não pertence" > depois sem Local
+      // deduplicar itens por código
       const totalFiltrados = filtrados.length
       const auditoriaDiaISO = paraDataISO(opts?.dataAuditoria)
       const ehRuptura = normalizarTexto(opts?.tipoAuditoria || '') === 'ruptura'
@@ -472,8 +471,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
           return acc
         }
-        const locAtual = ((item['Local'] || '').toString().trim())
-        const lidoNaoPertenceAtual = item._lidoNaoPertence
         const existenteIndex = acc.findIndex(i => {
           const cod = (i['Código'] || i.Codigo || '').toString().trim()
           return cod === codigo
@@ -482,8 +479,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           acc.push(item)
         } else {
           const existente = acc[existenteIndex]
-          const locExistente = ((existente['Local'] || '').toString().trim())
-          const lidoNaoPertenceExistente = existente._lidoNaoPertence
 
           // Regra específica de Ruptura: para código duplicado, prioriza item auditado no dia da auditoria.
           if (ehRuptura && auditoriaDiaISO) {
@@ -509,8 +504,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             if (!locAtual && locExistente) {
               acc[existenteIndex] = item
             }
+            // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
+            else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
+              if (!locAtual && locExistente) {
+                acc[existenteIndex] = item
+              }
+            }
           }
-          // caso contrário mantemos o existente
         }
         return acc
       }, [])
@@ -696,9 +696,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const efetivamenteTemPresenca = temPresenca || lidoNaoPertence
 
       // ❌ EXCLUI DO SKU (não contam no total auditável)
-      // Itens com estoque <= 0 ou lidos em local errado não entram na auditoria
-      if (estoque <= 0 || lidoNaoPertence) {
-        if (estoque <= 0) {
+      // Itens "Com Presença e sem Estoque" ou "Lido não pertence" são apenas para exibição em "Itens com problema"
+      if ((temPresenca && estoque <= 0) || lidoNaoPertence) {
+        if (temPresenca && estoque <= 0) {
           analise.itensComEstoqueZero++
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],

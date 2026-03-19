@@ -154,7 +154,7 @@ const submeterAuditoria = async () => {
         ? await store.processarExcelEtiqueta(formulario.value.arquivo)
         : await store.processarExcelPresenca(formulario.value.arquivo)
     } else {
-      dados = await store.processarExcelPresenca(formulario.value.arquivo)
+      dados = await store.processarExcelPresenca(formulario.value.arquivo, { tipo: tipo, dataAuditoria: formulario.value.data })
     }
     
     if (!dados || dados.length === 0) {

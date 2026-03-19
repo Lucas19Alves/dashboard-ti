@@ -340,7 +340,7 @@ const processar = async () => {
         ? await store.processarExcelEtiqueta(arquivoSelecionado.value)
         : await store.processarExcelPresenca(arquivoSelecionado.value)
     } else {
-      dados = await store.processarExcelPresenca(arquivoSelecionado.value)
+      dados = await store.processarExcelPresenca(arquivoSelecionado.value, { tipo: tipo, dataAuditoria: props.auditoria?.data })
     }
     
     if (!dados || dados.length === 0) {
