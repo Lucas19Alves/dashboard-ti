@@ -40,7 +40,7 @@
             </div>
             <div class="bg-orange-50 p-4 rounded-lg">
               <p class="text-gray-600 text-sm">Pendentes</p>
-              <p class="text-2xl font-bold text-orange-600">{{ dados.itensPendentes }}</p>
+              <p class="text-2xl font-bold text-orange-600">{{ pendentesExibidos }}</p>
             </div>
             <div class="bg-red-50 p-4 rounded-lg">
               <p class="text-gray-600 text-sm">Com Problema</p>
@@ -97,11 +97,11 @@
           <div class="bg-gray-50 p-4 rounded-lg">
             <div class="flex justify-between items-center mb-2">
               <p class="text-gray-600 text-sm font-medium">Percentual Pendente</p>
-              <span class="text-xs font-semibold text-gray-600">{{ dados.itensPendentes }}/{{ dados.totalItens }} itens</span>
+              <span class="text-xs font-semibold text-gray-600">{{ pendentesExibidos }}/{{ dados.totalItens }} itens</span>
             </div>
             <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
-                :style="{ width: Math.round((dados.itensPendentes / (dados.totalItens || 1)) * 100) + '%' }"
+                :style="{ width: Math.round((pendentesExibidos / (dados.totalItens || 1)) * 100) + '%' }"
                 class="h-full bg-linear-to-r from-orange-500 to-orange-600"
               />
             </div>
@@ -231,7 +231,8 @@ const props = defineProps({
   aberto: Boolean,
   tipo: String,
   dados: Object,
-  dadosCompletos: Array
+  dadosCompletos: Array,
+  tipoAuditoria: String
 })
 
 const emit = defineEmits(['fechar'])
@@ -267,14 +268,30 @@ const subtitulo = computed(() => {
 
 const valor = computed(() => {
   if (!props.dados) return '-'
+  const comProblema = props.dados.itensLidosComProblema != null
+    ? (props.dados.itensLidosComProblema || 0)
+    : ((props.dados.itensLidoNaoPertence || 0) + (props.dados.itensComEstoqueZero || 0))
+  const pendentesBase = props.dados.itensPendentes || 0
+  const pendentesExibidos = props.tipoAuditoria === 'Ruptura'
+    ? Math.max(0, pendentesBase - comProblema)
+    : pendentesBase
   const valores = {
     'total': props.dados.totalItens || 0,
     'lidos': props.dados.totalLidos || 0,
-    'pendentes': props.dados.itensPendentes || 0,
+    'pendentes': pendentesExibidos,
     'problema': props.dados.itensLidosComProblema || 0,
     'desatualizado': props.dados.itensDesatualizados || 0
   }
   return valores[props.tipo] || 0
+})
+
+const pendentesExibidos = computed(() => {
+  if (!props.dados) return 0
+  const comProblema = props.dados.itensLidosComProblema != null
+    ? (props.dados.itensLidosComProblema || 0)
+    : ((props.dados.itensLidoNaoPertence || 0) + (props.dados.itensComEstoqueZero || 0))
+  const pendentesBase = props.dados.itensPendentes || 0
+  return Math.max(0, pendentesBase - comProblema)
 })
 
 const corFundo = computed(() => {

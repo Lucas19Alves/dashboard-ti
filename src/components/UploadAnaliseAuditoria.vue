@@ -127,7 +127,7 @@
         <div class="flex items-center justify-between">
           <div>
             <p class="text-gray-600 text-sm font-medium">⏳ Pendentes</p>
-            <p class="text-3xl font-bold text-orange-600">{{ analise.itensPendentes }}</p>
+            <p class="text-3xl font-bold text-orange-600">{{ pendentesExibidos }}</p>
           </div>
           <i class="fas fa-clock text-4xl text-orange-300 opacity-50"></i>
         </div>
@@ -157,6 +157,7 @@
       :aberto="modalAberto"
       :tipo="tipoMetricaSelecionada"
       :dados="analise"
+      :tipoAuditoria="props.auditoria?.tipo"
       @fechar="fecharModal"
     />
 
@@ -226,7 +227,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import ModalMetrica from './ModalMetrica.vue'
 
@@ -245,6 +246,16 @@ const modalAberto = ref(false)
 const tipoMetricaSelecionada = ref(null)
 const arrastando = ref(false)
 const erroUpload = ref('')
+
+const pendentesExibidos = computed(() => {
+  const a = analise.value
+  if (!a) return 0
+  const pend = a.itensPendentes || 0
+  const comProblema = a.itensLidosComProblema != null
+    ? (a.itensLidosComProblema || 0)
+    : ((a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
+  return Math.max(0, pend - comProblema)
+})
 
 const handleFileChange = (event) => {
   event.stopPropagation()
