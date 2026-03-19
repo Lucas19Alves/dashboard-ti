@@ -767,10 +767,12 @@ const historicoResumo = computed(() => {
 const dadosUsuarios = computed(() => {
   if (!auditoria.value?.analise) return []
   const analise = auditoria.value.analise
+  if (!Array.isArray(analise.usuarios)) return []
+  const porUsuario = analise.porUsuario || {}
   return analise.usuarios.map(u => {
-      const lidos = analise.porUsuario[u]?.lidos || 0
-      const comProblema = analise.porUsuario[u]?.comProblema || 0
-      const pendentes = analise.porUsuario[u]?.pendentes || 0
+      const lidos = porUsuario[u]?.lidos || 0
+      const comProblema = porUsuario[u]?.comProblema || 0
+      const pendentes = porUsuario[u]?.pendentes || 0
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
 
@@ -815,19 +817,20 @@ const dadosUsuarios = computed(() => {
 const analiseUsuarios = computed(() => {
   if (!auditoria.value?.analise) return null
   const usuarios = auditoria.value.analise.usuarios
-  if (usuarios.length === 0) return null
+  if (!Array.isArray(usuarios) || usuarios.length === 0) return null
 
-  const totalLidos = usuarios.reduce((sum, u) => sum + (auditoria.value.analise.porUsuario[u]?.lidos || 0), 0)
+  const porUsuario = auditoria.value.analise.porUsuario || {}
+  const totalLidos = usuarios.reduce((sum, u) => sum + (porUsuario[u]?.lidos || 0), 0)
   const mediaLidosPorUsuario = Math.round(totalLidos / usuarios.length)
-  const usuarioMaisProdutivo = usuarios.sort((a, b) =>
-    (auditoria.value.analise.porUsuario[b]?.lidos || 0) - (auditoria.value.analise.porUsuario[a]?.lidos || 0)
+  const usuarioMaisProdutivo = [...usuarios].sort((a, b) =>
+    (porUsuario[b]?.lidos || 0) - (porUsuario[a]?.lidos || 0)
   )[0]
 
   return {
     totalUsuarios: usuarios.length,
     mediaLidasPorUsuario: mediaLidosPorUsuario,
     usuarioDestaque: usuarioMaisProdutivo,
-    lidasDestaque: auditoria.value.analise.porUsuario[usuarioMaisProdutivo]?.lidos || 0
+    lidasDestaque: porUsuario[usuarioMaisProdutivo]?.lidos || 0
   }
 })
 
@@ -919,13 +922,14 @@ const percentualPorUsuario = computed(() => {
   if (!auditoria.value?.analise) return {}
 
   const usuarios = auditoria.value.analise.usuarios || []
+  const porUsuario = auditoria.value.analise.porUsuario || {}
   const totalLidosGlobal = usuarios.reduce((sum, u) =>
-    sum + (auditoria.value.analise.porUsuario[u]?.lidos || 0), 0
+    sum + (porUsuario[u]?.lidos || 0), 0
   )
 
   const resultado = {}
   usuarios.forEach(u => {
-    const lidos = auditoria.value.analise.porUsuario[u]?.lidos || 0
+    const lidos = porUsuario[u]?.lidos || 0
     const percentual = totalLidosGlobal > 0 ? (lidos / totalLidosGlobal) * 100 : 0
     resultado[u] = {
       totalLidos: lidos,
@@ -1144,6 +1148,7 @@ const mapaSeteores = computed(() => {
   if (!auditoria.value?.dados || !auditoria.value?.analise) return {}
   
   const analise = auditoria.value.analise
+  if (!analise.porSetor) return {}
   const setores = {}
 
   Object.entries(analise.porSetor).forEach(([setor, dados]) => {
@@ -1809,7 +1814,7 @@ const dadosRelatorio = computed(() => {
     .slice(0, 20)
   
   // Locais sem leitura
-  const locaisSemLeitura = a.locaisSemLeitura || []
+  const locaisSemLeitura = auditoria.value.analise.locaisSemLeitura || []
   
   // Quantidade que falta para meta
   const faltaParaMeta = Math.max(0, percentualPendente - 3.0)
@@ -1983,6 +1988,7 @@ const itensRupturaFormatados = computed(() => {
 })
 
 const itensFornecedorFormatados = computed(() => {
+  if (!itensPorFornecedor.value) return []
   return itensPorFornecedor.value.map(item => {
     const lido = item._temPresenca !== undefined ? item._temPresenca : (item['Presença confirmada'] || false)
     return {
