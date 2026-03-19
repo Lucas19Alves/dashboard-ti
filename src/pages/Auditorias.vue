@@ -138,8 +138,17 @@ const submeterAuditoria = async () => {
     let dados = []
     const tipo = formulario.value.tipo
     const temEtiqueta = typeof store.processarExcelEtiqueta === 'function'
+    const temRuptura = typeof store.processarExcelRuptura === 'function'
+    const optsRuptura = {
+      dataAuditoria: formulario.value.data,
+      tipoAuditoria: tipo
+    }
     if (tipo === 'Presença') {
       dados = await store.processarExcelPresenca(formulario.value.arquivo)
+    } else if (tipo === 'Ruptura') {
+      dados = temRuptura
+        ? await store.processarExcelRuptura(formulario.value.arquivo, optsRuptura)
+        : await store.processarExcelPresenca(formulario.value.arquivo, optsRuptura)
     } else if (tipo === 'Etiqueta') {
       dados = temEtiqueta
         ? await store.processarExcelEtiqueta(formulario.value.arquivo)
@@ -157,8 +166,11 @@ const submeterAuditoria = async () => {
     const tipoEfetivo = formulario.value.tipo
     const skuValor = parseInt(formulario.value.sku) || 0
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
+    const temAnaliseRuptura = typeof store.analisarDadosRuptura === 'function'
     const analise = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados, skuValor)
+      : tipoEfetivo === 'Ruptura'
+        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
       : tipoEfetivo === 'Etiqueta'
         ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
         : store.analisarDadosPresenca(dados, skuValor)
