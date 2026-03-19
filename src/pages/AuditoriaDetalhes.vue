@@ -166,6 +166,31 @@ const tabelaItensRef = ref(null)
 const tabelaUsuariosRef = ref(null)
 const printAreaRelatorio = ref(null)
 const exibirTudoPDFItens = ref(false)
+const editandoSku = ref(false)
+const skuEditavel = ref('')
+
+const iniciarEdicaoSku = () => {
+  skuEditavel.value = String(auditoria.value?.sku || '')
+  editandoSku.value = true
+}
+
+const salvarSku = async () => {
+  const novoSku = parseInt(skuEditavel.value) || 0
+  if (novoSku > 0 && auditoria.value) {
+    await store.updateAuditoria(auditoria.value.id, {
+      sku: novoSku,
+      total: novoSku
+    })
+    store.addToast('SKU atualizado com sucesso!', 'success')
+  }
+  editandoSku.value = false
+  skuEditavel.value = ''
+}
+
+const cancelarEdicaoSku = () => {
+  editandoSku.value = false
+  skuEditavel.value = ''
+}
 
 // UI/UX Improvements - Collapse states
 const collapsedSections = ref({
@@ -216,11 +241,10 @@ onMounted(() => {
 
 const handleUploadCompleto = async ({ dados, analise }) => {
   if (auditoria.value) {
-    // Atualizar SKU automaticamente baseado em itens auditáveis
+    // Manter o SKU existente da auditoria (não atualizar pelo arquivo)
     await store.updateAuditoria(auditoria.value.id, {
       dados: dados,
       analise: analise,
-      sku: analise.totalItens, // SKU = total de itens auditáveis
       parcial: analise.parcialPercentual,
       total: analise.totalItens
     })
@@ -233,41 +257,35 @@ const handleUploadCompleto = async ({ dados, analise }) => {
 const metricasGerais = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
-  const atualizados = a.itensAtualizados || 0
-  let desatualizados = a.itensDesatualizados || 0
-  if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
-    const dadosArr = auditoria.value.dados
-    const soma = dadosArr.reduce((acc, item) => {
-      const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
-      return acc + (s.includes('desatualizad') ? 1 : 0)
-    }, 0)
-    if (soma > 0) desatualizados = soma
-  }
+  // Usar SKU da auditoria como base de cálculo
+  const sku = auditoria.value.sku || a.totalItens || 0
+  const itensPendentes = a.itensPendentes || 0
+  const itensDesatualizados = a.itensDesatualizados || 0
+
+  const totalItens = sku
+  const totalLidos = Math.max(0, totalItens - itensPendentes)
+  const itensAtualizados = Math.max(0, totalLidos - itensDesatualizados)
+  const pendentes = itensPendentes
+  // Itens com problema: lidos sem estoque + lido não pertence (apenas exibição)
   const comProblema = a.itensLidosComProblema != null
     ? a.itensLidosComProblema
     : ((a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
-  const totalLidos = (a.totalLidos != null)
-    ? a.totalLidos
-    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
-  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
-  const pendentesBrutos = a.itensPendentes || 0
-  const pendentes = Math.max(0, pendentesBrutos - comProblema)
-  const percentualConclusao = a.percentualConclusao ?? (totalAuditaveis > 0 ? (totalLidos / totalAuditaveis) * 100 : 0)
-  const percentualPendente = (totalAuditaveis > 0 ? (pendentes / totalAuditaveis) * 100 : 0)
-  
+  const percentualConclusao = totalItens > 0 ? (totalLidos / totalItens) * 100 : 0
+  const percentualPendente = totalItens > 0 ? (pendentes / totalItens) * 100 : 0
+
   return {
-    totalItens: totalAuditaveis,
-    lidosCorretamente: a.itensLidosCorretamente,
+    totalItens,
+    lidosCorretamente: itensAtualizados || totalLidos,
     pendentes,
-    comProblema: comProblema,
-    totalLidos: totalLidos,
-    atualizados,
-    desatualizados,
-    percentualConclusao: percentualConclusao, // % concluído (exato)
-    percentualPendente: percentualPendente, // % pendente (exato)
-    metaConclusao: 97.0, // Meta de conclusão
-    metaPendente: 3.0, // Meta de pendente (foco)
-    faltaParaMeta: Math.max(0, percentualPendente - 3.0), // Quanto falta para meta de 3%
+    comProblema,
+    totalLidos,
+    atualizados: itensAtualizados,
+    desatualizados: itensDesatualizados,
+    percentualConclusao,
+    percentualPendente,
+    metaConclusao: 97.0,
+    metaPendente: 3.0,
+    faltaParaMeta: Math.max(0, percentualPendente - 3.0),
     setoresParados: a.setoresParados?.length || 0,
     locaisCriticos: a.locaisSemLeitura?.length || 0
   }
@@ -279,10 +297,11 @@ const insights = computed(() => {
   const insights = []
   const a = auditoria.value.analise
   const dados = auditoria.value.dados
-  const totalLidos = (a.totalLidos != null) ? a.totalLidos : ((a.itensAtualizados || 0) + (a.itensDesatualizados || 0) + (a.itensLidoNaoPertence || 0) + (a.itensComEstoqueZero || 0))
-  const totalAuditaveis = (a.totalItens != null) ? a.totalItens : (totalLidos + (a.itensPendentes || 0))
-  const percentualConclusao = a.percentualConclusao || 0
-  const percentualPendente = a.parcialPercentual || 0
+  const metricas = metricasGerais.value
+  const totalLidos = metricas?.totalLidos ?? 0
+  const totalAuditaveis = metricas?.totalItens ?? 0
+  const percentualConclusao = metricas?.percentualConclusao ?? 0
+  const percentualPendente = metricas?.percentualPendente ?? 0
 
   // Insight 1: Status da Meta
   if (percentualPendente <= 3.0) {
@@ -461,12 +480,9 @@ const horasEntre = (inicio, fim) => {
 const projecoes = computed(() => {
   if (!auditoria.value?.analise) return null
   const a = auditoria.value.analise
-  const totalLidos = (a.totalLidos != null)
-    ? a.totalLidos
-    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
-  const totalAuditaveis = (a.totalItens != null)
-    ? a.totalItens
-    : (totalLidos + (a.itensPendentes || 0))
+  const sku = auditoria.value.sku || a.totalItens || 0
+  const totalLidos = Math.max(0, sku - (a.itensPendentes || 0))
+  const totalAuditaveis = sku
 
   const agora = new Date()
   const ini = parseHoraHoje(horarioInicio.value)
@@ -1779,16 +1795,13 @@ const setoresComAnaliseFiltered = computed(() => {
 const dadosRelatorio = computed(() => {
   if (!auditoria.value?.analise) return null
   
-  const a = auditoria.value.analise
-  const totalLidos = (a.totalLidos != null)
-    ? a.totalLidos
-    : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
-  const totalAuditaveis = (a.totalItens != null)
-    ? a.totalItens
-    : (totalLidos + (a.itensPendentes || 0))
-  const percentualConclusao = a.percentualConclusao || 0
-  const percentualPendente = metricasGerais.value?.percentualPendente ?? (a.parcialPercentual || 0)
-  const pendentesExibidos = metricasGerais.value?.pendentes ?? (a.itensPendentes || 0)
+  const metricas = metricasGerais.value
+  if (!metricas) return null
+  const totalAuditaveis = metricas.totalItens
+  const totalLidos = metricas.totalLidos
+  const percentualConclusao = metricas.percentualConclusao
+  const percentualPendente = metricas.percentualPendente
+  const pendentesExibidos = metricas.pendentes
   
   // Top 20 locais com mais itens pendentes
   const topLocaisPendentes = locaisComAnalise.value
@@ -1810,10 +1823,7 @@ const dadosRelatorio = computed(() => {
       totalAuditaveis: totalAuditaveis,
       totalLidos: totalLidos,
       pendentes: pendentesExibidos,
-      desatualizados: (a.itensDesatualizados || (Array.isArray(auditoria.value?.dados) ? auditoria.value.dados.reduce((acc, item) => {
-        const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
-        return acc + (s.includes('desatualizad') ? 1 : 0)
-      }, 0) : 0)),
+      desatualizados: metricas.desatualizados,
       percentualConclusao: percentualConclusao,
       percentualPendente: percentualPendente,
       metaConclusao: 97.0,
@@ -2049,10 +2059,28 @@ const fecharRelatorio = () => {
             <span>Voltar</span>
           </button>
           <h1 class="text-4xl font-bold">{{ auditoria.tipo }}</h1>
-          <p class="text-blue-100 mt-2">
-            <i class="fas fa-calendar mr-2"></i>{{ dataAuditoriaBR }} | 
-            <i class="fas fa-boxes mr-2"></i>SKU: {{ auditoria.sku }} | 
-            <i class="fas fa-tasks mr-2"></i>Total: {{ auditoria.analise?.totalItens || 0 }} itens
+          <p class="text-blue-100 mt-2 flex items-center flex-wrap gap-2">
+            <span><i class="fas fa-calendar mr-2"></i>{{ dataAuditoriaBR }}</span>
+            <span>|</span>
+            <span class="flex items-center gap-1">
+              <i class="fas fa-boxes mr-1"></i>SKU:
+              <template v-if="editandoSku">
+                <input
+                  v-model="skuEditavel"
+                  type="number"
+                  min="1"
+                  class="w-24 px-2 py-0.5 rounded text-gray-800 text-sm font-bold"
+                  @keyup.enter="salvarSku"
+                  @keyup.escape="cancelarEdicaoSku"
+                />
+                <button @click="salvarSku" class="text-green-300 hover:text-white ml-1" title="Salvar"><i class="fas fa-check"></i></button>
+                <button @click="cancelarEdicaoSku" class="text-red-300 hover:text-white ml-1" title="Cancelar"><i class="fas fa-times"></i></button>
+              </template>
+              <template v-else>
+                <span class="font-bold">{{ auditoria.sku }}</span>
+                <button v-if="!readOnly" @click="iniciarEdicaoSku" class="text-blue-200 hover:text-white ml-1" title="Editar SKU"><i class="fas fa-pencil-alt text-xs"></i></button>
+              </template>
+            </span>
           </p>
           <div v-if="statusBadge?.fechada" class="mt-3 inline-flex items-center gap-2">
             <span
