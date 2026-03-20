@@ -263,7 +263,32 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
 
   const dataItemAuditadoEmISO = (item) => {
     if (!item || typeof item !== 'object') return ''
-    return paraDataISO(item['Auditado em'] || item['Auditado Em'] || item['auditado em'] || item['Data'])
+    // Em planilhas de Ruptura com colunas repetidas, a coluna J (índice 9)
+    // é capturada em `_auditadoEmColJ` durante o parse e tem prioridade.
+    if (item._auditadoEmColJ) {
+      return paraDataISO(item._auditadoEmColJ)
+    }
+
+    const candidatas = [
+      item['Auditado em_9'],
+      item['Auditado em_10'],
+      item['Auditado em'],
+      item['Auditado Em'],
+      item['auditado em'],
+      item['Data']
+    ]
+
+    for (const valor of candidatas) {
+      const iso = paraDataISO(valor)
+      if (iso) return iso
+    }
+
+    const chaveDinamica = Object.keys(item).find((k) => normalizarTexto(k).startsWith('auditado em'))
+    if (chaveDinamica) {
+      return paraDataISO(item[chaveDinamica])
+    }
+
+    return ''
   }
 
   const temMarcadorNaoLidoComEstoque = (valor) => {
@@ -423,6 +448,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Converter para JSON
       const worksheet = workbook.Sheets[primeiraAba]
       const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+      // Mantém referência por índice de linha para extrair a coluna J (índice 9)
+      // mesmo quando o cabeçalho possui nomes duplicados.
+      const linhasMatriz = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' })
       if (dadosCompletos.length > 0) {
         const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
         const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s)
@@ -442,16 +470,18 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Normalizar e filtrar dados
       // primeiro faz a normalização e filtro de itens não auditáveis
       const filtrados = dadosCompletos
-        .map(item => {
+        .map((item, index) => {
           const temPresenca = temPresencaConfirmada(item)
           const estoque = extrairEstoque(item)
           const lidoNaoPertence = getLidoNaoPertence(item)
+          const auditadoEmColJ = linhasMatriz[index + 1]?.[9] || ''
           return {
             ...item,
             _temPresenca: temPresenca,
             _estoque: estoque,
             _situacao: item['Situação'] || item['Situação atual da auditoria'] || '',
-            _lidoNaoPertence: lidoNaoPertence
+            _lidoNaoPertence: lidoNaoPertence,
+            _auditadoEmColJ: auditadoEmColJ
           }
         })
         .filter(item => {
@@ -826,11 +856,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return analise
   }
 
-  const analisarDadosRuptura = (dados, sku = 0) => {
-    // Regra de Ruptura segue o mesmo cálculo-base de Presença:
-    // pendentes = "Sem Presença e Com Estoque"; totalLidos = SKU - pendentes;
-    // problemas apenas para exibição.
-    return analisarDadosPresenca(dados, sku)
+  const analisarDadosRuptura = (dados, sku = 0, opts = {}) => {
+    const auditoriaDiaISO = paraDataISO(opts?.dataAuditoria)
+    if (!auditoriaDiaISO) {
+      return analisarDadosPresenca(dados, sku)
+    }
+
+    // Em Ruptura, só conta pendência quando for "Sem Presença e Com Estoque"
+    // E o "Auditado em" (coluna J) for do mesmo dia da auditoria.
+    const dadosAjustados = (dados || []).map((item) => {
+      const temPresenca = item?._temPresenca || false
+      const estoque = item?._estoque || 0
+      if (temPresenca || estoque <= 0) return item
+
+      const dataItemISO = dataItemAuditadoEmISO(item)
+      if (dataItemISO === auditoriaDiaISO) {
+        return item
+      }
+
+      // Fora da data da auditoria: não entra como pendente.
+      // Ajusta apenas para reutilizar a regra-base sem duplicação.
+      return {
+        ...item,
+        _temPresenca: true
+      }
+    })
+
+    return analisarDadosPresenca(dadosAjustados, sku)
   }
 
   const analisarDadosEtiqueta = (dados, sku = 0) => {

@@ -352,12 +352,16 @@ const processar = async () => {
     // Usar o tipo definido na auditoria (já foi selecionado no formulário)
     const tipoEfetivo = props.auditoria?.tipo || 'Etiqueta'
     const skuValor = props.auditoria?.sku || 0
+    const optsAnaliseRuptura = {
+      dataAuditoria: props.auditoria?.data,
+      tipoAuditoria: tipoEfetivo
+    }
     const temAnaliseEtiqueta = typeof store.analisarDadosEtiqueta === 'function'
     const temAnaliseRuptura = typeof store.analisarDadosRuptura === 'function'
     analise.value = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados, skuValor)
       : tipoEfetivo === 'Ruptura'
-        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
+        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor, optsAnaliseRuptura) : store.analisarDadosPresenca(dados, skuValor))
       : tipoEfetivo === 'Etiqueta'
         ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
         : store.analisarDadosPresenca(dados, skuValor)
