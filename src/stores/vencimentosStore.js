@@ -177,11 +177,22 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     return Array.from(s).sort()
   })
 
+  const limparVencimentos = async () => {
+    itens.value = []
+    analise.value = null
+    try {
+      await db.vencimentos.clear()
+    } catch (e) {
+      console.error('Erro ao limpar vencimentos do IndexedDB', e)
+    }
+  }
+
   return {
     itens,
     analise,
     setores,
     processarExcelVencimentos,
-    carregarVencimentosPersistidos
+    carregarVencimentosPersistidos,
+    limparVencimentos
   }
 })

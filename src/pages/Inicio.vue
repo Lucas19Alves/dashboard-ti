@@ -331,30 +331,33 @@ const statusAuditorias = computed(() => {
                 <div v-if="setoresCriticos.length === 0" class="text-sm text-gray-500">
                   Sem dados de setores críticos.
                 </div>
-                <div v-else class="space-y-3">
+                <div v-else class="space-y-2">
                   <div
-                    v-for="s in setoresCriticos"
+                    v-for="(s, idx) in setoresCriticos"
                     :key="s.nome"
-                    class="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2.5 hover:bg-slate-50 transition"
+                    class="flex items-center gap-3 rounded-xl px-3.5 py-3 transition-colors border"
+                    :class="s.vencidos > 0 ? 'bg-red-50/60 border-red-100 hover:bg-red-50' : s.hoje > 0 ? 'bg-orange-50/50 border-orange-100 hover:bg-orange-50' : 'bg-yellow-50/50 border-yellow-100 hover:bg-yellow-50'"
                   >
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-gray-900 truncate">{{ s.nome }}</p>
-                      <p class="text-[11px] text-gray-500">
-                        {{ s.total }} itens monitorados
-                      </p>
+                    <span
+                      class="flex-shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-lg text-xs font-bold text-white"
+                      :class="s.vencidos > 0 ? 'bg-red-500' : s.hoje > 0 ? 'bg-orange-400' : 'bg-yellow-400'"
+                    >
+                      {{ idx + 1 }}
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold text-gray-900 truncate">{{ s.nome }}</p>
+                      <p class="text-[11px] text-gray-500 mt-0.5">{{ s.total }} itens monitorados</p>
                     </div>
-                    <div class="flex items-center gap-3">
-                      <div class="text-right text-xs">
-                        <div class="text-red-700 font-semibold">Vencidos: {{ s.vencidos }}</div>
-                        <div class="text-orange-700">Hoje: {{ s.hoje }}</div>
-                        <div class="text-yellow-700">Até 3: {{ s.ate3 }}</div>
-                      </div>
-                      <div class="w-20 h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div
-                          class="h-full bg-gradient-to-r from-red-500 via-orange-500 to-yellow-400"
-                          :style="{ width: Math.min(100, ((s.vencidos + s.hoje + s.ate3) / (s.total || 1)) * 100) + '%' }"
-                        ></div>
-                      </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                      <span v-if="s.vencidos > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                        {{ s.vencidos }}
+                      </span>
+                      <span v-if="s.hoje > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                        {{ s.hoje }}
+                      </span>
+                      <span v-if="s.ate3 > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                        {{ s.ate3 }}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -605,8 +605,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
             _estoque: estoque,
             _temEstoqueSituacao: estoqueSituacao,
             _situacao: item['Situação'] || item['Situação atual da auditoria'] || '',
-            _lidoNaoPertence: lidoNaoPertence,
-            _auditadoEmColJ: auditadoEmColJ
+            _lidoNaoPertence: lidoNaoPertence
           }
         })
         .filter(item => {
