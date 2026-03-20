@@ -8,55 +8,71 @@ import { printTableInNewWindow } from '../utils/print'
 const store = useVencimentosStore()
 const toastStore = useAuditoriasStore()
 
+// --- Estado ---
 const arquivo = ref(null)
 const carregando = ref(false)
+const mostrarUpload = ref(false)
+const hoverDrop = ref(false)
+const inputRef = ref(null)
+
+// Abas (3 tabs)
+const abaAtiva = ref('visao')
+const abas = ['visao', 'explorar', 'analise']
+const abasDisplay = { visao: 'Visao Geral', explorar: 'Explorar', analise: 'Analise' }
+const iconeAba = (tab) => ({
+  visao: 'fas fa-chart-line',
+  explorar: 'fas fa-search',
+  analise: 'fas fa-chart-bar'
+})[tab]
+
+// Filtros (aba Explorar)
 const filtroSetor = ref('')
 const filtroFornecedor = ref('')
 const filtroStatus = ref('')
 const busca = ref('')
 const setorFocus = ref('')
 const fornecedorSelecionado = ref('')
-const hoverDrop = ref(false)
-const inputRef = ref(null)
+
+// Modais
 const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
-const mostrarUpload = ref(true)
+const modalFornecedorAberto = ref(false)
+
+// Refs de impressao
+const tabelaFornecedorRef = ref(null)
+const tabelaSetorItensRef = ref(null)
+const tabelaItensFiltradosRef = ref(null)
+const exibirTudoFornecedorPrint = ref(false)
+const exibirTudoSetorPrint = ref(false)
+const exibirTudoItensPrint = ref(false)
+
+// Status filter pills config
+const statusPills = [
+  { valor: '', label: 'Todos', icone: 'fas fa-layer-group', cor: 'bg-slate-100 text-slate-700 border-slate-200', corAtiva: 'bg-slate-700 text-white border-slate-700' },
+  { valor: 'vencidos', label: 'Vencidos', icone: 'fas fa-times-circle', cor: 'bg-red-50 text-red-700 border-red-200', corAtiva: 'bg-red-600 text-white border-red-600' },
+  { valor: 'hoje', label: 'Hoje', icone: 'fas fa-clock', cor: 'bg-orange-50 text-orange-700 border-orange-200', corAtiva: 'bg-orange-500 text-white border-orange-500' },
+  { valor: 'ate3', label: 'Ate 3 dias', icone: 'fas fa-hourglass-half', cor: 'bg-yellow-50 text-yellow-700 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500' },
+  { valor: 'futuro', label: 'Futuro', icone: 'fas fa-check-circle', cor: 'bg-green-50 text-green-700 border-green-200', corAtiva: 'bg-green-600 text-white border-green-600' }
+]
 
 onMounted(() => {
   store.carregarVencimentosPersistidos()
-  if (store.itens.length > 0) {
-    mostrarUpload.value = false
+  if (store.itens.length === 0) {
+    mostrarUpload.value = true
   }
 })
 
-const escolherArquivo = (e) => {
-  arquivo.value = e.target.files?.[0] || null
-}
-
+// --- Upload ---
+const escolherArquivo = (e) => { arquivo.value = e.target.files?.[0] || null }
 const onDropArquivo = (e) => {
   e.preventDefault()
   const f = e.dataTransfer?.files?.[0]
   if (f) arquivo.value = f
   hoverDrop.value = false
 }
-const onDragOverArquivo = (e) => {
-  e.preventDefault()
-  hoverDrop.value = true
-}
-const onDragLeaveArquivo = () => {
-  hoverDrop.value = false
-}
-const dispararSelecao = () => {
-  inputRef.value?.click()
-}
-
-const formatarData = (d) => {
-  if (!d || !(d instanceof Date) || isNaN(d)) return '—'
-  const dia = String(d.getDate()).padStart(2, '0')
-  const mes = String(d.getMonth() + 1).padStart(2, '0')
-  const ano = d.getFullYear()
-  return `${dia}/${mes}/${ano}`
-}
+const onDragOverArquivo = (e) => { e.preventDefault(); hoverDrop.value = true }
+const onDragLeaveArquivo = () => { hoverDrop.value = false }
+const dispararSelecao = () => { inputRef.value?.click() }
 
 const carregarPlanilha = async () => {
   if (!arquivo.value) {
@@ -68,6 +84,7 @@ const carregarPlanilha = async () => {
     await store.processarExcelVencimentos(arquivo.value)
     toastStore.addToast(`Planilha carregada: ${store.itens.length} itens`, 'success')
     mostrarUpload.value = false
+    arquivo.value = null
   } catch (e) {
     toastStore.addToast('Erro ao processar arquivo: ' + (e?.message || 'desconhecido'), 'error')
   } finally {
@@ -75,70 +92,66 @@ const carregarPlanilha = async () => {
   }
 }
 
+const limparDados = async () => {
+  if (!confirm('Tem certeza que deseja remover todos os dados de vencimentos?')) return
+  await store.limparVencimentos()
+  mostrarUpload.value = true
+  abaAtiva.value = 'visao'
+  toastStore.addToast('Dados de vencimentos removidos.', 'info')
+}
+
+// --- Formatacao ---
+const formatarData = (d) => {
+  if (!d || !(d instanceof Date) || isNaN(d)) return '—'
+  const dia = String(d.getDate()).padStart(2, '0')
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const ano = d.getFullYear()
+  return `${dia}/${mes}/${ano}`
+}
+
+const prazoBadgeClasses = (prazo) => ({
+  'text-red-700 bg-red-50 border-red-200': prazo === 'vencidos',
+  'text-orange-700 bg-orange-50 border-orange-200': prazo === 'hoje',
+  'text-yellow-700 bg-yellow-50 border-yellow-200': prazo === 'ate3',
+  'text-gray-700 bg-gray-50 border-gray-200': prazo === 'futuro'
+})
+
+const prazoBadgeLabel = (prazo) =>
+  ({ vencidos: 'Vencido', hoje: 'Hoje', ate3: 'Ate 3 dias', futuro: 'Futuro' })[prazo] || prazo
+
+// --- Computed: Resumo ---
 const resumo = computed(() => store.analise || { total: 0, vencidos: 0, hoje: 0, ate3: 0 })
 
-const totalCriticosPrazo = computed(() => resumo.value.vencidos + resumo.value.hoje + resumo.value.ate3)
-
-const statusValidades = computed(() => {
+// --- Computed: Alerta Banner ---
+const alertaBanner = computed(() => {
   const r = resumo.value
-  if (!r.total) {
-    return {
-      titulo: 'Sem dados de validades',
-      descricao: 'Importe uma planilha para visualizar a saúde das validades.',
-      classe: 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (r.vencidos > 0) {
-    return {
-      titulo: 'Risco alto em validades',
-      descricao: `${r.vencidos} itens já vencidos e ${r.hoje + r.ate3} muito próximos.`,
-      classe: 'bg-red-50 text-red-800'
-    }
-  }
-  if (r.hoje + r.ate3 > 0) {
-    return {
-      titulo: 'Atenção aos próximos dias',
-      descricao: `${r.hoje + r.ate3} itens vencendo hoje ou em até 3 dias.`,
-      classe: 'bg-yellow-50 text-yellow-800'
-    }
-  }
-  return {
-    titulo: 'Validades sob controle',
-    descricao: 'Nenhum item crítico nos próximos dias.',
-    classe: 'bg-green-50 text-green-800'
-  }
+  if (!r.total) return { icone: 'fas fa-info-circle', texto: 'Nenhum dado carregado.', classe: 'bg-slate-50 border-slate-200 text-slate-700', iconeCor: 'text-slate-400' }
+  if (r.vencidos > 0) return { icone: 'fas fa-exclamation-circle', texto: `Atencao: ${r.vencidos} itens vencidos requerem acao imediata. ${r.hoje + r.ate3} itens vencem nos proximos 3 dias.`, classe: 'bg-red-50 border-red-200 text-red-800', iconeCor: 'text-red-500' }
+  if (r.hoje + r.ate3 > 0) return { icone: 'fas fa-exclamation-triangle', texto: `${r.hoje} itens vencem hoje e ${r.ate3} nos proximos 3 dias. Planeje acoes preventivas.`, classe: 'bg-amber-50 border-amber-200 text-amber-800', iconeCor: 'text-amber-500' }
+  return { icone: 'fas fa-check-circle', texto: 'Todas as validades estao sob controle. Nenhum item critico encontrado.', classe: 'bg-emerald-50 border-emerald-200 text-emerald-800', iconeCor: 'text-emerald-500' }
 })
 
-const fornecedores = computed(() => {
-  const set = new Set()
-  store.itens.forEach(i => { if (i._fornecedor) set.add(i._fornecedor) })
-  return Array.from(set).sort()
+// --- Computed: Itens Criticos (Visao Geral) ---
+const itensCriticosPainel = computed(() => {
+  const rank = { vencidos: 0, hoje: 1, ate3: 2 }
+  return store.itens
+    .filter(i => ['vencidos', 'hoje', 'ate3'].includes(i._prazo))
+    .sort((a, b) => {
+      const ra = rank[a._prazo] ?? 9
+      const rb = rank[b._prazo] ?? 9
+      if (ra !== rb) return ra - rb
+      return (a._diasParaVencer ?? 9999) - (b._diasParaVencer ?? 9999)
+    })
+    .slice(0, 10)
 })
 
+const verCriticos = () => {
+  filtroStatus.value = 'vencidos'
+  abaAtiva.value = 'explorar'
+}
+
+// --- Computed: Setores ---
 const setores = computed(() => store.setores || [])
-
-const itensFiltrados = computed(() => {
-  const q = busca.value.toLowerCase().trim()
-  const setSel = (filtroSetor.value || setorFocus.value || '').toLowerCase().trim()
-  const fornSel = (filtroFornecedor.value || '').toLowerCase().trim()
-  const stSel = (filtroStatus.value || '').toLowerCase().trim()
-  return store.itens.filter(i => {
-    const matchBusca = !q || (String(i._produto).toLowerCase().includes(q) || String(i._codigo).toLowerCase().includes(q))
-    const matchSetor = !setSel || String(i._setor).toLowerCase().trim() === setSel
-    const matchForn = !fornSel || String(i._fornecedor).toLowerCase().trim() === fornSel
-    const matchStatus = !stSel || String(i._prazo) === stSel
-    return matchBusca && matchSetor && matchForn && matchStatus
-  })
-})
-
-const colunasSetores = [
-  { chave: 'nome', titulo: 'Setor', sortable: true },
-  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
-  { chave: 'vencidos', titulo: 'Vencidos', sortable: true, alinhamento: 'right' },
-  { chave: 'hoje', titulo: 'Hoje', sortable: true, alinhamento: 'right' },
-  { chave: 'ate3', titulo: 'Até 3 dias', sortable: true, alinhamento: 'right' },
-  { chave: 'acoes', titulo: 'Ações', sortable: false, alinhamento: 'center' }
-]
 
 const linhasSetores = computed(() => {
   const a = store.analise?.porSetor || {}
@@ -152,42 +165,41 @@ const linhasSetores = computed(() => {
   .sort((a, b) => b.vencidos - a.vencidos || b.hoje - a.hoje || b.ate3 - a.ate3)
 })
 
-const setarFocusSetor = (nome) => {
-  setorFocus.value = nome || ''
-  filtroSetor.value = nome || ''
-  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+const setoresAnalise = computed(() => {
+  return linhasSetores.value.map(s => {
+    const futuro = s.total - s.vencidos - s.hoje - s.ate3
+    const maxVal = Math.max(s.vencidos, s.hoje, s.ate3, futuro, 1)
+    return {
+      ...s,
+      futuro,
+      maxVal,
+      barVencidos: Math.round((s.vencidos / maxVal) * 100),
+      barHoje: Math.round((s.hoje / maxVal) * 100),
+      barAte3: Math.round((s.ate3 / maxVal) * 100),
+      barFuturo: Math.round((futuro / maxVal) * 100)
+    }
+  })
+})
+
+const abrirModalSetor = (nome) => {
+  setorModalNome.value = nome || 'Todos'
+  modalSetorAberto.value = true
 }
-
-const limparFocus = () => {
-  setorFocus.value = ''
+const fecharModalSetor = () => {
+  modalSetorAberto.value = false
+  setorModalNome.value = ''
 }
+const itensSetorModal = computed(() => {
+  if (!setorModalNome.value || setorModalNome.value === 'Todos') return store.itens
+  return store.itens.filter(i => i._setor === setorModalNome.value)
+})
 
-const colunasItens = [
-  { chave: '_codigo', titulo: 'Código', sortable: true },
-  { chave: '_produto', titulo: 'Produto', sortable: true },
-  { chave: '_setor', titulo: 'Setor', sortable: true },
-  { chave: '_fornecedor', titulo: 'Fornecedor', sortable: true },
-  { chave: '_local', titulo: 'Local', sortable: true },
-  { chave: '_validadeISO', titulo: 'Validade', sortable: true },
-  { chave: '_diasParaVencer', titulo: 'Dias', sortable: true, alinhamento: 'right' },
-  { chave: '_estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
-  { chave: '_prazo', titulo: 'Status', sortable: true }
-]
-
-const rowClassPrazo = (item) => {
-  if (item._prazo === 'vencidos') return 'bg-red-50'
-  if (item._prazo === 'hoje') return 'bg-orange-50'
-  if (item._prazo === 'ate3') return 'bg-yellow-50'
-  return ''
-}
-
-const colunasFornecedores = [
-  { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true },
-  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
-  { chave: 'vencidos', titulo: 'Vencidos', sortable: true, alinhamento: 'right' },
-  { chave: 'hoje', titulo: 'Hoje', sortable: true, alinhamento: 'right' },
-  { chave: 'ate3', titulo: 'Até 3 dias', sortable: true, alinhamento: 'right' }
-]
+// --- Computed: Fornecedores ---
+const fornecedores = computed(() => {
+  const set = new Set()
+  store.itens.forEach(i => { if (i._fornecedor) set.add(i._fornecedor) })
+  return Array.from(set).sort()
+})
 
 const linhasFornecedores = computed(() => {
   const mapa = {}
@@ -202,16 +214,22 @@ const linhasFornecedores = computed(() => {
   return Object.values(mapa).sort((a, b) => b.vencidos - a.vencidos || b.hoje - a.hoje || b.ate3 - a.ate3)
 })
 
-const rowClassResumo = (item) => {
-  if ((item.vencidos || 0) > 0 || (item.hoje || 0) > 0) return 'bg-red-50'
-  if ((item.ate3 || 0) > 0) return 'bg-yellow-50'
-  return ''
-}
+const fornecedoresRanking = computed(() => {
+  return linhasFornecedores.value
+    .map(f => {
+      const criticos = f.vencidos + f.hoje + f.ate3
+      return { ...f, criticos }
+    })
+    .filter(f => f.criticos > 0)
+    .slice(0, 15)
+})
 
 const abrirItensFornecedor = (row) => {
   fornecedorSelecionado.value = row.fornecedor
+  modalFornecedorAberto.value = true
 }
 const limparFornecedor = () => {
+  modalFornecedorAberto.value = false
   fornecedorSelecionado.value = ''
 }
 const itensFornecedor = computed(() => {
@@ -219,11 +237,80 @@ const itensFornecedor = computed(() => {
   return store.itens.filter(i => i._fornecedor === fornecedorSelecionado.value)
 })
 
-const tabelaFornecedorRef = ref(null)
-const tabelaSetorItensRef = ref(null)
-const exibirTudoFornecedorPrint = ref(false)
-const exibirTudoSetorPrint = ref(false)
+// --- Computed: Filtros (aba Explorar) ---
+const itensFiltrados = computed(() => {
+  const q = busca.value.toLowerCase().trim()
+  const setSel = (filtroSetor.value || setorFocus.value || '').toLowerCase().trim()
+  const fornSel = (filtroFornecedor.value || '').toLowerCase().trim()
+  const stSel = (filtroStatus.value || '').toLowerCase().trim()
+  return store.itens.filter(i => {
+    const matchBusca = !q || (String(i._produto).toLowerCase().includes(q) || String(i._codigo).toLowerCase().includes(q))
+    const matchSetor = !setSel || String(i._setor).toLowerCase().trim() === setSel
+    const matchForn = !fornSel || String(i._fornecedor).toLowerCase().trim() === fornSel
+    const matchStatus = !stSel || String(i._prazo) === stSel
+    return matchBusca && matchSetor && matchForn && matchStatus
+  })
+})
 
+const temFiltrosAtivos = computed(() => busca.value || filtroSetor.value || filtroFornecedor.value || filtroStatus.value)
+
+const filtrosAtivos = computed(() => {
+  const tags = []
+  if (busca.value) tags.push({ tipo: 'busca', label: `Busca: "${busca.value}"`, limpar: () => { busca.value = '' } })
+  if (filtroSetor.value) tags.push({ tipo: 'setor', label: `Setor: ${filtroSetor.value}`, limpar: () => { filtroSetor.value = '' } })
+  if (filtroFornecedor.value) tags.push({ tipo: 'fornecedor', label: `Fornecedor: ${filtroFornecedor.value}`, limpar: () => { filtroFornecedor.value = '' } })
+  if (filtroStatus.value) tags.push({ tipo: 'status', label: `Status: ${prazoBadgeLabel(filtroStatus.value)}`, limpar: () => { filtroStatus.value = '' } })
+  return tags
+})
+
+const limparTodosFiltros = () => {
+  busca.value = ''
+  filtroSetor.value = ''
+  filtroFornecedor.value = ''
+  filtroStatus.value = ''
+  setorFocus.value = ''
+}
+
+const navegarSetorExplorar = (nomeSetor) => {
+  filtroSetor.value = nomeSetor
+  abaAtiva.value = 'explorar'
+}
+
+// --- Colunas ---
+const colunasItens = [
+  { chave: '_codigo', titulo: 'Codigo', sortable: true },
+  { chave: '_produto', titulo: 'Produto', sortable: true },
+  { chave: '_setor', titulo: 'Setor', sortable: true },
+  { chave: '_fornecedor', titulo: 'Fornecedor', sortable: true },
+  { chave: '_local', titulo: 'Local', sortable: true },
+  { chave: '_validadeISO', titulo: 'Validade', sortable: true },
+  { chave: '_diasParaVencer', titulo: 'Dias', sortable: true, alinhamento: 'right' },
+  { chave: '_estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
+  { chave: '_prazo', titulo: 'Status', sortable: true }
+]
+
+const colunasFornecedores = [
+  { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true },
+  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
+  { chave: 'vencidos', titulo: 'Vencidos', sortable: true, alinhamento: 'right' },
+  { chave: 'hoje', titulo: 'Hoje', sortable: true, alinhamento: 'right' },
+  { chave: 'ate3', titulo: 'Ate 3 dias', sortable: true, alinhamento: 'right' }
+]
+
+const rowClassPrazo = (item) => {
+  if (item._prazo === 'vencidos') return 'bg-red-50'
+  if (item._prazo === 'hoje') return 'bg-orange-50'
+  if (item._prazo === 'ate3') return 'bg-yellow-50'
+  return ''
+}
+
+const rowClassResumo = (item) => {
+  if ((item.vencidos || 0) > 0 || (item.hoje || 0) > 0) return 'bg-red-50'
+  if ((item.ate3 || 0) > 0) return 'bg-yellow-50'
+  return ''
+}
+
+// --- Impressao ---
 const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
   if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
   const root = tabelaRef.value.$el
@@ -238,8 +325,7 @@ const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
     const obj = {}
     colunas.forEach((col, idx) => {
       const td = tds[idx]
-      const texto = td ? td.textContent ?? '' : ''
-      obj[col.chave] = String(texto).trim()
+      obj[col.chave] = String(td ? td.textContent ?? '' : '').trim()
     })
     dados.push(obj)
   })
@@ -252,314 +338,586 @@ const imprimir = async (alvo) => {
     await nextTick()
     const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaFornecedorRef, colunasItens)
     exibirTudoFornecedorPrint.value = false
-    const base = dadosOrdenados && dadosOrdenados.length
-      ? dadosOrdenados
-      : itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
-    const title = `Vencimentos - Fornecedor - ${fornecedorSelecionado.value}`
-    if (base.length && colunasItens.length) {
-      printTableInNewWindow(base, colunasItens, title)
-    }
+    const base = dadosOrdenados?.length ? dadosOrdenados : itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Fornecedor - ${fornecedorSelecionado.value}`)
   } else if (alvo === 'modal-setor') {
     exibirTudoSetorPrint.value = true
     await nextTick()
     const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaSetorItensRef, colunasItens)
     exibirTudoSetorPrint.value = false
-    const base = dadosOrdenados && dadosOrdenados.length
-      ? dadosOrdenados
-      : itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
-    const title = `Vencimentos - Setor - ${setorModalNome.value || 'Todos'}`
-    if (base.length && colunasItens.length) {
-      printTableInNewWindow(base, colunasItens, title)
-    }
+    const base = dadosOrdenados?.length ? dadosOrdenados : itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Setor - ${setorModalNome.value || 'Todos'}`)
+  } else if (alvo === 'filtrados') {
+    exibirTudoItensPrint.value = true
+    await nextTick()
+    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaItensFiltradosRef, colunasItens)
+    exibirTudoItensPrint.value = false
+    const base = dadosOrdenados?.length ? dadosOrdenados : itensFiltrados.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    const parts = []
+    if (filtroSetor.value) parts.push(`Setor: ${filtroSetor.value}`)
+    if (filtroFornecedor.value) parts.push(`Fornecedor: ${filtroFornecedor.value}`)
+    if (filtroStatus.value) parts.push(`Status: ${filtroStatus.value}`)
+    const title = 'Vencimentos' + (parts.length ? ' - ' + parts.join(' | ') : '')
+    if (base.length) printTableInNewWindow(base, colunasItens, title)
   }
 }
 
-const abrirModalSetor = (nome) => {
-  setorModalNome.value = nome || 'Todos'
-  modalSetorAberto.value = true
+const imprimirAnalise = (alvo) => {
+  if (alvo === 'setores') {
+    const dados = setoresAnalise.value.map(s => ({
+      nome: s.nome,
+      total: s.total,
+      vencidos: s.vencidos,
+      hoje: s.hoje,
+      ate3: s.ate3
+    }))
+    const colunas = [
+      { chave: 'nome', titulo: 'Setor' },
+      { chave: 'total', titulo: 'Total', alinhamento: 'right' },
+      { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
+      { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
+      { chave: 'ate3', titulo: 'Ate 3 dias', alinhamento: 'right' }
+    ]
+    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Analise por Setor')
+  } else if (alvo === 'fornecedores') {
+    const dados = fornecedoresRanking.value.map(f => ({
+      fornecedor: f.fornecedor,
+      criticos: f.criticos,
+      vencidos: f.vencidos,
+      hoje: f.hoje,
+      ate3: f.ate3,
+      total: f.total
+    }))
+    const colunas = [
+      { chave: 'fornecedor', titulo: 'Fornecedor' },
+      { chave: 'criticos', titulo: 'Criticos', alinhamento: 'right' },
+      { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
+      { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
+      { chave: 'ate3', titulo: 'Ate 3 dias', alinhamento: 'right' },
+      { chave: 'total', titulo: 'Total', alinhamento: 'right' }
+    ]
+    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Ranking de Fornecedores')
+  }
 }
-const fecharModalSetor = () => {
-  modalSetorAberto.value = false
-  setorModalNome.value = ''
-}
-const itensSetorModal = computed(() => {
-  if (!setorModalNome.value || setorModalNome.value === 'Todos') return store.itens
-  return store.itens.filter(i => i._setor === setorModalNome.value)
-})
 </script>
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8">
     <div class="max-w-7xl mx-auto space-y-6">
+
+      <!-- ===== HEADER ===== -->
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="flex items-center gap-3">
-          <div class="h-12 w-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
-            <i class="fas fa-calendar-alt text-2xl text-orange-600"></i>
+          <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <i class="fas fa-calendar-alt text-2xl text-white"></i>
           </div>
           <div>
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Vencimentos</h1>
-            <p class="text-sm text-gray-500 mt-1">
-              Painel de controle de validade dos itens.
-            </p>
+            <p class="text-sm text-gray-500 mt-1">Controle de validades e itens criticos</p>
           </div>
         </div>
-        <div
-          class="inline-flex items-center px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-gray-100 text-gray-700"
-          :class="statusValidades.classe"
-        >
-          <span class="font-semibold">{{ statusValidades.titulo }}</span>
-          <span class="hidden sm:inline text-[11px] md:text-xs opacity-90 ml-2">
-            {{ statusValidades.descricao }}
-          </span>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 gap-6">
-        <div v-if="mostrarUpload" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div class="flex justify-between items-center mb-3">
-          <h2 class="text-2xl font-bold text-gray-800">Carregar Planilha</h2>
-          <button v-if="store.itens.length > 0" @click="mostrarUpload = false" class="text-gray-500 hover:text-gray-700">
-            <i class="fas fa-times"></i>
+        <div class="flex items-center gap-2">
+          <button v-if="store.itens.length > 0" @click="mostrarUpload = true"
+            class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm text-sm">
+            <i class="fas fa-file-upload mr-2"></i>Nova Importacao
           </button>
-        </div>
-        <p class="text-gray-600 text-sm mb-4">Arraste e solte o arquivo .xlsx ou clique para selecionar.</p>
-        <div
-          class="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center transition cursor-pointer"
-          :class="hoverDrop ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'"
-          @dragover="onDragOverArquivo"
-          @dragleave="onDragLeaveArquivo"
-          @drop="onDropArquivo"
-          @click="dispararSelecao"
-        >
-          <i class="fas fa-file-excel text-4xl text-green-600 mb-2"></i>
-          <p class="text-gray-700 font-medium" v-if="!arquivo">Solte o arquivo aqui ou clique para selecionar</p>
-          <p class="text-gray-700 font-medium" v-else>{{ arquivo.name }} ({{ Math.ceil(arquivo.size/1024) }} KB)</p>
-          <input ref="inputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="escolherArquivo" />
-        </div>
-        <div class="flex items-center gap-2 mt-4">
-          <button
-            @click="carregarPlanilha"
-            :disabled="!arquivo || carregando"
-            class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
-          >
-            <i v-if="!carregando" class="fas fa-file-import mr-2"></i>
-            <i v-else class="fas fa-spinner fa-spin mr-2"></i>
-            {{ carregando ? 'Processando...' : 'Importar' }}
-          </button>
-          <button
-            @click="arquivo = null"
-            :disabled="carregando"
-            class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition"
-          >
-            Limpar
+          <button v-if="store.itens.length > 0" @click="limparDados"
+            class="px-3 py-2 rounded-lg bg-red-50 text-red-700 font-medium hover:bg-red-100 transition text-sm border border-red-200">
+            <i class="fas fa-trash-alt mr-1"></i>Limpar
           </button>
         </div>
       </div>
-      </div>
 
-      <div v-if="store.itens.length > 0" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div v-if="!mostrarUpload" class="col-span-1 md:col-span-4 flex justify-end">
-          <button @click="mostrarUpload = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm text-sm font-medium">
-            <i class="fas fa-file-upload mr-2"></i>Nova Importação
-          </button>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-blue-100 p-4">
-          <div class="flex items-center justify-between">
+      <!-- ===== UPLOAD MODAL ===== -->
+      <div v-if="mostrarUpload" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        @click="store.itens.length > 0 ? (mostrarUpload = false) : null">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden" @click.stop>
+          <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
             <div>
-              <p class="text-gray-600 text-sm font-medium">Total</p>
-              <p class="text-3xl font-bold text-gray-800">{{ resumo.total }}</p>
+              <h2 class="text-lg font-bold">Importar Planilha de Vencimentos</h2>
+              <p class="text-blue-100 text-sm mt-0.5">Arraste ou selecione um arquivo .xlsx</p>
             </div>
-            <i class="fas fa-list text-blue-600 text-3xl opacity-20"></i>
-          </div>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-600 text-sm font-medium">Vencidos</p>
-              <p class="text-3xl font-bold text-red-600">{{ resumo.vencidos }}</p>
-            </div>
-            <i class="fas fa-times-circle text-red-600 text-3xl opacity-20"></i>
-          </div>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-600 text-sm font-medium">Vencendo Hoje</p>
-              <p class="text-3xl font-bold text-orange-600">{{ resumo.hoje }}</p>
-            </div>
-            <i class="fas fa-bell text-orange-600 text-3xl opacity-20"></i>
-          </div>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-gray-600 text-sm font-medium">Até 3 dias</p>
-              <p class="text-3xl font-bold text-yellow-600">{{ resumo.ate3 }}</p>
-            </div>
-            <i class="fas fa-hourglass-half text-yellow-600 text-3xl opacity-20"></i>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-4">
-          <div>
-            <h2 class="text-2xl font-bold text-gray-800">Filtro</h2>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-2 w-full md:w-auto">
-            <input v-model="busca" placeholder="Buscar por código/produto" class="px-3 py-2 border rounded-md text-sm"/>
-            <select v-model="filtroSetor" class="px-3 py-2 border rounded-md text-sm">
-              <option value="">Todos os setores</option>
-              <option v-for="s in setores" :key="s" :value="s">{{ s }}</option>
-            </select>
-            <select v-model="filtroFornecedor" class="px-3 py-2 border rounded-md text-sm">
-              <option value="">Todos os fornecedores</option>
-              <option v-for="f in fornecedores" :key="f" :value="f">{{ f }}</option>
-            </select>
-            <select v-model="filtroStatus" class="px-3 py-2 border rounded-md text-sm">
-              <option value="">Todos os status</option>
-              <option value="vencidos">Vencidos</option>
-              <option value="hoje">Hoje</option>
-              <option value="ate3">Até 3 dias</option>
-              <option value="futuro">Futuro</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="border rounded-md">
-          <TabelaInterativaAuditoria
-            :dados="linhasSetores"
-            :colunas="colunasSetores"
-            titulo="Resumo por Setor"
-            subtitulo="Distribuição por prazo de validade"
-            :rowClass="rowClassResumo"
-            :exibirTudo="true"
-          >
-            <template #cell-vencidos="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200">{{ valor }}</span>
-            </template>
-            <template #cell-hoje="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200">{{ valor }}</span>
-            </template>
-            <template #cell-ate3="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200">{{ valor }}</span>
-            </template>
-            <template #cell-acoes="{ item }">
-              <button
-                @click.stop="abrirModalSetor(item.nome)"
-                class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-xs"
-              >
-                Ver itens
-              </button>
-            </template>
-          </TabelaInterativaAuditoria>
-        </div>
-
-      </div>
-
-      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-2xl font-bold text-gray-800">
-            Itens por Filtro
-            <span v-if="setorFocus" class="text-base font-medium text-gray-500 ml-2">(Setor: {{ setorFocus }})</span>
-          </h2>
-          <button v-if="setorFocus" @click="limparFocus" class="text-sm text-blue-600 hover:underline">Limpar setor</button>
-        </div>
-        <TabelaInterativaAuditoria
-          :dados="itensFiltrados.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-          :colunas="colunasItens"
-          titulo=""
-          :rowClass="rowClassPrazo"
-          :itensPorPagina="15"
-        >
-          <template #cell-_prazo="{ valor }">
-            <span
-              class="px-2 py-0.5 text-xs rounded-full border"
-              :class="{
-                'text-red-700 bg-red-50 border-red-200': valor === 'vencidos',
-                'text-orange-700 bg-orange-50 border-orange-200': valor === 'hoje',
-                'text-yellow-700 bg-yellow-50 border-yellow-200': valor === 'ate3',
-                'text-gray-700 bg-gray-50 border-gray-200': valor === 'futuro'
-              }"
-            >
-              {{ valor === 'vencidos' ? 'Vencidos' : valor === 'hoje' ? 'Hoje' : valor === 'ate3' ? 'Até 3 dias' : 'Futuro' }}
-            </span>
-          </template>
-        </TabelaInterativaAuditoria>
-      </div>
-
-      <div v-if="store.itens.length > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-6">
-        <TabelaInterativaAuditoria
-          :dados="linhasFornecedores"
-          :colunas="colunasFornecedores"
-          titulo="Resumo por Fornecedor"
-          :rowClass="rowClassResumo"
-          clickable
-          @click-row="abrirItensFornecedor"
-          :itensPorPagina="12"
-        >
-          <template #cell-vencidos="{ valor }">
-            <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200">{{ valor }}</span>
-          </template>
-          <template #cell-hoje="{ valor }">
-            <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200">{{ valor }}</span>
-          </template>
-          <template #cell-ate3="{ valor }">
-            <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200">{{ valor }}</span>
-          </template>
-        </TabelaInterativaAuditoria>
-        <div v-if="fornecedorSelecionado" class="mt-4">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-lg font-semibold text-gray-800">Itens do fornecedor: {{ fornecedorSelecionado }}</h3>
-            <button @click="limparFornecedor" class="text-sm text-blue-600 hover:underline">Fechar</button>
-          </div>
-          <TabelaInterativaAuditoria
-            ref="tabelaFornecedorRef"
-            :dados="itensFornecedor.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-            :colunas="colunasItens"
-            titulo=""
-            :rowClass="rowClassPrazo"
-            :itensPorPagina="10"
-            :exibirTudo="exibirTudoFornecedorPrint"
-          >
-            <template #cell-_prazo="{ valor }">
-              <span
-                class="px-2 py-0.5 text-xs rounded-full border"
-                :class="{
-                  'text-red-700 bg-red-50 border-red-200': valor === 'vencidos',
-                  'text-orange-700 bg-orange-50 border-orange-200': valor === 'hoje',
-                  'text-yellow-700 bg-yellow-50 border-yellow-200': valor === 'ate3',
-                  'text-gray-700 bg-gray-50 border-gray-200': valor === 'futuro'
-                }"
-              >
-                {{ valor === 'vencidos' ? 'Vencidos' : valor === 'hoje' ? 'Hoje' : valor === 'ate3' ? 'Até 3 dias' : 'Futuro' }}
-              </span>
-            </template>
-          </TabelaInterativaAuditoria>
-          <div class="mt-3 flex justify-end">
-            <button @click="imprimir('fornecedor')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-sm font-medium border border-gray-300 shadow-sm">
-              <i class="fas fa-print mr-2"></i>Imprimir Relatório
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div 
-        v-if="modalSetorAberto" 
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
-        @click="fecharModalSetor"
-      >
-        <div 
-          class="relative bg-white rounded-lg shadow-xl w-full max-w-6xl mx-4 overflow-hidden flex flex-col max-h-[90vh]"
-          @click.stop
-        >
-          <div class="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-            <h3 class="text-lg font-semibold text-gray-800">Itens do setor: {{ setorModalNome }}</h3>
-            <button @click="fecharModalSetor" class="text-gray-500 hover:text-gray-700">
+            <button v-if="store.itens.length > 0" @click="mostrarUpload = false" class="text-white hover:opacity-80 transition">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
-          <div class="p-4 overflow-y-auto">
+          <div class="p-6 space-y-4">
+            <div
+              class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition cursor-pointer"
+              :class="hoverDrop ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'"
+              @dragover="onDragOverArquivo" @dragleave="onDragLeaveArquivo" @drop="onDropArquivo" @click="dispararSelecao">
+              <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
+              <p class="text-gray-700 font-medium" v-if="!arquivo">Solte o arquivo aqui ou clique para selecionar</p>
+              <p class="text-gray-700 font-medium" v-else>{{ arquivo.name }} ({{ Math.ceil(arquivo.size / 1024) }} KB)</p>
+              <input ref="inputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="escolherArquivo" />
+            </div>
+            <div class="flex items-center gap-2">
+              <button @click="carregarPlanilha" :disabled="!arquivo || carregando"
+                class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed">
+                <i v-if="!carregando" class="fas fa-file-import mr-2"></i>
+                <i v-else class="fas fa-spinner fa-spin mr-2"></i>
+                {{ carregando ? 'Processando...' : 'Importar' }}
+              </button>
+              <button @click="arquivo = null" :disabled="carregando"
+                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition">
+                Limpar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== EMPTY STATE ===== -->
+      <div v-if="store.itens.length === 0 && !mostrarUpload" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
+        <i class="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
+        <p class="text-lg font-semibold text-gray-700">Nenhum dado de vencimento carregado</p>
+        <p class="text-sm text-gray-500 mt-1 mb-4">Importe uma planilha para comecar a monitorar as validades.</p>
+        <button @click="mostrarUpload = true" class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm">
+          <i class="fas fa-file-upload mr-2"></i>Importar Planilha
+        </button>
+      </div>
+
+      <!-- ===== TAB BAR ===== -->
+      <div v-if="store.itens.length > 0" class="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm -mx-4 md:-mx-8 px-4 md:px-8">
+        <div class="max-w-7xl mx-auto flex gap-0">
+          <button v-for="tab in abas" :key="tab" @click="abaAtiva = tab"
+            :class="['px-6 py-4 font-medium transition-all border-b-2 text-sm',
+              abaAtiva === tab
+                ? 'border-orange-600 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300']">
+            <i :class="iconeAba(tab)" class="mr-2"></i>{{ abasDisplay[tab] }}
+          </button>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ===== TAB 1: VISAO GERAL ===== -->
+      <!-- ============================================================ -->
+      <template v-if="store.itens.length > 0 && abaAtiva === 'visao'">
+
+        <!-- Alert Banner -->
+        <div class="rounded-2xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
+          <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" :class="alertaBanner.iconeCor">
+            <i :class="alertaBanner.icone" class="text-xl"></i>
+          </div>
+          <p class="text-sm font-medium flex-1">{{ alertaBanner.texto }}</p>
+          <button v-if="resumo.vencidos > 0" @click="verCriticos"
+            class="px-3 py-1.5 rounded-lg bg-white/80 text-sm font-semibold shadow-sm hover:bg-white transition shrink-0 border border-red-300 text-red-700">
+            Ver itens <i class="fas fa-arrow-right ml-1 text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Hero Metrics Row -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Total -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-blue-600 rounded-l-2xl"></div>
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total de Itens</p>
+                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-blue-700 tabular-nums">{{ resumo.total }}</p>
+                <p class="mt-1.5 text-xs text-slate-400">Itens com validade monitorada</p>
+              </div>
+              <div class="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-boxes text-lg text-blue-500"></i>
+              </div>
+            </div>
+          </div>
+          <!-- Vencidos -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-red-500 to-red-600 rounded-l-2xl"></div>
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
+                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
+                <p class="mt-1.5 text-xs text-red-400">Requer acao imediata</p>
+              </div>
+              <div class="h-11 w-11 rounded-xl bg-red-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-exclamation-triangle text-lg text-red-500"></i>
+              </div>
+            </div>
+          </div>
+          <!-- Hoje -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-orange-500 rounded-l-2xl"></div>
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencem Hoje</p>
+                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-orange-600 tabular-nums">{{ resumo.hoje }}</p>
+                <p class="mt-1.5 text-xs text-orange-400">Planejar acoes promocionais</p>
+              </div>
+              <div class="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-sun text-lg text-orange-500"></i>
+              </div>
+            </div>
+          </div>
+          <!-- Ate 3 dias -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-yellow-500 rounded-l-2xl"></div>
+            <div class="flex items-start justify-between">
+              <div>
+                <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Ate 3 Dias</p>
+                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
+                <p class="mt-1.5 text-xs text-yellow-500">Remarcacao e giro de estoque</p>
+              </div>
+              <div class="h-11 w-11 rounded-xl bg-yellow-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <i class="fas fa-hourglass-half text-lg text-yellow-500"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sector Breakdown (Table) -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="px-5 pt-5 md:px-6 md:pt-6 pb-3 flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Distribuicao de itens por status em cada setor. Clique para ver detalhes.</p>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-y border-slate-200">
+                  <th class="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Setor</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Total</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-red-500 uppercase tracking-wider w-24">Vencidos</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-orange-500 uppercase tracking-wider w-20">Hoje</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-yellow-600 uppercase tracking-wider w-20">Ate 3d</th>
+                  <th class="w-10"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="setor in setoresAnalise" :key="setor.nome"
+                  @click="abrirModalSetor(setor.nome)"
+                  class="cursor-pointer hover:bg-orange-50/60 transition-colors group"
+                  :class="setor.vencidos > 0 ? 'bg-red-50/60' : setor.hoje > 0 ? 'bg-orange-50/50' : setor.ate3 > 0 ? 'bg-yellow-50/50' : ''">
+                  <td class="px-5 py-3.5">
+                    <p class="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">{{ setor.nome }}</p>
+                  </td>
+                  <td class="px-4 py-3.5 text-center">
+                    <span class="font-bold text-slate-700 tabular-nums">{{ setor.total }}</span>
+                  </td>
+                  <td class="px-4 py-3.5 text-center">
+                    <span v-if="setor.vencidos > 0"
+                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-red-100 text-red-700 font-bold text-xs tabular-nums">
+                      {{ setor.vencidos }}
+                    </span>
+                    <span v-else class="text-slate-300 text-xs">—</span>
+                  </td>
+                  <td class="px-4 py-3.5 text-center">
+                    <span v-if="setor.hoje > 0"
+                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 font-bold text-xs tabular-nums">
+                      {{ setor.hoje }}
+                    </span>
+                    <span v-else class="text-slate-300 text-xs">—</span>
+                  </td>
+                  <td class="px-4 py-3.5 text-center">
+                    <span v-if="setor.ate3 > 0"
+                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-yellow-100 text-yellow-700 font-bold text-xs tabular-nums">
+                      {{ setor.ate3 }}
+                    </span>
+                    <span v-else class="text-slate-300 text-xs">—</span>
+                  </td>
+                  <td class="px-2 py-3.5 text-center">
+                    <i class="fas fa-chevron-right text-slate-300 group-hover:text-orange-400 transition-colors text-xs"></i>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Critical Items (Timeline Style) -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Itens Mais Criticos</h2>
+              <p class="text-xs text-slate-500">Top 10 itens com validade mais urgente</p>
+            </div>
+            <button @click="verCriticos"
+              class="text-xs text-orange-600 hover:text-orange-800 font-semibold flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-orange-50 transition">
+              Ver todos <i class="fas fa-arrow-right"></i>
+            </button>
+          </div>
+
+          <div v-if="itensCriticosPainel.length === 0" class="text-center py-10 text-gray-400">
+            <i class="fas fa-check-circle text-4xl mb-3 text-emerald-400"></i>
+            <p class="text-sm font-medium">Nenhum item critico encontrado</p>
+          </div>
+
+          <div v-else class="space-y-2.5">
+            <div v-for="(item, idx) in itensCriticosPainel" :key="item._codigo + item._validadeISO + idx"
+              class="flex items-center gap-3 px-4 py-3 rounded-xl border-l-4 bg-white shadow-xs hover:shadow-sm transition-shadow border border-slate-100"
+              :class="{
+                'border-l-red-500': item._prazo === 'vencidos',
+                'border-l-orange-400': item._prazo === 'hoje',
+                'border-l-yellow-400': item._prazo === 'ate3'
+              }">
+              <span class="px-2.5 py-1 text-[10px] rounded-lg border font-bold uppercase tracking-wide shrink-0"
+                :class="prazoBadgeClasses(item._prazo)">
+                {{ prazoBadgeLabel(item._prazo) }}
+              </span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-gray-900 truncate">{{ item._produto }}</p>
+                <p class="text-[11px] text-gray-500 mt-0.5">
+                  <span class="font-medium text-gray-600">{{ item._codigo }}</span>
+                  <span class="mx-1.5 text-slate-300">|</span>
+                  {{ item._setor }}
+                  <span v-if="item._fornecedor" class="mx-1.5 text-slate-300">|</span>
+                  <span v-if="item._fornecedor">{{ item._fornecedor }}</span>
+                </p>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold"
+                  :class="{
+                    'bg-red-100 text-red-700': item._prazo === 'vencidos',
+                    'bg-orange-100 text-orange-700': item._prazo === 'hoje',
+                    'bg-yellow-100 text-yellow-700': item._prazo === 'ate3'
+                  }">
+                  {{ item._diasParaVencer === 0 ? 'HOJE' : item._diasParaVencer < 0 ? `${Math.abs(item._diasParaVencer)}d atras` : `${item._diasParaVencer}d` }}
+                </span>
+                <p class="text-[10px] text-gray-400 mt-1">{{ formatarData(item._validadeDate) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </template>
+
+      <!-- ============================================================ -->
+      <!-- ===== TAB 2: EXPLORAR ===== -->
+      <!-- ============================================================ -->
+      <template v-if="store.itens.length > 0 && abaAtiva === 'explorar'">
+
+        <!-- Smart Filter Bar -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2">Status:</span>
+            <button v-for="pill in statusPills" :key="pill.valor"
+              @click="filtroStatus = pill.valor"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all"
+              :class="filtroStatus === pill.valor ? pill.corAtiva : pill.cor">
+              <i :class="pill.icone" class="text-[10px]"></i>
+              {{ pill.label }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input v-model="busca" placeholder="Buscar por codigo ou produto..."
+                class="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition bg-white" />
+            </div>
+            <select v-model="filtroSetor"
+              class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition">
+              <option value="">Todos os setores</option>
+              <option v-for="s in setores" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <select v-model="filtroFornecedor"
+              class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition">
+              <option value="">Todos os fornecedores</option>
+              <option v-for="f in fornecedores" :key="f" :value="f">{{ f }}</option>
+            </select>
+          </div>
+
+          <div v-if="filtrosAtivos.length > 0" class="flex flex-wrap items-center gap-2">
+            <span class="text-xs text-slate-400">Filtros ativos:</span>
+            <span v-for="tag in filtrosAtivos" :key="tag.tipo"
+              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-xs font-medium border border-orange-200">
+              {{ tag.label }}
+              <button @click="tag.limpar" class="ml-0.5 hover:text-red-600 transition">
+                <i class="fas fa-times text-[10px]"></i>
+              </button>
+            </span>
+            <button @click="limparTodosFiltros" class="text-xs text-red-500 hover:text-red-700 font-medium ml-2">
+              <i class="fas fa-times-circle mr-0.5"></i>Limpar todos
+            </button>
+          </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <p class="text-sm text-slate-600">
+              <span class="font-bold text-gray-900">{{ itensFiltrados.length }}</span> itens encontrados
+            </p>
+            <button @click="imprimir('filtrados')"
+              class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
+              <i class="fas fa-print mr-1.5"></i>Imprimir
+            </button>
+          </div>
+
+          <TabelaInterativaAuditoria
+            ref="tabelaItensFiltradosRef"
+            :dados="itensFiltrados.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
+            :colunas="colunasItens"
+            titulo=""
+            :rowClass="rowClassPrazo"
+            :itensPorPagina="15"
+            :exibirTudo="exibirTudoItensPrint"
+          >
+            <template #cell-_prazo="{ valor }">
+              <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">
+                {{ prazoBadgeLabel(valor) }}
+              </span>
+            </template>
+          </TabelaInterativaAuditoria>
+        </div>
+
+        <!-- Supplier Summary with Drill-Down -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Resumo por Fornecedor</h2>
+              <p class="text-xs text-slate-500">Clique em um fornecedor para ver seus itens</p>
+            </div>
+          </div>
+          <TabelaInterativaAuditoria
+            :dados="linhasFornecedores"
+            :colunas="colunasFornecedores"
+            titulo=""
+            :rowClass="rowClassResumo"
+            clickable
+            @click-row="abrirItensFornecedor"
+            :itensPorPagina="12"
+          >
+            <template #cell-vencidos="{ valor }">
+              <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{ valor }}</span>
+            </template>
+            <template #cell-hoje="{ valor }">
+              <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{ valor }}</span>
+            </template>
+            <template #cell-ate3="{ valor }">
+              <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{ valor }}</span>
+            </template>
+          </TabelaInterativaAuditoria>
+        </div>
+      </template>
+
+      <!-- ============================================================ -->
+      <!-- ===== TAB 3: ANALISE ===== -->
+      <!-- ============================================================ -->
+      <template v-if="store.itens.length > 0 && abaAtiva === 'analise'">
+
+        <!-- Print Actions Bar -->
+        <div class="flex items-center justify-end gap-2">
+          <button @click="imprimirAnalise('setores')"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
+            <i class="fas fa-print mr-1.5"></i>Imprimir Setores
+          </button>
+          <button @click="imprimirAnalise('fornecedores')"
+            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
+            <i class="fas fa-print mr-1.5"></i>Imprimir Fornecedores
+          </button>
+        </div>
+
+        <!-- Sector Breakdown (List) -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
+              <p class="text-xs text-slate-500">Distribuicao de itens por status em cada setor. Clique para ver detalhes.</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div v-for="setor in setoresAnalise" :key="setor.nome"
+              @click="abrirModalSetor(setor.nome)"
+              class="flex items-center gap-4 px-4 py-3.5 rounded-xl border cursor-pointer hover:border-orange-300 hover:shadow-sm transition-all group"
+              :class="setor.vencidos > 0 ? 'bg-red-50/70 border-red-200' : setor.hoje > 0 ? 'bg-orange-50/70 border-orange-200' : setor.ate3 > 0 ? 'bg-yellow-50/70 border-yellow-200' : 'bg-white border-slate-200'">
+
+              <!-- Sector name + total -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold text-gray-900 truncate group-hover:text-orange-600 transition-colors">{{ setor.nome }}</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">{{ setor.total }} itens</p>
+              </div>
+
+              <!-- Status badges -->
+              <div class="flex items-center gap-2 shrink-0">
+                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 min-w-[52px]">
+                  <span class="text-sm font-bold text-red-700 tabular-nums">{{ setor.vencidos }}</span>
+                  <span class="text-[9px] text-red-500 font-medium">Vencidos</span>
+                </div>
+                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 min-w-[52px]">
+                  <span class="text-sm font-bold text-orange-700 tabular-nums">{{ setor.hoje }}</span>
+                  <span class="text-[9px] text-orange-500 font-medium">Hoje</span>
+                </div>
+                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[52px]">
+                  <span class="text-sm font-bold text-yellow-700 tabular-nums">{{ setor.ate3 }}</span>
+                  <span class="text-[9px] text-yellow-600 font-medium">Ate 3d</span>
+                </div>
+              </div>
+
+              <i class="fas fa-chevron-right text-slate-300 group-hover:text-orange-400 transition-colors shrink-0"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supplier Ranking (Leaderboard) -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="text-base font-bold text-gray-900">Ranking de Fornecedores</h2>
+              <p class="text-xs text-slate-500">Fornecedores com mais itens criticos (vencidos + hoje + ate 3 dias)</p>
+            </div>
+          </div>
+
+          <div v-if="fornecedoresRanking.length === 0" class="text-center py-8 text-slate-400">
+            <i class="fas fa-trophy text-3xl mb-2 text-emerald-400"></i>
+            <p class="text-sm">Nenhum fornecedor com itens criticos</p>
+          </div>
+
+          <div v-else class="space-y-3">
+            <div v-for="(forn, idx) in fornecedoresRanking" :key="forn.fornecedor"
+              @click="abrirItensFornecedor(forn)"
+              class="flex items-center gap-4 px-4 py-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all">
+
+              <span class="text-lg font-extrabold tabular-nums shrink-0 w-8 text-center"
+                :class="idx === 0 ? 'text-red-600' : idx === 1 ? 'text-orange-500' : idx === 2 ? 'text-yellow-500' : 'text-slate-400'">
+                {{ idx + 1 }}
+              </span>
+
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-gray-900 truncate">{{ forn.fornecedor }}</p>
+                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mt-1.5 flex">
+                  <div v-if="forn.vencidos > 0" class="h-full bg-red-500 transition-all duration-500"
+                    :style="{ width: (forn.vencidos / forn.criticos * 100) + '%' }"></div>
+                  <div v-if="forn.hoje > 0" class="h-full bg-orange-400 transition-all duration-500"
+                    :style="{ width: (forn.hoje / forn.criticos * 100) + '%' }"></div>
+                  <div v-if="forn.ate3 > 0" class="h-full bg-yellow-400 transition-all duration-500"
+                    :style="{ width: (forn.ate3 / forn.criticos * 100) + '%' }"></div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 shrink-0 text-xs">
+                <span class="px-2 py-0.5 rounded-md bg-red-50 text-red-700 font-bold border border-red-200" title="Vencidos">{{ forn.vencidos }}</span>
+                <span class="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 font-bold border border-orange-200" title="Hoje">{{ forn.hoje }}</span>
+                <span class="px-2 py-0.5 rounded-md bg-yellow-50 text-yellow-700 font-bold border border-yellow-200" title="Ate 3 dias">{{ forn.ate3 }}</span>
+                <span class="font-extrabold text-sm text-slate-700">{{ forn.criticos }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ===== MODAL SETOR ===== -->
+      <div v-if="modalSetorAberto"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+        @click="fecharModalSetor">
+        <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
+          @click.stop>
+          <div class="bg-gradient-to-r from-orange-600 to-orange-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+            <div>
+              <h2 class="text-xl font-bold">{{ setorModalNome }}</h2>
+              <p class="text-orange-100 text-sm mt-1">{{ itensSetorModal.length }} itens neste setor</p>
+            </div>
+            <button @click="fecharModalSetor" class="text-white hover:opacity-80 transition">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-4 overflow-y-auto flex-1">
             <TabelaInterativaAuditoria
               ref="tabelaSetorItensRef"
               :dados="itensSetorModal.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
@@ -570,27 +928,66 @@ const itensSetorModal = computed(() => {
               :exibirTudo="exibirTudoSetorPrint"
             >
               <template #cell-_prazo="{ valor }">
-                <span
-                  class="px-2 py-0.5 text-xs rounded-full border"
-                  :class="{
-                    'text-red-700 bg-red-50 border-red-200': valor === 'vencidos',
-                    'text-orange-700 bg-orange-50 border-orange-200': valor === 'hoje',
-                    'text-yellow-700 bg-yellow-50 border-yellow-200': valor === 'ate3',
-                    'text-gray-700 bg-gray-50 border-gray-200': valor === 'futuro'
-                  }"
-                >
-                  {{ valor === 'vencidos' ? 'Vencidos' : valor === 'hoje' ? 'Hoje' : valor === 'ate3' ? 'Até 3 dias' : 'Futuro' }}
-                </span>
+                <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">{{ prazoBadgeLabel(valor) }}</span>
               </template>
             </TabelaInterativaAuditoria>
           </div>
-          <div class="px-4 py-3 border-t bg-gray-50 flex justify-end">
-            <button @click="imprimir('modal-setor')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium shadow-sm transition">
-              <i class="fas fa-print mr-2"></i>Imprimir Relatório
+          <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
+            <button @click="fecharModalSetor"
+              class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium text-sm">
+              Fechar
+            </button>
+            <button @click="imprimir('modal-setor')"
+              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-sm transition">
+              <i class="fas fa-print mr-2"></i>Imprimir
             </button>
           </div>
         </div>
       </div>
+
+      <!-- ===== MODAL FORNECEDOR ===== -->
+      <div v-if="modalFornecedorAberto && fornecedorSelecionado"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
+        @click="limparFornecedor">
+        <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
+          @click.stop>
+          <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+            <div>
+              <h2 class="text-xl font-bold"><i class="fas fa-truck mr-2"></i>{{ fornecedorSelecionado }}</h2>
+              <p class="text-blue-100 text-sm mt-1">{{ itensFornecedor.length }} itens deste fornecedor</p>
+            </div>
+            <button @click="limparFornecedor" class="text-white hover:opacity-80 transition">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="p-4 overflow-y-auto flex-1">
+            <TabelaInterativaAuditoria
+              ref="tabelaFornecedorRef"
+              :dados="itensFornecedor.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
+              :colunas="colunasItens"
+              titulo=""
+              :rowClass="rowClassPrazo"
+              :itensPorPagina="12"
+              :exibirTudo="exibirTudoFornecedorPrint"
+            >
+              <template #cell-_prazo="{ valor }">
+                <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">{{ prazoBadgeLabel(valor) }}</span>
+              </template>
+            </TabelaInterativaAuditoria>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
+            <button @click="limparFornecedor"
+              class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium text-sm">
+              Fechar
+            </button>
+            <button @click="imprimir('fornecedor')"
+              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-sm transition">
+              <i class="fas fa-print mr-2"></i>Imprimir
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
