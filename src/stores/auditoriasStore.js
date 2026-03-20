@@ -98,6 +98,121 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return false
   }
 
+  // Corrige planilhas com cabeçalhos agrupados (ex: "Auditado em" repetido).
+  // Retorna os dados com colunas padrão (Código, Situação, etc.) mapeadas.
+  const corrigirCabecalhoAgrupado = (dadosCompletos, worksheet) => {
+    if (!dadosCompletos || dadosCompletos.length === 0) return dadosCompletos
+
+    const todasChaves = new Set()
+    dadosCompletos.slice(0, 20).forEach(r => Object.keys(r).forEach(k => todasChaves.add(k)))
+    const temColunasEsperadas =
+      todasChaves.has('Código') || todasChaves.has('Codigo') ||
+      todasChaves.has('Situação') || todasChaves.has('Situação atual da auditoria')
+
+    if (temColunasEsperadas) return dadosCompletos
+
+    // Tentativa 1: procurar linha real de cabeçalho nas células brutas
+    if (worksheet) {
+      const range = XLSX.utils.decode_range(worksheet['!ref'])
+      let headerRow = -1
+      for (let r = 0; r <= Math.min(range.e.r, 10); r++) {
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = worksheet[XLSX.utils.encode_cell({ r, c })]
+          if (cell && typeof cell.v === 'string' && /^c[oó]digo$/i.test(cell.v.trim())) {
+            headerRow = r
+            break
+          }
+        }
+        if (headerRow >= 0) break
+      }
+      if (headerRow >= 0) {
+        console.log(`⚠️ Cabeçalho real encontrado na linha ${headerRow + 1}. Re-lendo...`)
+        const corrigido = XLSX.utils.sheet_to_json(worksheet, { range: headerRow })
+        if (corrigido.length > 0) {
+          console.log('Colunas corrigidas:', Object.keys(corrigido[0]))
+          return corrigido
+        }
+      }
+    }
+
+    // Tentativa 2: auto-detectar colunas pelos padrões dos dados
+    console.log('⚠️ Colunas padrão não encontradas. Detectando mapeamento automático...')
+    const amostra = dadosCompletos.slice(0, Math.min(100, dadosCompletos.length))
+    const chaves = [...new Set(amostra.flatMap(r => Object.keys(r)))]
+
+    const mapeamento = {}
+
+    for (const key of chaves) {
+      const vals = amostra.map(r => r[key]).filter(v => v != null)
+      if (vals.length === 0) continue
+
+      // Situação: valores contêm "Presença" + "Com"/"Sem"
+      if (!mapeamento['Situação']) {
+        const match = vals.filter(v => {
+          const s = String(v).toLowerCase()
+          return (s.includes('prese') || s.includes('presença')) && (s.includes('com') || s.includes('sem'))
+        }).length
+        if (match > vals.length * 0.3) {
+          mapeamento['Situação'] = key
+          continue
+        }
+      }
+
+      // Código: maioria numérica com 3+ dígitos
+      if (!mapeamento['Código']) {
+        const match = vals.filter(v =>
+          typeof v === 'number' || /^\d{3,}$/.test(String(v).trim())
+        ).length
+        if (match > vals.length * 0.8) {
+          mapeamento['Código'] = key
+          continue
+        }
+      }
+    }
+
+    // Identificar outras colunas pela posição relativa ao Código
+    const auditadoKeys = chaves
+      .filter(k => /^auditado\s*em/i.test(k))
+      .sort((a, b) => {
+        const numA = parseInt(a.match(/_(\d+)$/)?.[1] || '0')
+        const numB = parseInt(b.match(/_(\d+)$/)?.[1] || '0')
+        return numA - numB
+      })
+
+    if (mapeamento['Código']) {
+      const codIdx = auditadoKeys.indexOf(mapeamento['Código'])
+      if (codIdx >= 0) {
+        const after = auditadoKeys.slice(codIdx + 1).filter(k => k !== mapeamento['Situação'])
+        if (after.length >= 1) mapeamento['Produto'] = after[0]
+        if (after.length >= 2) mapeamento['Classe de Produto Raiz'] = after[1]
+        if (after.length >= 3) mapeamento['Local'] = after[2]
+      }
+    }
+
+    // Usuário: valores com padrão "número (NOME)"
+    for (const key of chaves) {
+      if (Object.values(mapeamento).includes(key)) continue
+      const vals = amostra.map(r => r[key]).filter(v => v != null)
+      if (vals.some(v => /\d+\s*\(/.test(String(v)))) {
+        mapeamento['Usuário'] = key
+        break
+      }
+    }
+
+    if (Object.keys(mapeamento).length > 0) {
+      console.log('🔍 Mapeamento detectado:', mapeamento)
+      return dadosCompletos.map(item => {
+        const mapped = { ...item }
+        for (const [standard, original] of Object.entries(mapeamento)) {
+          if (item[original] !== undefined) mapped[standard] = item[original]
+        }
+        return mapped
+      })
+    }
+
+    return dadosCompletos
+  }
+
   // Função auxiliar para extrair número do estoque
   // Pode estar em: "Estoque atual", "oque atual", ou embutido em outras colunas
   // Pode ser número, string formatada como "25,502 KG", ou estar em timestamp com KG
@@ -158,6 +273,17 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
     
     return 0
+  }
+
+  // Verifica se a coluna Situação indica "Com Estoque" ou "Sem Estoque"
+  // A Situação é a fonte de verdade para classificar pendentes vs problemas
+  const temEstoquePelaSituacao = (item) => {
+    const situacao = item['Situação'] || item['Situação atual da auditoria'] || ''
+    if (!situacao) return null // sem informação na Situação
+    const sitLower = situacao.toString().toLowerCase()
+    if (sitLower.includes('com estoque') || sitLower.includes('com esto')) return true
+    if (sitLower.includes('sem estoque') || sitLower.includes('sem esto')) return false
+    return null // Situação não menciona estoque
   }
 
   // Função auxiliar para verificar se tem presença confirmada
@@ -261,33 +387,28 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return ''
   }
 
+  // Verifica se uma data ISO está em um intervalo razoável (2020-2040)
+  const isDataRazoavel = (isoDate) => {
+    if (!isoDate) return false
+    const year = parseInt(isoDate.substring(0, 4))
+    return year >= 2020 && year <= 2040
+  }
+
   const dataItemAuditadoEmISO = (item) => {
     if (!item || typeof item !== 'object') return ''
-    // Em planilhas de Ruptura com colunas repetidas, a coluna J (índice 9)
-    // é capturada em `_auditadoEmColJ` durante o parse e tem prioridade.
-    if (item._auditadoEmColJ) {
-      return paraDataISO(item._auditadoEmColJ)
+    // Tentar coluna exata primeiro
+    const direto = paraDataISO(item['Auditado em'] || item['Auditado Em'] || item['auditado em'] || item['Data'])
+    if (direto && isDataRazoavel(direto)) return direto
+    // XLSX renomeia colunas duplicadas com sufixo _1, _2, etc.
+    // Buscar todas as variações e retornar a primeira com data válida e razoável
+    const chaves = Object.keys(item).filter(k => {
+      const n = k.toLowerCase()
+      return n.startsWith('auditado em') || n.startsWith('auditado_em')
+    })
+    for (const chave of chaves) {
+      const val = paraDataISO(item[chave])
+      if (val && isDataRazoavel(val)) return val
     }
-
-    const candidatas = [
-      item['Auditado em_9'],
-      item['Auditado em_10'],
-      item['Auditado em'],
-      item['Auditado Em'],
-      item['auditado em'],
-      item['Data']
-    ]
-
-    for (const valor of candidatas) {
-      const iso = paraDataISO(valor)
-      if (iso) return iso
-    }
-
-    const chaveDinamica = Object.keys(item).find((k) => normalizarTexto(k).startsWith('auditado em'))
-    if (chaveDinamica) {
-      return paraDataISO(item[chaveDinamica])
-    }
-
     return ''
   }
 
@@ -366,7 +487,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     const workbook = XLSX.read(data, { type: 'array' })
     const primeiraAba = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[primeiraAba]
-    const linhas = XLSX.utils.sheet_to_json(worksheet)
+    let linhas = XLSX.utils.sheet_to_json(worksheet)
+    linhas = corrigirCabecalhoAgrupado(linhas, worksheet)
+
     let etiquetaScore = 0
     let presencaScore = 0
     let rupturaSinal = 0
@@ -447,10 +570,11 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       
       // Converter para JSON
       const worksheet = workbook.Sheets[primeiraAba]
-      const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
-      // Mantém referência por índice de linha para extrair a coluna J (índice 9)
-      // mesmo quando o cabeçalho possui nomes duplicados.
-      const linhasMatriz = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' })
+      let dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+
+      // Corrigir cabeçalho agrupado se necessário
+      dadosCompletos = corrigirCabecalhoAgrupado(dadosCompletos, worksheet)
+
       if (dadosCompletos.length > 0) {
         const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
         const indicEtiqueta = s.includes('atualizado') || s.includes('desatualizado') || s.includes('lido sem estoque') || temMarcadorNaoLidoComEstoque(s)
@@ -474,18 +598,21 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           const temPresenca = temPresencaConfirmada(item)
           const estoque = extrairEstoque(item)
           const lidoNaoPertence = getLidoNaoPertence(item)
-          const auditadoEmColJ = linhasMatriz[index + 1]?.[9] || ''
+          const estoqueSituacao = temEstoquePelaSituacao(item)
           return {
             ...item,
             _temPresenca: temPresenca,
             _estoque: estoque,
+            _temEstoqueSituacao: estoqueSituacao,
             _situacao: item['Situação'] || item['Situação atual da auditoria'] || '',
             _lidoNaoPertence: lidoNaoPertence,
             _auditadoEmColJ: auditadoEmColJ
           }
         })
         .filter(item => {
-          if (!item._temPresenca && !item._lidoNaoPertence && item._estoque === 0) {
+          // Usar status de estoque pela Situação quando disponível, senão fallback para coluna de estoque
+          const temEstoque = item._temEstoqueSituacao !== null ? item._temEstoqueSituacao : (item._estoque > 0)
+          if (!item._temPresenca && !item._lidoNaoPertence && !temEstoque) {
             return false
           }
           return true
@@ -495,6 +622,26 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const totalFiltrados = filtrados.length
       const auditoriaDiaISO = paraDataISO(opts?.dataAuditoria)
       const ehRuptura = normalizarTexto(opts?.tipoAuditoria || '') === 'ruptura'
+
+      // Log pré-deduplicação para diagnóstico
+      if (ehRuptura) {
+        const preSemPresComEst = filtrados.filter(d => {
+          const estSit = d._temEstoqueSituacao
+          const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
+          return !d._temPresenca && !d._lidoNaoPertence && temEst
+        }).length
+        console.log(`📊 Ruptura PRÉ-deduplicação:`)
+        console.log(`   - Total filtrados: ${totalFiltrados}`)
+        console.log(`   - Sem Presença e Com Estoque (pendentes): ${preSemPresComEst}`)
+        console.log(`   - Data auditoria para dedup: ${auditoriaDiaISO || 'NÃO DEFINIDA'}`)
+        if (filtrados.length > 0) {
+          const exemplo = filtrados[0]
+          const chavesSemPrefixo = Object.keys(exemplo).filter(k => k.toLowerCase().includes('auditado'))
+          console.log(`   - Colunas 'Auditado' encontradas:`, chavesSemPrefixo)
+          console.log(`   - Exemplo dataItemAuditadoEmISO:`, dataItemAuditadoEmISO(exemplo))
+        }
+      }
+
       const dados = filtrados.reduce((acc, item) => {
         const codigo = (item['Código'] || item.Codigo || '').toString().trim()
         if (!codigo) {
@@ -556,13 +703,23 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       // Estatísticas de debug
       const comPresenca = dados.filter(d => d._temPresenca).length
       const semPresenca = dados.filter(d => !d._temPresenca).length
-      const comEstoque = dados.filter(d => d._estoque > 0).length
-      const semEstoque = dados.filter(d => d._estoque === 0).length
+      const semPresencaComEstoque = dados.filter(d => {
+        const estSit = d._temEstoqueSituacao
+        const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
+        return !d._temPresenca && !d._lidoNaoPertence && temEst
+      }).length
+      const comPresencaSemEstoque = dados.filter(d => {
+        const estSit = d._temEstoqueSituacao
+        const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
+        return d._temPresenca && !temEst
+      }).length
+      const lidoNaoPertence = dados.filter(d => d._lidoNaoPertence).length
       console.log(`📊 Estatísticas:`)
       console.log(`   - Com presença: ${comPresenca}`)
       console.log(`   - Sem presença: ${semPresenca}`)
-      console.log(`   - Com estoque: ${comEstoque}`)
-      console.log(`   - Sem estoque: ${semEstoque}`)
+      console.log(`   - Sem Presença e Com Estoque (pendentes): ${semPresencaComEstoque}`)
+      console.log(`   - Com Presença e Sem Estoque (problema): ${comPresencaSemEstoque}`)
+      console.log(`   - Lido não pertence (problema): ${lidoNaoPertence}`)
       console.log(`   - Total auditável: ${dados.length}`)
       
       return dados
@@ -581,7 +738,9 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const workbook = XLSX.read(data, { type: 'array' })
       const primeiraAba = workbook.SheetNames[0]
       const worksheet = workbook.Sheets[primeiraAba]
-      const dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+      let dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
+      dadosCompletos = corrigirCabecalhoAgrupado(dadosCompletos, worksheet)
+
       if (dadosCompletos.length > 0) {
         console.log('Colunas encontradas:', Object.keys(dadosCompletos[0]))
       }
@@ -707,7 +866,11 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     dados.forEach((item) => {
       // Usar valores normalizados do processamento
       const temPresenca = item._temPresenca || false
-      const estoque = item._estoque || 0
+      // Usar estoque pela Situação (fonte de verdade), fallback para coluna de estoque
+      const estoqueSituacao = item._temEstoqueSituacao
+      const temEstoque = estoqueSituacao !== null && estoqueSituacao !== undefined
+        ? estoqueSituacao
+        : (item._estoque || 0) > 0
 
       // Verificar "Lido não pertence" - pode não existir na planilha
       // Pode estar em diferentes formatos ou inferido da situação
@@ -721,8 +884,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
 
       // ❌ EXCLUI DO SKU (não contam no total auditável)
       // Itens "Com Presença e sem Estoque" ou "Lido não pertence" são apenas para exibição em "Itens com problema"
-      if ((temPresenca && estoque <= 0) || lidoNaoPertence) {
-        if (temPresenca && estoque <= 0) {
+      if ((temPresenca && !temEstoque) || lidoNaoPertence) {
+        if (temPresenca && !temEstoque) {
           analise.itensComEstoqueZero++
           analise.itensComEstoqueZeroDetalhes.push({
             codigo: item['Código'],
@@ -749,8 +912,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       }
 
       // Categorizar o item
-      if (!efetivamenteTemPresenca && estoque > 0) {
-        // ⏳ Não lido com estoque: conta como pendente (Não lidos com estoque)
+      if (!efetivamenteTemPresenca && temEstoque) {
+        // ⏳ Sem Presença e Com Estoque (pela Situação): conta como pendente
         analise.itensPendentes++
       }
 
@@ -811,12 +974,13 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       totalAuditaveis = sku
     } else {
       // Fallback sem SKU: mantém coerência da regra principal usando base planilha mínima
-      // (pendentes + itens com presença e estoque) apenas para não zerar total.
+      // (pendentes + itens com presença e estoque pela Situação) apenas para não zerar total.
       const lidosBase = dados.filter(i => {
         const temP = i._temPresenca || false
         const lnp = i._lidoNaoPertence !== undefined ? i._lidoNaoPertence : getLidoNaoPertence(i)
-        const est = i._estoque || 0
-        return temP && !lnp && est > 0
+        const estSit = i._temEstoqueSituacao
+        const temEst = estSit !== null && estSit !== undefined ? estSit : (i._estoque || 0) > 0
+        return temP && !lnp && temEst
       }).length
       totalAuditaveis = analise.itensPendentes + lidosBase
     }
