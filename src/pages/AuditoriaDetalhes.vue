@@ -2789,40 +2789,51 @@ const fecharRelatorio = () => {
           <h2 class="text-2xl font-bold text-gray-800 mb-6">
             <i class="fas fa-map text-blue-600 mr-2"></i>Mapa de Setores e Corredores
           </h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div 
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div
               v-for="(setor, nome) in mapaSeteores"
               :key="nome"
               @click="abrirModalSetorLocal('setor', [setor])"
-              class="bg-white rounded-lg p-6 shadow hover:shadow-lg transition border-l-4 cursor-pointer"
-              :class="setor.percentualConclusao >= 75 ? 'border-green-500' : setor.percentualConclusao >= 50 ? 'border-yellow-500' : 'border-red-500'"
+              class="group bg-white rounded-xl p-5 cursor-pointer transition-all duration-200 hover:shadow-lg border border-gray-100 hover:border-gray-200"
             >
-              <div class="flex items-start justify-between mb-4">
-                <div>
-                  <h3 class="font-bold text-lg text-gray-800">{{ setor.nome }}</h3>
-                  <p class="text-sm text-gray-500">{{ setor.total }} itens total</p>
-                </div>
-                <span 
-                  :class="[
-                    'px-3 py-1 rounded-full text-xs font-bold',
-                    setor.percentualConclusao >= 75 ? 'bg-green-100 text-green-800' :
-                    setor.percentualConclusao >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  ]"
-                >
-                  {{ setor.percentualConclusao }}%
-                </span>
+              <!-- Nome e seta -->
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-800 text-[15px] truncate mr-2">{{ setor.nome }}</h3>
+                <i class="fas fa-arrow-right text-xs text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all"></i>
               </div>
-              <div class="space-y-2">
-                <div class="flex justify-between text-sm">
-                  <span class="text-green-600 font-medium">✓ {{ setor.lidos }} lidos</span>
-                  <span class="text-orange-600 font-medium">⏳ {{ setor.pendentes }} pendentes</span>
+
+              <!-- Progresso circular + métricas -->
+              <div class="flex items-center gap-4">
+                <!-- Círculo de progresso -->
+                <div class="relative flex-shrink-0">
+                  <svg class="w-16 h-16 -rotate-90" viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="#f1f5f9" stroke-width="5"/>
+                    <circle
+                      cx="30" cy="30" r="25" fill="none" stroke-width="5" stroke-linecap="round"
+                      :stroke="setor.percentualConclusao >= 75 ? '#10b981' : setor.percentualConclusao >= 50 ? '#f59e0b' : '#ef4444'"
+                      :stroke-dasharray="157"
+                      :stroke-dashoffset="157 - (157 * setor.percentualConclusao / 100)"
+                    />
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="text-sm font-bold text-gray-700">{{ setor.percentualConclusao }}%</span>
+                  </div>
                 </div>
-                <div class="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    :style="{ width: setor.percentualConclusao + '%' }"
-                    class="h-full bg-linear-to-r from-blue-500 to-green-500"
-                  />
+
+                <!-- Números -->
+                <div class="flex-1 space-y-1.5 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-400">Total</span>
+                    <span class="text-sm font-semibold text-gray-700">{{ setor.total }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-emerald-500">Lidos</span>
+                    <span class="text-sm font-semibold text-emerald-600">{{ setor.lidos }}</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-orange-400">Pendentes</span>
+                    <span class="text-sm font-semibold text-orange-500">{{ setor.pendentes }}</span>
+                  </div>
                 </div>
               </div>
             </div>
