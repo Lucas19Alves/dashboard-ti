@@ -151,19 +151,8 @@ export const printTableInNewWindow = (data, columns, title = 'Relatório') => {
   doc.write(html)
   doc.close()
   win.document.title = safeTitle
-  const handle = () => {
-    try {
-      win.focus()
-      win.print()
-    } finally {
-      win.close()
-    }
-  }
-  if (win.document.readyState === 'complete') {
-    handle()
-  } else {
-    win.onload = handle
-  }
+  win.onafterprint = () => { win.close() }
+  setTimeout(() => { win.focus(); win.print() }, 300)
 }
 
 export const printHtmlInNewWindow = (title = 'Relatório', bodyHtml = '') => {
@@ -276,17 +265,6 @@ export const printHtmlInNewWindow = (title = 'Relatório', bodyHtml = '') => {
   doc.write(html)
   doc.close()
   win.document.title = safeTitle
-  const handle = () => {
-    try {
-      win.focus()
-      win.print()
-    } finally {
-      win.close()
-    }
-  }
-  if (win.document.readyState === 'complete') {
-    handle()
-  } else {
-    win.onload = handle
-  }
+  win.onafterprint = () => { win.close() }
+  setTimeout(() => { win.focus(); win.print() }, 300)
 }

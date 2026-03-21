@@ -1,8 +1,7 @@
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
-import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
 import { printTableInNewWindow } from '../utils/print'
 
 const store = useVencimentosStore()
@@ -38,13 +37,26 @@ const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
 const modalFornecedorAberto = ref(false)
 
-// Refs de impressao
-const tabelaFornecedorRef = ref(null)
-const tabelaSetorItensRef = ref(null)
-const tabelaItensFiltradosRef = ref(null)
-const exibirTudoFornecedorPrint = ref(false)
-const exibirTudoSetorPrint = ref(false)
-const exibirTudoItensPrint = ref(false)
+// --- Table state ---
+const paginaItensFiltrados = ref(1)
+const buscaItensFiltrados = ref('')
+const ordenacaoItensFiltrados = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
+const itensPorPaginaFiltrados = 15
+
+const paginaFornecedoresTab = ref(1)
+const buscaFornecedoresTab = ref('')
+const ordenacaoFornecedoresTab = ref({ coluna: 'vencidos', direcao: 'desc' })
+const itensPorPaginaFornecedores = 10
+
+const paginaSetorModal = ref(1)
+const buscaSetorModal = ref('')
+const ordenacaoSetorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
+const itensPorPaginaSetorModal = 12
+
+const paginaFornecedorModal = ref(1)
+const buscaFornecedorModal = ref('')
+const ordenacaoFornecedorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
+const itensPorPaginaFornecedorModal = 12
 
 // Status filter pills config
 const statusPills = [
@@ -183,6 +195,9 @@ const setoresAnalise = computed(() => {
 
 const abrirModalSetor = (nome) => {
   setorModalNome.value = nome || 'Todos'
+  paginaSetorModal.value = 1
+  buscaSetorModal.value = ''
+  ordenacaoSetorModal.value = { coluna: '_diasParaVencer', direcao: 'asc' }
   modalSetorAberto.value = true
 }
 const fecharModalSetor = () => {
@@ -226,6 +241,9 @@ const fornecedoresRanking = computed(() => {
 
 const abrirItensFornecedor = (row) => {
   fornecedorSelecionado.value = row.fornecedor
+  paginaFornecedorModal.value = 1
+  buscaFornecedorModal.value = ''
+  ordenacaoFornecedorModal.value = { coluna: '_diasParaVencer', direcao: 'asc' }
   modalFornecedorAberto.value = true
 }
 const limparFornecedor = () => {
@@ -310,49 +328,101 @@ const rowClassResumo = (item) => {
   return ''
 }
 
-// --- Impressao ---
-const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
-  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
-  const root = tabelaRef.value.$el
-  const tbody = root.querySelector('tbody')
-  if (!tbody) return null
-  const trs = Array.from(tbody.querySelectorAll('tr'))
-  if (!trs.length) return null
-  const dados = []
-  trs.forEach(tr => {
-    const tds = Array.from(tr.querySelectorAll('td'))
-    if (!tds.length) return
-    const obj = {}
-    colunas.forEach((col, idx) => {
-      const td = tds[idx]
-      obj[col.chave] = String(td ? td.textContent ?? '' : '').trim()
-    })
-    dados.push(obj)
+// --- Sort / Filter / Paginate helpers ---
+const sortVenc = (lista, ordenacao) => {
+  const col = ordenacao.coluna
+  const dir = ordenacao.direcao
+  return [...lista].sort((a, b) => {
+    const va = a[col]; const vb = b[col]
+    if (typeof va === 'number' && typeof vb === 'number') return dir === 'asc' ? va - vb : vb - va
+    return dir === 'asc' ? String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR', { numeric: true }) : String(vb ?? '').localeCompare(String(va ?? ''), 'pt-BR', { numeric: true })
   })
-  return dados
 }
 
-const imprimir = async (alvo) => {
-  if (alvo === 'fornecedor') {
-    exibirTudoFornecedorPrint.value = true
-    await nextTick()
-    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaFornecedorRef, colunasItens)
-    exibirTudoFornecedorPrint.value = false
-    const base = dadosOrdenados?.length ? dadosOrdenados : itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+const filtrarBuscaVenc = (lista, termo) => {
+  if (!termo) return lista
+  const t = termo.toLowerCase()
+  return lista.filter(item => Object.values(item).some(v => String(v ?? '').toLowerCase().includes(t)))
+}
+
+const atualizarOrdenacaoVenc = (obj, coluna) => {
+  if (obj.coluna === coluna) {
+    obj.direcao = obj.direcao === 'asc' ? 'desc' : 'asc'
+  } else {
+    obj.coluna = coluna
+    obj.direcao = 'asc'
+  }
+}
+
+// Itens Filtrados table
+const itensFiltradosComISO = computed(() => itensFiltrados.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
+const itensFiltradosBusca = computed(() => filtrarBuscaVenc(itensFiltradosComISO.value, buscaItensFiltrados.value))
+const itensFiltradosOrdenados = computed(() => sortVenc(itensFiltradosBusca.value, ordenacaoItensFiltrados.value))
+const totalPaginasItensFiltrados = computed(() => Math.max(1, Math.ceil(itensFiltradosOrdenados.value.length / itensPorPaginaFiltrados)))
+const itensFiltradosPaginados = computed(() => {
+  const p = Math.min(paginaItensFiltrados.value, totalPaginasItensFiltrados.value)
+  const i = (p - 1) * itensPorPaginaFiltrados
+  return itensFiltradosOrdenados.value.slice(i, i + itensPorPaginaFiltrados)
+})
+
+// Fornecedores tab table
+const fornecedoresTabBusca = computed(() => filtrarBuscaVenc(linhasFornecedores.value, buscaFornecedoresTab.value))
+const fornecedoresTabOrdenados = computed(() => sortVenc(fornecedoresTabBusca.value, ordenacaoFornecedoresTab.value))
+const totalPaginasFornecedoresTab = computed(() => Math.max(1, Math.ceil(fornecedoresTabOrdenados.value.length / itensPorPaginaFornecedores)))
+const fornecedoresTabPaginados = computed(() => {
+  const p = Math.min(paginaFornecedoresTab.value, totalPaginasFornecedoresTab.value)
+  const i = (p - 1) * itensPorPaginaFornecedores
+  return fornecedoresTabOrdenados.value.slice(i, i + itensPorPaginaFornecedores)
+})
+
+// Setor Modal table
+const itensSetorModalComISO = computed(() => itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
+const itensSetorModalBusca = computed(() => filtrarBuscaVenc(itensSetorModalComISO.value, buscaSetorModal.value))
+const itensSetorModalOrdenados = computed(() => sortVenc(itensSetorModalBusca.value, ordenacaoSetorModal.value))
+const totalPaginasSetorModal = computed(() => Math.max(1, Math.ceil(itensSetorModalOrdenados.value.length / itensPorPaginaSetorModal)))
+const itensSetorModalPaginados = computed(() => {
+  const p = Math.min(paginaSetorModal.value, totalPaginasSetorModal.value)
+  const i = (p - 1) * itensPorPaginaSetorModal
+  return itensSetorModalOrdenados.value.slice(i, i + itensPorPaginaSetorModal)
+})
+
+// Fornecedor Modal table
+const itensFornecedorComISO = computed(() => itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
+const itensFornecedorBusca = computed(() => filtrarBuscaVenc(itensFornecedorComISO.value, buscaFornecedorModal.value))
+const itensFornecedorOrdenados = computed(() => sortVenc(itensFornecedorBusca.value, ordenacaoFornecedorModal.value))
+const totalPaginasFornecedorModal = computed(() => Math.max(1, Math.ceil(itensFornecedorOrdenados.value.length / itensPorPaginaFornecedorModal)))
+const itensFornecedorPaginados = computed(() => {
+  const p = Math.min(paginaFornecedorModal.value, totalPaginasFornecedorModal.value)
+  const i = (p - 1) * itensPorPaginaFornecedorModal
+  return itensFornecedorOrdenados.value.slice(i, i + itensPorPaginaFornecedorModal)
+})
+
+const paginasVisiveisVenc = (total, atual) => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [1]
+  if (atual > 3) pages.push('...')
+  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) pages.push(i)
+  if (atual < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+}
+
+// --- Watches: reset pagination ---
+watch(() => itensFiltradosBusca.value.length, () => { paginaItensFiltrados.value = 1 })
+watch(() => fornecedoresTabBusca.value.length, () => { paginaFornecedoresTab.value = 1 })
+watch(() => itensSetorModalBusca.value.length, () => { paginaSetorModal.value = 1 })
+watch(() => itensFornecedorBusca.value.length, () => { paginaFornecedorModal.value = 1 })
+
+// --- Impressao ---
+const imprimir = (alvo) => {
+  if (alvo === 'modal-fornecedor') {
+    const base = itensFornecedorOrdenados.value
     if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Fornecedor - ${fornecedorSelecionado.value}`)
   } else if (alvo === 'modal-setor') {
-    exibirTudoSetorPrint.value = true
-    await nextTick()
-    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaSetorItensRef, colunasItens)
-    exibirTudoSetorPrint.value = false
-    const base = dadosOrdenados?.length ? dadosOrdenados : itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    const base = itensSetorModalOrdenados.value
     if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Setor - ${setorModalNome.value || 'Todos'}`)
   } else if (alvo === 'filtrados') {
-    exibirTudoItensPrint.value = true
-    await nextTick()
-    const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaItensFiltradosRef, colunasItens)
-    exibirTudoItensPrint.value = false
-    const base = dadosOrdenados?.length ? dadosOrdenados : itensFiltrados.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))
+    const base = itensFiltradosOrdenados.value
     const parts = []
     if (filtroSetor.value) parts.push(`Setor: ${filtroSetor.value}`)
     if (filtroFornecedor.value) parts.push(`Fornecedor: ${filtroFornecedor.value}`)
@@ -749,21 +819,82 @@ const imprimirAnalise = (alvo) => {
             </button>
           </div>
 
-          <TabelaInterativaAuditoria
-            ref="tabelaItensFiltradosRef"
-            :dados="itensFiltrados.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-            :colunas="colunasItens"
-            titulo=""
-            :rowClass="rowClassPrazo"
-            :itensPorPagina="15"
-            :exibirTudo="exibirTudoItensPrint"
-          >
-            <template #cell-_prazo="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">
-                {{ prazoBadgeLabel(valor) }}
-              </span>
-            </template>
-          </TabelaInterativaAuditoria>
+          <!-- Search -->
+          <div class="px-4 pt-3">
+            <div class="relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input v-model="buscaItensFiltrados" placeholder="Buscar na tabela..."
+                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th v-for="col in colunasItens" :key="col.chave"
+                    class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                    @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoItensFiltrados, col.chave)">
+                    {{ col.titulo }}
+                    <template v-if="col.sortable">
+                      <i v-if="ordenacaoItensFiltrados.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
+                      <i v-else-if="ordenacaoItensFiltrados.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                      <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                    </template>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="itensFiltradosPaginados.length === 0">
+                  <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
+                    <i class="fas fa-inbox text-3xl mb-2 block"></i>
+                    <p class="text-sm">Nenhum item encontrado</p>
+                  </td>
+                </tr>
+                <tr v-for="(item, idx) in itensFiltradosPaginados" :key="item._codigo + item._validadeISO + idx"
+                  :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                  <td class="px-3 py-2">{{ item._codigo }}</td>
+                  <td class="px-3 py-2">{{ item._produto }}</td>
+                  <td class="px-3 py-2">{{ item._setor }}</td>
+                  <td class="px-3 py-2">{{ item._fornecedor }}</td>
+                  <td class="px-3 py-2">{{ item._local }}</td>
+                  <td class="px-3 py-2">{{ item._validadeISO }}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
+                  <td class="px-3 py-2">
+                    <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                      {{ prazoBadgeLabel(item._prazo) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div v-if="totalPaginasItensFiltrados > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) }} de {{ totalPaginasItensFiltrados }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaItensFiltrados = Math.max(1, paginaItensFiltrados - 1)" :disabled="paginaItensFiltrados <= 1"
+                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <template v-for="p in paginasVisiveisVenc(totalPaginasItensFiltrados, Math.min(paginaItensFiltrados, totalPaginasItensFiltrados))" :key="'pif'+p">
+                <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
+                <button v-else @click="paginaItensFiltrados = p"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition"
+                  :class="p === Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                  {{ p }}
+                </button>
+              </template>
+              <button @click="paginaItensFiltrados = Math.min(totalPaginasItensFiltrados, paginaItensFiltrados + 1)" :disabled="paginaItensFiltrados >= totalPaginasItensFiltrados"
+                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Supplier Summary with Drill-Down -->
@@ -774,25 +905,82 @@ const imprimirAnalise = (alvo) => {
               <p class="text-xs text-slate-500">Clique em um fornecedor para ver seus itens</p>
             </div>
           </div>
-          <TabelaInterativaAuditoria
-            :dados="linhasFornecedores"
-            :colunas="colunasFornecedores"
-            titulo=""
-            :rowClass="rowClassResumo"
-            clickable
-            @click-row="abrirItensFornecedor"
-            :itensPorPagina="12"
-          >
-            <template #cell-vencidos="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{ valor }}</span>
-            </template>
-            <template #cell-hoje="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{ valor }}</span>
-            </template>
-            <template #cell-ate3="{ valor }">
-              <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{ valor }}</span>
-            </template>
-          </TabelaInterativaAuditoria>
+          <!-- Search -->
+          <div class="px-4 pt-3">
+            <div class="relative">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <input v-model="buscaFornecedoresTab" placeholder="Buscar fornecedor..."
+                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th v-for="col in colunasFornecedores" :key="col.chave"
+                    class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                    @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedoresTab, col.chave)">
+                    {{ col.titulo }}
+                    <template v-if="col.sortable">
+                      <i v-if="ordenacaoFornecedoresTab.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
+                      <i v-else-if="ordenacaoFornecedoresTab.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                      <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                    </template>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="fornecedoresTabPaginados.length === 0">
+                  <td :colspan="colunasFornecedores.length" class="text-center py-10 text-slate-400">
+                    <i class="fas fa-inbox text-3xl mb-2 block"></i>
+                    <p class="text-sm">Nenhum fornecedor encontrado</p>
+                  </td>
+                </tr>
+                <tr v-for="(item, idx) in fornecedoresTabPaginados" :key="item.fornecedor"
+                  @click="abrirItensFornecedor(item)"
+                  class="cursor-pointer transition-colors"
+                  :class="(item.vencidos > 0 || item.hoje > 0) ? 'bg-red-50/60 hover:bg-indigo-50/40' : item.ate3 > 0 ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                  <td class="px-3 py-2 font-medium">{{ item.fornecedor }}</td>
+                  <td class="px-3 py-2 text-right tabular-nums">{{ item.total }}</td>
+                  <td class="px-3 py-2 text-right">
+                    <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{ item.vencidos }}</span>
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{ item.hoje }}</span>
+                  </td>
+                  <td class="px-3 py-2 text-right">
+                    <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{ item.ate3 }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div v-if="totalPaginasFornecedoresTab > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) }} de {{ totalPaginasFornecedoresTab }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaFornecedoresTab = Math.max(1, paginaFornecedoresTab - 1)" :disabled="paginaFornecedoresTab <= 1"
+                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <template v-for="p in paginasVisiveisVenc(totalPaginasFornecedoresTab, Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab))" :key="'pft'+p">
+                <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
+                <button v-else @click="paginaFornecedoresTab = p"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition"
+                  :class="p === Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                  {{ p }}
+                </button>
+              </template>
+              <button @click="paginaFornecedoresTab = Math.min(totalPaginasFornecedoresTab, paginaFornecedoresTab + 1)" :disabled="paginaFornecedoresTab >= totalPaginasFornecedoresTab"
+                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </template>
 
@@ -918,19 +1106,82 @@ const imprimirAnalise = (alvo) => {
             </button>
           </div>
           <div class="p-4 overflow-y-auto flex-1">
-            <TabelaInterativaAuditoria
-              ref="tabelaSetorItensRef"
-              :dados="itensSetorModal.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-              :colunas="colunasItens"
-              titulo=""
-              :rowClass="rowClassPrazo"
-              :itensPorPagina="12"
-              :exibirTudo="exibirTudoSetorPrint"
-            >
-              <template #cell-_prazo="{ valor }">
-                <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">{{ prazoBadgeLabel(valor) }}</span>
-              </template>
-            </TabelaInterativaAuditoria>
+            <!-- Search -->
+            <div class="mb-3">
+              <div class="relative max-w-xs">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input v-model="buscaSetorModal" placeholder="Buscar por codigo ou produto..."
+                  class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th v-for="col in colunasItens" :key="col.chave"
+                      class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                      :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                      @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoSetorModal, col.chave)">
+                      {{ col.titulo }}
+                      <template v-if="col.sortable">
+                        <i v-if="ordenacaoSetorModal.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
+                        <i v-else-if="ordenacaoSetorModal.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                        <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                      </template>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="itensSetorModalPaginados.length === 0">
+                    <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
+                      <i class="fas fa-inbox text-3xl mb-2 block"></i>
+                      <p class="text-sm">Nenhum item encontrado</p>
+                    </td>
+                  </tr>
+                  <tr v-for="(item, idx) in itensSetorModalPaginados" :key="item._codigo + item._validadeISO + idx"
+                    :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                    <td class="px-3 py-2">{{ item._codigo }}</td>
+                    <td class="px-3 py-2">{{ item._produto }}</td>
+                    <td class="px-3 py-2">{{ item._setor }}</td>
+                    <td class="px-3 py-2">{{ item._fornecedor }}</td>
+                    <td class="px-3 py-2">{{ item._local }}</td>
+                    <td class="px-3 py-2">{{ item._validadeISO }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
+                    <td class="px-3 py-2">
+                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                        {{ prazoBadgeLabel(item._prazo) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="totalPaginasSetorModal > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaSetorModal, totalPaginasSetorModal) }} de {{ totalPaginasSetorModal }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaSetorModal = Math.max(1, paginaSetorModal - 1)" :disabled="paginaSetorModal <= 1"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <template v-for="p in paginasVisiveisVenc(totalPaginasSetorModal, Math.min(paginaSetorModal, totalPaginasSetorModal))" :key="'psm'+p">
+                  <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
+                  <button v-else @click="paginaSetorModal = p"
+                    class="px-2.5 py-1 rounded text-xs font-medium border transition"
+                    :class="p === Math.min(paginaSetorModal, totalPaginasSetorModal) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                    {{ p }}
+                  </button>
+                </template>
+                <button @click="paginaSetorModal = Math.min(totalPaginasSetorModal, paginaSetorModal + 1)" :disabled="paginaSetorModal >= totalPaginasSetorModal"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
             <button @click="fecharModalSetor"
@@ -961,26 +1212,89 @@ const imprimirAnalise = (alvo) => {
             </button>
           </div>
           <div class="p-4 overflow-y-auto flex-1">
-            <TabelaInterativaAuditoria
-              ref="tabelaFornecedorRef"
-              :dados="itensFornecedor.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) }))"
-              :colunas="colunasItens"
-              titulo=""
-              :rowClass="rowClassPrazo"
-              :itensPorPagina="12"
-              :exibirTudo="exibirTudoFornecedorPrint"
-            >
-              <template #cell-_prazo="{ valor }">
-                <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(valor)">{{ prazoBadgeLabel(valor) }}</span>
-              </template>
-            </TabelaInterativaAuditoria>
+            <!-- Search -->
+            <div class="mb-3">
+              <div class="relative max-w-xs">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input v-model="buscaFornecedorModal" placeholder="Buscar por codigo ou produto..."
+                  class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th v-for="col in colunasItens" :key="col.chave"
+                      class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                      :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                      @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedorModal, col.chave)">
+                      {{ col.titulo }}
+                      <template v-if="col.sortable">
+                        <i v-if="ordenacaoFornecedorModal.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
+                        <i v-else-if="ordenacaoFornecedorModal.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                        <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                      </template>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="itensFornecedorPaginados.length === 0">
+                    <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
+                      <i class="fas fa-inbox text-3xl mb-2 block"></i>
+                      <p class="text-sm">Nenhum item encontrado</p>
+                    </td>
+                  </tr>
+                  <tr v-for="(item, idx) in itensFornecedorPaginados" :key="item._codigo + item._validadeISO + idx"
+                    :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                    <td class="px-3 py-2">{{ item._codigo }}</td>
+                    <td class="px-3 py-2">{{ item._produto }}</td>
+                    <td class="px-3 py-2">{{ item._setor }}</td>
+                    <td class="px-3 py-2">{{ item._fornecedor }}</td>
+                    <td class="px-3 py-2">{{ item._local }}</td>
+                    <td class="px-3 py-2">{{ item._validadeISO }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
+                    <td class="px-3 py-2">
+                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                        {{ prazoBadgeLabel(item._prazo) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="totalPaginasFornecedorModal > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedorModal, totalPaginasFornecedorModal) }} de {{ totalPaginasFornecedorModal }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaFornecedorModal = Math.max(1, paginaFornecedorModal - 1)" :disabled="paginaFornecedorModal <= 1"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <template v-for="p in paginasVisiveisVenc(totalPaginasFornecedorModal, Math.min(paginaFornecedorModal, totalPaginasFornecedorModal))" :key="'pfm'+p">
+                  <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
+                  <button v-else @click="paginaFornecedorModal = p"
+                    class="px-2.5 py-1 rounded text-xs font-medium border transition"
+                    :class="p === Math.min(paginaFornecedorModal, totalPaginasFornecedorModal) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                    {{ p }}
+                  </button>
+                </template>
+                <button @click="paginaFornecedorModal = Math.min(totalPaginasFornecedorModal, paginaFornecedorModal + 1)" :disabled="paginaFornecedorModal >= totalPaginasFornecedorModal"
+                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
             <button @click="limparFornecedor"
               class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium text-sm">
               Fechar
             </button>
-            <button @click="imprimir('fornecedor')"
+            <button @click="imprimir('modal-fornecedor')"
               class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-sm transition">
               <i class="fas fa-print mr-2"></i>Imprimir
             </button>

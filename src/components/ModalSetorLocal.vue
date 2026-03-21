@@ -25,47 +25,78 @@
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto p-4">
-        <!-- Lista de Itens com Filtros -->
-        <TabelaInterativaAuditoria
-          :dados="items"
-          :colunas="colunas"
-          :itensPorPagina="10"
-          :mostrarBusca="true"
-          :clickable="tipo === 'setor'"
-          :exibirTudo="true"
-          @click-row="handleRowClick"
-        >
-          <template #cell-percentualPendente="{ item }">
-            <span class="font-bold" :class="getPercentual(item) <= 3 ? 'text-green-600' : 'text-orange-600'">
-              {{ getPercentual(item).toFixed(2) }}%
-            </span>
-          </template>
-          
-          <template #cell-lidos="{ item }">
-            <span class="text-green-600 font-semibold">{{ item.lidos }}</span>
-          </template>
-          
-          <template #cell-pendentes="{ item }">
-            <span class="text-orange-600 font-semibold">{{ item.pendentes }}</span>
-          </template>
-          
-          <template #cell-comProblema="{ item }">
-            <span class="text-red-600 font-semibold">{{ item.comProblema || 0 }}</span>
-          </template>
-          
-          <template #cell-total="{ item }">
-            <span class="text-blue-600 font-semibold">{{ item.total }}</span>
-          </template>
+        <!-- Search -->
+        <div class="relative mb-3">
+          <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+          <input v-model="buscaModal" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64" @input="paginaModal = 1" />
+        </div>
 
-          <template #cell-acoes="{ item }">
-             <button
-              @click.stop="abrirItensDoLocal(item)"
-              class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-xs"
-            >
-              Ver Itens
-            </button>
-          </template>
-        </TabelaInterativaAuditoria>
+        <div v-if="listaOrdenada.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+          <i class="fas fa-inbox text-3xl mb-2"></i>
+          <p class="text-xs">Nenhum item encontrado.</p>
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b-2 border-slate-100">
+                <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'nome'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1">{{ tipo === 'setor' ? 'Setor' : 'Local' }} <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'nome' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'lidos'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1 justify-end">Lidos <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'lidos' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'pendentes'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1 justify-end">Pendentes <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'pendentes' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'comProblema'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1 justify-end">Problema <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'comProblema' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'total'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1 justify-end">Total <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'total' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoModal(ordenacaoModal, 'percentualPendente'); paginaModal = 1">
+                  <span class="inline-flex items-center gap-1 justify-end">% Pendente <i class="fas text-[10px]" :class="ordenacaoModal.coluna === 'percentualPendente' ? (ordenacaoModal.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                </th>
+                <th v-if="tipo === 'local'" class="px-3 py-2.5 text-center font-semibold text-slate-600">Ação</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="(item, idx) in listaPaginada" :key="idx"
+                class="transition-colors"
+                :class="[idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40', tipo === 'setor' ? 'cursor-pointer' : '']"
+                @click="handleRowClick(item)"
+              >
+                <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.nome }}</td>
+                <td class="px-3 py-2.5 text-right text-green-600 font-semibold">{{ item.lidos }}</td>
+                <td class="px-3 py-2.5 text-right text-orange-600 font-semibold">{{ item.pendentes }}</td>
+                <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ item.comProblema || 0 }}</td>
+                <td class="px-3 py-2.5 text-right text-blue-600 font-semibold">{{ item.total }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <span class="font-bold" :class="getPercentual(item) <= 3 ? 'text-green-600' : 'text-orange-600'">{{ getPercentual(item).toFixed(2) }}%</span>
+                </td>
+                <td v-if="tipo === 'local'" class="px-3 py-2.5 text-center">
+                  <button @click.stop="abrirItensDoLocal(item)" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-xs">Ver Itens</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="totalPaginasModal > 1" class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
+          <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaModal - 1) * itensPorPaginaModal) + 1 }} a {{ Math.min(paginaModal * itensPorPaginaModal, listaOrdenada.length) }} de {{ listaOrdenada.length }}</p>
+          <div class="flex items-center gap-1">
+            <button @click="paginaModal = 1" :disabled="paginaModal === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+            <button @click="paginaModal--" :disabled="paginaModal === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+            <template v-for="p in paginasVisiveis" :key="p">
+              <button v-if="typeof p === 'number'" @click="paginaModal = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaModal ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+              <span v-else class="text-slate-400 text-[11px] px-1">...</span>
+            </template>
+            <button @click="paginaModal++" :disabled="paginaModal === totalPaginasModal" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+            <button @click="paginaModal = totalPaginasModal" :disabled="paginaModal === totalPaginasModal" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+          </div>
+        </div>
       </div>
 
       <!-- Footer -->
@@ -82,8 +113,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import TabelaInterativaAuditoria from './TabelaInterativaAuditoria.vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   aberto: Boolean,
@@ -97,21 +127,60 @@ const props = defineProps({
 
 const emit = defineEmits(['fechar', 'abrirItens', 'abrirLocais'])
 
-const colunas = computed(() => {
-  const cols = [
-    { chave: 'nome', titulo: props.tipo === 'setor' ? 'Setor' : 'Local', sortable: true },
-    { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right' },
-    { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right' },
-    { chave: 'comProblema', titulo: 'Problema', sortable: true, alinhamento: 'right' },
-    { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
-    { chave: 'percentualPendente', titulo: '% Pendente', sortable: true, alinhamento: 'right' }
-  ]
-  
-  if (props.tipo === 'local') {
-    cols.push({ chave: 'acoes', titulo: 'Ação', sortable: false, alinhamento: 'center' })
+const paginaModal = ref(1)
+const itensPorPaginaModal = 10
+const buscaModal = ref('')
+const ordenacaoModal = ref({ coluna: 'pendentes', direcao: 'desc' })
+
+const atualizarOrdenacaoModal = (obj, coluna) => {
+  if (obj.coluna === coluna) {
+    obj.direcao = obj.direcao === 'asc' ? 'desc' : 'asc'
+  } else {
+    obj.coluna = coluna
+    obj.direcao = 'asc'
   }
-  
-  return cols
+}
+
+watch(() => props.items, () => { paginaModal.value = 1; buscaModal.value = '' })
+
+const listaFiltrada = computed(() => {
+  if (!props.items) return []
+  if (!buscaModal.value) return props.items
+  const t = buscaModal.value.toLowerCase()
+  return props.items.filter(item => String(item.nome || '').toLowerCase().includes(t))
+})
+
+const listaOrdenada = computed(() => {
+  const items = [...listaFiltrada.value]
+  const { coluna, direcao } = ordenacaoModal.value
+  const mult = direcao === 'asc' ? 1 : -1
+  return items.sort((a, b) => {
+    const va = a[coluna] ?? ''
+    const vb = b[coluna] ?? ''
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mult
+    return String(va).localeCompare(String(vb), 'pt-BR', { numeric: true }) * mult
+  })
+})
+
+const totalPaginasModal = computed(() => Math.max(1, Math.ceil(listaOrdenada.value.length / itensPorPaginaModal)))
+
+const listaPaginada = computed(() => {
+  const pagina = Math.min(paginaModal.value, totalPaginasModal.value)
+  const inicio = (pagina - 1) * itensPorPaginaModal
+  return listaOrdenada.value.slice(inicio, inicio + itensPorPaginaModal)
+})
+
+const paginasVisiveis = computed(() => {
+  const total = totalPaginasModal.value
+  const atual = paginaModal.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = []
+  pages.push(1)
+  if (atual > 3) pages.push('...')
+  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) pages.push(i)
+  if (atual < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
 })
 
 const getPercentual = (item) => {
