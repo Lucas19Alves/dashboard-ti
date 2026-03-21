@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref, reactive } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
+import { useRouter } from 'vue-router'
 import { printHtmlInNewWindow } from '../utils/print'
 
 const store = useAuditoriasStore()
+const router = useRouter()
 
 const filtroTipo = ref('todos')
 const filtroStatus = ref('todos')
@@ -117,6 +119,17 @@ const resumoGeral = computed(() => {
   }
 })
 
+const nomesMeses = {
+  '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+  '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+  '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+}
+
+const formatarMes = (chave) => {
+  const [ano, mes] = chave.split('-')
+  return `${nomesMeses[mes] || mes} ${ano}`
+}
+
 const agrupadoPorMesBase = computed(() => {
   const mapa = {}
   auditoriasFiltradas.value.forEach(a => {
@@ -127,6 +140,7 @@ const agrupadoPorMesBase = computed(() => {
     if (!mapa[chave]) {
       mapa[chave] = {
         mes: chave,
+        mesFormatado: formatarMes(chave),
         total: 0,
         fechadas: 0,
         dentroMeta: 0,
@@ -153,6 +167,7 @@ const agrupadoPorMesBase = computed(() => {
     const taxaMeta = g.fechadas > 0 ? (g.dentroMeta / g.fechadas) * 100 : 0
     return {
       mes: g.mes,
+      mesFormatado: g.mesFormatado,
       total: g.total,
       fechadas: g.fechadas,
       dentroMeta: g.dentroMeta,
@@ -293,6 +308,13 @@ const getParcialExibido = (auditoria) => {
   return ((analise.itensPendentes || 0) / total) * 100
 }
 
+const formatarDataISO = (dataStr) => {
+  if (!dataStr) return ''
+  const partes = String(dataStr).split('T')[0].split('-')
+  if (partes.length !== 3) return dataStr
+  return `${partes[2]}/${partes[1]}/${partes[0]}`
+}
+
 const auditoriasParaTabelaBase = computed(() => {
   return auditoriasFiltradas.value.map(a => {
     const analise = a.analise || {}
@@ -303,9 +325,12 @@ const auditoriasParaTabelaBase = computed(() => {
     return {
       id: a.id,
       data: a.data,
+      dataFormatada: formatarDataISO(a.data),
       tipo: a.tipo,
       status: a.status === 'fechada' ? 'Fechada' : 'Em andamento',
+      statusRaw: a.status,
       meta: a.status === 'fechada' ? (a.metaAlcancada ? 'Dentro da meta' : 'Fora da meta') : '-',
+      metaAlcancada: a.metaAlcancada,
       parcial: parcialValor,
       conclusao: conclusaoValor,
       totalItens: analise.totalItens ?? a.total ?? '',
@@ -333,6 +358,9 @@ const ordenacaoUsuarios = reactive({ coluna: 'total', direcao: 'desc' })
 const ordenacaoSetores = reactive({ coluna: 'percPendente', direcao: 'desc' })
 const ordenacaoAuditorias = reactive({ coluna: 'data', direcao: 'desc' })
 
+const paginaUsuarios = ref(1)
+const itensPorPaginaUsuarios = 10
+
 const ordenarLista = (lista, ordenacao) => {
   const arr = [...lista]
   const coluna = ordenacao.coluna
@@ -353,6 +381,11 @@ const ordenarLista = (lista, ordenacao) => {
 const agrupadoPorMes = computed(() => ordenarLista(agrupadoPorMesBase.value, ordenacaoMes))
 const desempenhoTipos = computed(() => ordenarLista(desempenhoTiposBase.value, ordenacaoTipos))
 const desempenhoUsuarios = computed(() => ordenarLista(desempenhoUsuariosBase.value, ordenacaoUsuarios))
+const totalPaginasUsuarios = computed(() => Math.ceil(desempenhoUsuarios.value.length / itensPorPaginaUsuarios))
+const desempenhoUsuariosPaginado = computed(() => {
+  const inicio = (paginaUsuarios.value - 1) * itensPorPaginaUsuarios
+  return desempenhoUsuarios.value.slice(inicio, inicio + itensPorPaginaUsuarios)
+})
 const desempenhoSetores = computed(() => ordenarLista(desempenhoSetoresBase.value, ordenacaoSetores))
 const auditoriasParaTabela = computed(() => ordenarLista(auditoriasParaTabelaBase.value, ordenacaoAuditorias))
 
@@ -364,6 +397,18 @@ const atualizarOrdenacao = (estado, coluna) => {
     estado.direcao = 'asc'
   }
 }
+
+const abrirAuditoria = (id) => {
+  if (id) router.push(`/auditorias/${id}`)
+}
+
+const tipoConfig = {
+  'Etiqueta': { cor: 'bg-violet-100 text-violet-700', icone: 'fa-tag' },
+  'Presença': { cor: 'bg-sky-100 text-sky-700', icone: 'fa-clipboard-check' },
+  'Ruptura': { cor: 'bg-orange-100 text-orange-700', icone: 'fa-exclamation-triangle' },
+  'Desconhecido': { cor: 'bg-slate-100 text-slate-600', icone: 'fa-question' }
+}
+const getTipoConfig = (tipo) => tipoConfig[tipo] || tipoConfig['Desconhecido']
 
 const gerarRelatorioPDF = () => {
   if (!auditoriasParaTabela.value.length) return
@@ -423,7 +468,7 @@ const gerarRelatorioPDF = () => {
     const linhas = agrupadoPorMes.value.map(m => {
       return `
         <tr>
-          <td>${escapeHtml(m.mes)}</td>
+          <td>${escapeHtml(m.mesFormatado)}</td>
           <td style="text-align:right;">${escapeHtml(m.total)}</td>
           <td style="text-align:right;">${formatPercent(m.mediaParcial)}</td>
           <td style="text-align:right;">${formatPercent(m.mediaConclusao)}</td>
@@ -492,7 +537,6 @@ const gerarRelatorioPDF = () => {
           <td>${escapeHtml(u.usuario)}</td>
           <td style="text-align:right;">${escapeHtml(u.lidos)}</td>
           <td style="text-align:right;">${escapeHtml(u.comProblema)}</td>
-          <td style="text-align:right;">${formatPercent(u.percPendente)}</td>
           <td style="text-align:right;">${formatPercent(u.percProblema)}</td>
         </tr>
       `
@@ -506,7 +550,6 @@ const gerarRelatorioPDF = () => {
               <th>Usuário</th>
               <th>Itens lidos</th>
               <th>Leituras com erro</th>
-              <th>% Pendentes</th>
               <th>% Problemas</th>
             </tr>
           </thead>
@@ -556,7 +599,7 @@ const gerarRelatorioPDF = () => {
       const conclusao = a.conclusao != null ? formatPercent(a.conclusao) : ''
       return `
         <tr>
-          <td>${escapeHtml(a.data)}</td>
+          <td>${escapeHtml(a.dataFormatada)}</td>
           <td>${escapeHtml(a.tipo)}</td>
           <td>${escapeHtml(a.status)}</td>
           <td>${escapeHtml(a.meta)}</td>
@@ -609,6 +652,7 @@ const gerarRelatorioPDF = () => {
 
 <template>
   <div class="min-h-[calc(100vh-4rem)] bg-linear-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div class="flex items-center gap-3">
         <div class="h-12 w-12 rounded-xl bg-indigo-600/10 flex items-center justify-center">
@@ -633,10 +677,11 @@ const gerarRelatorioPDF = () => {
       </div>
     </div>
 
+    <!-- Filtros -->
     <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 md:p-5 space-y-4">
       <div class="flex flex-wrap gap-3 items-end">
         <div class="flex flex-col gap-1">
-          <label class="text-[11px] font-semibold text-slate-500">Período</label>
+          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Período</label>
           <div class="flex flex-wrap gap-2 items-center">
             <select
               v-model="filtroPeriodoTipo"
@@ -672,7 +717,7 @@ const gerarRelatorioPDF = () => {
           </div>
         </div>
         <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 mb-1">Tipo</label>
+          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Tipo</label>
           <select
             v-model="filtroTipo"
             class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -684,7 +729,7 @@ const gerarRelatorioPDF = () => {
           </select>
         </div>
         <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 mb-1">Status</label>
+          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Status</label>
           <select
             v-model="filtroStatus"
             class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -695,7 +740,7 @@ const gerarRelatorioPDF = () => {
           </select>
         </div>
         <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 mb-1">Meta</label>
+          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Meta</label>
           <select
             v-model="filtroMeta"
             class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -705,164 +750,198 @@ const gerarRelatorioPDF = () => {
             <option value="fora">Fora da meta</option>
           </select>
         </div>
-        <div class="ml-auto text-xs text-slate-500">
-          {{ auditoriasFiltradas.length }} auditoria(s) no período selecionado
+        <div class="ml-auto flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
+            <i class="fas fa-filter text-[10px]"></i>
+            {{ auditoriasFiltradas.length }} auditoria(s)
+          </span>
         </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Total no período</p>
-          <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-slate-50 text-slate-700">
-            <i class="fas fa-history text-xs"></i>
+    <!-- Cards de Resumo -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Total no período -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total no período</p>
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600">
+            <i class="fas fa-history text-sm"></i>
           </span>
         </div>
-        <p class="mt-2 text-2xl md:text-3xl font-bold text-slate-800">
-          {{ resumoGeral.total }}
-        </p>
-        <p class="mt-1 text-[11px] text-slate-500">
-          Auditorias encontradas com os filtros atuais.
-        </p>
+        <p class="text-3xl font-bold text-slate-800">{{ resumoGeral.total }}</p>
+        <div class="flex items-center gap-3 text-[11px]">
+          <span class="inline-flex items-center gap-1 text-emerald-600 font-medium">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            {{ resumoGeral.fechadas }} fechadas
+          </span>
+          <span class="inline-flex items-center gap-1 text-amber-600 font-medium">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+            {{ resumoGeral.abertas }} abertas
+          </span>
+        </div>
       </div>
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Taxa de meta</p>
-          <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-emerald-50 text-emerald-600">
-            <i class="fas fa-bullseye text-xs"></i>
+
+      <!-- Taxa de meta -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Taxa de meta</p>
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg" :class="resumoGeral.percDentroMeta >= 70 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'">
+            <i class="fas fa-bullseye text-sm"></i>
           </span>
         </div>
-        <p class="mt-2 text-2xl md:text-3xl font-bold" :class="resumoGeral.percDentroMeta >= 70 ? 'text-emerald-700' : 'text-amber-700'">
+        <p class="text-3xl font-bold" :class="resumoGeral.percDentroMeta >= 70 ? 'text-emerald-700' : 'text-amber-700'">
           {{ resumoGeral.percDentroMeta.toFixed(1) }}%
         </p>
-        <p class="mt-1 text-[11px] text-slate-500">
-          Das auditorias fechadas ficaram dentro da meta.
-        </p>
+        <div class="w-full bg-slate-100 rounded-full h-2">
+          <div
+            class="h-2 rounded-full transition-all duration-500"
+            :class="resumoGeral.percDentroMeta >= 70 ? 'bg-emerald-500' : 'bg-amber-500'"
+            :style="{ width: Math.min(resumoGeral.percDentroMeta, 100) + '%' }"
+          ></div>
+        </div>
+        <div class="flex items-center gap-3 text-[11px]">
+          <span class="text-emerald-600 font-medium">{{ resumoGeral.dentroMeta }} dentro</span>
+          <span class="text-red-500 font-medium">{{ resumoGeral.foraMeta }} fora</span>
+        </div>
       </div>
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Parcial média</p>
-          <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-amber-50 text-amber-600">
-            <i class="fas fa-hourglass-half text-xs"></i>
+
+      <!-- Parcial média -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Parcial média</p>
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg" :class="resumoGeral.percParcialMedia > 3 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'">
+            <i class="fas fa-hourglass-half text-sm"></i>
           </span>
         </div>
-        <p class="mt-2 text-2xl md:text-3xl font-bold" :class="resumoGeral.percParcialMedia > 3 ? 'text-amber-700' : 'text-emerald-700'">
+        <p class="text-3xl font-bold" :class="resumoGeral.percParcialMedia > 3 ? 'text-amber-700' : 'text-emerald-700'">
           {{ resumoGeral.percParcialMedia.toFixed(2) }}%
         </p>
-        <p class="mt-1 text-[11px] text-slate-500">
-          Percentual médio pendente das auditorias no período.
-        </p>
+        <div class="w-full bg-slate-100 rounded-full h-2">
+          <div
+            class="h-2 rounded-full transition-all duration-500"
+            :class="resumoGeral.percParcialMedia > 3 ? 'bg-amber-500' : 'bg-emerald-500'"
+            :style="{ width: Math.min(resumoGeral.percParcialMedia, 100) + '%' }"
+          ></div>
+        </div>
+        <p class="text-[11px] text-slate-500">Percentual médio pendente</p>
       </div>
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-        <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Conclusão média</p>
-          <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
-            <i class="fas fa-check-circle text-xs"></i>
+
+      <!-- Conclusão média -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Conclusão média</p>
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
+            <i class="fas fa-check-circle text-sm"></i>
           </span>
         </div>
-        <p class="mt-2 text-2xl md:text-3xl font-bold text-blue-700">
+        <p class="text-3xl font-bold text-blue-700">
           {{ resumoGeral.percConclusaoMedia.toFixed(2) }}%
         </p>
-        <p class="mt-1 text-[11px] text-slate-500">
-          Percentual médio concluído das auditorias no período.
-        </p>
+        <div class="w-full bg-slate-100 rounded-full h-2">
+          <div
+            class="h-2 rounded-full bg-blue-500 transition-all duration-500"
+            :style="{ width: Math.min(resumoGeral.percConclusaoMedia, 100) + '%' }"
+          ></div>
+        </div>
+        <p class="text-[11px] text-slate-500">Percentual médio concluído</p>
       </div>
     </div>
 
+    <!-- Evolução mensal + Desempenho por tipo -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <i class="fas fa-calendar-week text-indigo-600"></i>
-            Evolução mensal
-          </h2>
+      <!-- Evolução mensal -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <i class="fas fa-calendar-week text-indigo-600 text-sm"></i>
+          </div>
+          <h2 class="text-sm font-bold text-slate-800">Evolução mensal</h2>
         </div>
-        <div v-if="agrupadoPorMes.length === 0" class="text-xs text-slate-500">
-          Nenhuma auditoria encontrada para o período selecionado.
+        <div v-if="agrupadoPorMes.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+          <i class="fas fa-calendar-times text-3xl mb-2"></i>
+          <p class="text-xs">Nenhuma auditoria encontrada para o período selecionado.</p>
         </div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-slate-50 border-b">
-              <tr>
+            <thead>
+              <tr class="border-b-2 border-slate-100">
                 <th
-                  class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoMes, 'mes')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Mês
-                    <i
-                      class="fas"
-                      :class="ordenacaoMes.coluna === 'mes' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mes' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoMes, 'total')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Qtd
-                    <i
-                      class="fas"
-                      :class="ordenacaoMes.coluna === 'total' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'total' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoMes, 'mediaParcial')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Parcial
-                    <i
-                      class="fas"
-                      :class="ordenacaoMes.coluna === 'mediaParcial' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mediaParcial' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoMes, 'mediaConclusao')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Conclusão
-                    <i
-                      class="fas"
-                      :class="ordenacaoMes.coluna === 'mediaConclusao' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mediaConclusao' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoMes, 'taxaMeta')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Meta
-                    <i
-                      class="fas"
-                      :class="ordenacaoMes.coluna === 'taxaMeta' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'taxaMeta' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y">
-              <tr v-for="m in agrupadoPorMes" :key="m.mes" class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-slate-700 font-medium">
-                  {{ m.mes }}
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="(m, idx) in agrupadoPorMes" :key="m.mes" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ m.mesFormatado }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <span class="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">{{ m.total }}</span>
                 </td>
-                <td class="px-2 py-2 text-right text-slate-700">
-                  {{ m.total }}
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full transition-all" :class="m.mediaParcial > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(m.mediaParcial, 100) + '%' }"></div>
+                    </div>
+                    <span class="font-semibold" :class="m.mediaParcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ m.mediaParcial.toFixed(2) }}%</span>
+                  </div>
                 </td>
-                <td class="px-2 py-2 text-right" :class="m.mediaParcial > 3 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'">
-                  {{ m.mediaParcial.toFixed(2) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-blue-400 transition-all" :style="{ width: Math.min(m.mediaConclusao, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-blue-700 font-semibold">{{ m.mediaConclusao.toFixed(2) }}%</span>
+                  </div>
                 </td>
-                <td class="px-2 py-2 text-right text-blue-700 font-semibold">
-                  {{ m.mediaConclusao.toFixed(2) }}%
-                </td>
-                <td class="px-2 py-2 text-right text-emerald-700 font-semibold">
-                  {{ m.taxaMeta.toFixed(1) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-emerald-400 transition-all" :style="{ width: Math.min(m.taxaMeta, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-emerald-700 font-semibold">{{ m.taxaMeta.toFixed(1) }}%</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -870,98 +949,103 @@ const gerarRelatorioPDF = () => {
         </div>
       </div>
 
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <i class="fas fa-layer-group text-indigo-600"></i>
-            Desempenho por tipo de auditoria
-          </h2>
+      <!-- Desempenho por tipo -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <i class="fas fa-layer-group text-indigo-600 text-sm"></i>
+          </div>
+          <h2 class="text-sm font-bold text-slate-800">Desempenho por tipo de auditoria</h2>
         </div>
-        <div v-if="desempenhoTipos.length === 0" class="text-xs text-slate-500">
-          Nenhuma auditoria encontrada para o período selecionado.
+        <div v-if="desempenhoTipos.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+          <i class="fas fa-layer-group text-3xl mb-2"></i>
+          <p class="text-xs">Nenhuma auditoria encontrada para o período selecionado.</p>
         </div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-slate-50 border-b">
-              <tr>
+            <thead>
+              <tr class="border-b-2 border-slate-100">
                 <th
-                  class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoTipos, 'tipo')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Tipo
-                    <i
-                      class="fas"
-                      :class="ordenacaoTipos.coluna === 'tipo' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'tipo' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoTipos, 'total')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Qtd
-                    <i
-                      class="fas"
-                      :class="ordenacaoTipos.coluna === 'total' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'total' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoTipos, 'mediaParcial')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Parcial
-                    <i
-                      class="fas"
-                      :class="ordenacaoTipos.coluna === 'mediaParcial' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'mediaParcial' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoTipos, 'mediaConclusao')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Conclusão
-                    <i
-                      class="fas"
-                      :class="ordenacaoTipos.coluna === 'mediaConclusao' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'mediaConclusao' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoTipos, 'taxaMeta')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Meta
-                    <i
-                      class="fas"
-                      :class="ordenacaoTipos.coluna === 'taxaMeta' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'taxaMeta' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y">
-              <tr v-for="t in desempenhoTipos" :key="t.tipo" class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-slate-700 font-medium">
-                  {{ t.tipo }}
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="(t, idx) in desempenhoTipos" :key="t.tipo" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                <td class="px-3 py-2.5">
+                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold" :class="getTipoConfig(t.tipo).cor">
+                    <i class="fas text-[9px]" :class="getTipoConfig(t.tipo).icone"></i>
+                    {{ t.tipo }}
+                  </span>
                 </td>
-                <td class="px-2 py-2 text-right text-slate-700">
-                  {{ t.total }}
+                <td class="px-3 py-2.5 text-right">
+                  <span class="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">{{ t.total }}</span>
                 </td>
-                <td class="px-2 py-2 text-right" :class="t.mediaParcial > 3 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'">
-                  {{ t.mediaParcial.toFixed(2) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full transition-all" :class="t.mediaParcial > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(t.mediaParcial, 100) + '%' }"></div>
+                    </div>
+                    <span class="font-semibold" :class="t.mediaParcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ t.mediaParcial.toFixed(2) }}%</span>
+                  </div>
                 </td>
-                <td class="px-2 py-2 text-right text-blue-700 font-semibold">
-                  {{ t.mediaConclusao.toFixed(2) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-blue-400 transition-all" :style="{ width: Math.min(t.mediaConclusao, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-blue-700 font-semibold">{{ t.mediaConclusao.toFixed(2) }}%</span>
+                  </div>
                 </td>
-                <td class="px-2 py-2 text-right text-emerald-700 font-semibold">
-                  {{ t.taxaMeta.toFixed(1) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-emerald-400 transition-all" :style="{ width: Math.min(t.taxaMeta, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-emerald-700 font-semibold">{{ t.taxaMeta.toFixed(1) }}%</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -970,198 +1054,216 @@ const gerarRelatorioPDF = () => {
       </div>
     </div>
 
+    <!-- Desempenho por usuário + Desempenho por setor -->
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <i class="fas fa-users text-indigo-600"></i>
-            Desempenho por usuário
-          </h2>
+      <!-- Desempenho por usuário -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <i class="fas fa-users text-indigo-600 text-sm"></i>
+          </div>
+          <h2 class="text-sm font-bold text-slate-800">Desempenho por usuário</h2>
+          <span v-if="desempenhoUsuarios.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ desempenhoUsuarios.length }} usuário(s)</span>
         </div>
-        <div v-if="desempenhoUsuarios.length === 0" class="text-xs text-slate-500">
-          Nenhuma informação de usuários encontrada no período.
+        <div v-if="desempenhoUsuarios.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+          <i class="fas fa-users text-3xl mb-2"></i>
+          <p class="text-xs">Nenhuma informação de usuários encontrada no período.</p>
         </div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-slate-50 border-b">
-              <tr>
+            <thead>
+              <tr class="border-b-2 border-slate-100">
                 <th
-                  class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'usuario')"
+                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
+                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'usuario'); paginaUsuarios = 1"
                 >
                   <span class="inline-flex items-center gap-1">
                     Usuário
-                    <i
-                      class="fas"
-                      :class="ordenacaoUsuarios.coluna === 'usuario' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'usuario' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'lidos')"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
+                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'lidos'); paginaUsuarios = 1"
                 >
                   <span class="inline-flex items-center gap-1">
                     Itens Lidos
-                    <i
-                      class="fas"
-                      :class="ordenacaoUsuarios.coluna === 'lidos' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'lidos' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'comProblema')"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
+                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'comProblema'); paginaUsuarios = 1"
                 >
                   <span class="inline-flex items-center gap-1">
-                    Leituras com erro
-                    <i
-                      class="fas"
-                      :class="ordenacaoUsuarios.coluna === 'comProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    Com erro
+                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'comProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'percPendente')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Pendentes
-                    <i
-                      class="fas"
-                      :class="ordenacaoUsuarios.coluna === 'percPendente' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
-                  </span>
-                </th>
-                <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'percProblema')"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
+                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'percProblema'); paginaUsuarios = 1"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Problemas
-                    <i
-                      class="fas"
-                      :class="ordenacaoUsuarios.coluna === 'percProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'percProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y">
-              <tr v-for="u in desempenhoUsuarios" :key="u.usuario" class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-slate-700 font-medium">
-                  {{ u.usuario }}
-                </td>
-                <td class="px-2 py-2 text-right text-emerald-700 font-semibold">
-                  {{ u.lidos }}
-                </td>
-                <td class="px-2 py-2 text-right text-amber-700 font-semibold">
-                  {{ u.comProblema }}
-                </td>
-                <td class="px-2 py-2 text-right" :class="u.percPendente > 3 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'">
-                  {{ u.percPendente.toFixed(2) }}%
-                </td>
-                <td class="px-2 py-2 text-right text-red-600 font-semibold">
-                  {{ u.percProblema.toFixed(2) }}%
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="(u, idx) in desempenhoUsuariosPaginado" :key="u.usuario" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ u.usuario }}</td>
+                <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ u.lidos.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-red-400 transition-all" :style="{ width: Math.min(u.percProblema * 5, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-red-600 font-semibold">{{ u.percProblema.toFixed(2) }}%</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <!-- Paginação -->
+        <div v-if="totalPaginasUsuarios > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <p class="text-[11px] text-slate-500">
+            Página {{ paginaUsuarios }} de {{ totalPaginasUsuarios }}
+          </p>
+          <div class="flex items-center gap-1">
+            <button
+              @click="paginaUsuarios = 1"
+              :disabled="paginaUsuarios === 1"
+              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+            >
+              <i class="fas fa-angle-double-left"></i>
+            </button>
+            <button
+              @click="paginaUsuarios--"
+              :disabled="paginaUsuarios === 1"
+              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+            >
+              <i class="fas fa-angle-left"></i>
+            </button>
+            <template v-for="p in totalPaginasUsuarios" :key="p">
+              <button
+                v-if="p === 1 || p === totalPaginasUsuarios || (p >= paginaUsuarios - 1 && p <= paginaUsuarios + 1)"
+                @click="paginaUsuarios = p"
+                class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition"
+                :class="p === paginaUsuarios ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'"
+              >
+                {{ p }}
+              </button>
+              <span
+                v-else-if="p === paginaUsuarios - 2 || p === paginaUsuarios + 2"
+                class="text-slate-400 text-[11px] px-1"
+              >...</span>
+            </template>
+            <button
+              @click="paginaUsuarios++"
+              :disabled="paginaUsuarios === totalPaginasUsuarios"
+              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+            >
+              <i class="fas fa-angle-right"></i>
+            </button>
+            <button
+              @click="paginaUsuarios = totalPaginasUsuarios"
+              :disabled="paginaUsuarios === totalPaginasUsuarios"
+              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+            >
+              <i class="fas fa-angle-double-right"></i>
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-            <i class="fas fa-store-alt text-indigo-600"></i>
-            Desempenho por setor
-          </h2>
+      <!-- Desempenho por setor -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <i class="fas fa-store-alt text-indigo-600 text-sm"></i>
+          </div>
+          <h2 class="text-sm font-bold text-slate-800">Desempenho por setor</h2>
+          <span v-if="desempenhoSetores.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ desempenhoSetores.length }} setor(es)</span>
         </div>
-        <div v-if="desempenhoSetores.length === 0" class="text-xs text-slate-500">
-          Nenhuma informação de setores encontrada no período.
+        <div v-if="desempenhoSetores.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+          <i class="fas fa-store-alt text-3xl mb-2"></i>
+          <p class="text-xs">Nenhuma informação de setores encontrada no período.</p>
         </div>
         <div v-else class="overflow-x-auto">
           <table class="w-full text-xs">
-            <thead class="bg-slate-50 border-b">
-              <tr>
+            <thead>
+              <tr class="border-b-2 border-slate-100">
                 <th
-                  class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoSetores, 'setor')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Setor
-                    <i
-                      class="fas"
-                      :class="ordenacaoSetores.coluna === 'setor' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'setor' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoSetores, 'lidos')"
                 >
                   <span class="inline-flex items-center gap-1">
                     Itens Lidos
-                    <i
-                      class="fas"
-                      :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoSetores, 'comProblema')"
                 >
                   <span class="inline-flex items-center gap-1">
-                    Leituras com erro
-                    <i
-                      class="fas"
-                      :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    Com erro
+                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoSetores, 'percPendente')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Pendentes
-                    <i
-                      class="fas"
-                      :class="ordenacaoSetores.coluna === 'percPendente' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percPendente' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
                 <th
-                  class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                   @click="atualizarOrdenacao(ordenacaoSetores, 'percProblema')"
                 >
                   <span class="inline-flex items-center gap-1">
                     % Problemas
-                    <i
-                      class="fas"
-                      :class="ordenacaoSetores.coluna === 'percProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                    />
+                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                   </span>
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y">
-              <tr v-for="s in desempenhoSetores" :key="s.setor" class="hover:bg-slate-50">
-                <td class="px-2 py-2 text-slate-700 font-medium">
-                  {{ s.setor }}
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="(s, idx) in desempenhoSetores" :key="s.setor" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ s.setor }}</td>
+                <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ s.lidos.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ s.comProblema.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full transition-all" :class="s.percPendente > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(s.percPendente, 100) + '%' }"></div>
+                    </div>
+                    <span class="font-semibold" :class="s.percPendente > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ s.percPendente.toFixed(2) }}%</span>
+                  </div>
                 </td>
-                <td class="px-2 py-2 text-right text-emerald-700 font-semibold">
-                  {{ s.lidos }}
-                </td>
-                <td class="px-2 py-2 text-right text-amber-700 font-semibold">
-                  {{ s.comProblema }}
-                </td>
-                <td class="px-2 py-2 text-right" :class="s.percPendente > 3 ? 'text-amber-700 font-semibold' : 'text-emerald-700 font-semibold'">
-                  {{ s.percPendente.toFixed(2) }}%
-                </td>
-                <td class="px-2 py-2 text-right text-red-600 font-semibold">
-                  {{ s.percProblema.toFixed(2) }}%
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full bg-red-400 transition-all" :style="{ width: Math.min(s.percProblema * 5, 100) + '%' }"></div>
+                    </div>
+                    <span class="text-red-600 font-semibold">{{ s.percProblema.toFixed(2) }}%</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -1170,159 +1272,153 @@ const gerarRelatorioPDF = () => {
       </div>
     </div>
 
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 space-y-3">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <i class="fas fa-table text-indigo-600"></i>
-          Lista detalhada das auditorias filtradas
-        </h2>
+    <!-- Tabela detalhada de auditorias -->
+    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+          <i class="fas fa-table text-indigo-600 text-sm"></i>
+        </div>
+        <h2 class="text-sm font-bold text-slate-800">Lista detalhada das auditorias filtradas</h2>
+        <span v-if="auditoriasParaTabela.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ auditoriasParaTabela.length }} registro(s)</span>
       </div>
-      <div v-if="auditoriasParaTabela.length === 0" class="text-xs text-slate-500">
-        Nenhuma auditoria encontrada com os filtros selecionados.
+      <div v-if="auditoriasParaTabela.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
+        <i class="fas fa-search text-4xl mb-3"></i>
+        <p class="text-sm font-medium">Nenhuma auditoria encontrada</p>
+        <p class="text-xs mt-1">Tente ajustar os filtros selecionados.</p>
       </div>
       <div v-else class="overflow-x-auto">
         <table class="w-full text-xs">
-          <thead class="bg-slate-50 border-b">
-            <tr>
+          <thead>
+            <tr class="border-b-2 border-slate-100">
               <th
-                class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'data')"
               >
                 <span class="inline-flex items-center gap-1">
                   Data
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'data' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'data' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'tipo')"
               >
                 <span class="inline-flex items-center gap-1">
                   Tipo
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'tipo' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'tipo' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'status')"
               >
                 <span class="inline-flex items-center gap-1">
                   Status
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'status' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'status' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-left font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'meta')"
               >
                 <span class="inline-flex items-center gap-1">
                   Meta
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'meta' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'meta' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'parcial')"
               >
                 <span class="inline-flex items-center gap-1">
                   % Parcial
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'parcial' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'parcial' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'conclusao')"
               >
                 <span class="inline-flex items-center gap-1">
                   % Conclusão
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'conclusao' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'conclusao' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'totalItens')"
               >
                 <span class="inline-flex items-center gap-1">
                   Itens
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'totalItens' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'totalItens' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'pendentes')"
               >
                 <span class="inline-flex items-center gap-1">
                   Pendentes
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'pendentes' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'pendentes' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
               <th
-                class="px-2 py-2 text-right font-semibold text-slate-600 cursor-pointer select-none"
+                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
                 @click="atualizarOrdenacao(ordenacaoAuditorias, 'lidos')"
               >
                 <span class="inline-flex items-center gap-1">
                   Lidos
-                  <i
-                    class="fas"
-                    :class="ordenacaoAuditorias.coluna === 'lidos' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"
-                  />
+                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'lidos' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                 </span>
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y">
-            <tr v-for="a in auditoriasParaTabela" :key="a.id" class="hover:bg-slate-50">
-              <td class="px-2 py-2 text-slate-700">
-                {{ a.data }}
+          <tbody class="divide-y divide-slate-50">
+            <tr
+              v-for="(a, idx) in auditoriasParaTabela"
+              :key="a.id"
+              class="transition-colors cursor-pointer group"
+              :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'"
+              @click="abrirAuditoria(a.id)"
+            >
+              <td class="px-3 py-2.5 text-slate-700 font-medium">
+                <span class="group-hover:text-indigo-600 transition-colors">{{ a.dataFormatada }}</span>
               </td>
-              <td class="px-2 py-2 text-slate-700">
-                {{ a.tipo }}
+              <td class="px-3 py-2.5">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold" :class="getTipoConfig(a.tipo).cor">
+                  <i class="fas text-[9px]" :class="getTipoConfig(a.tipo).icone"></i>
+                  {{ a.tipo }}
+                </span>
               </td>
-              <td class="px-2 py-2 text-slate-700">
-                {{ a.status }}
+              <td class="px-3 py-2.5">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                  :class="a.statusRaw === 'fechada' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full" :class="a.statusRaw === 'fechada' ? 'bg-emerald-500' : 'bg-sky-500'"></span>
+                  {{ a.status }}
+                </span>
               </td>
-              <td class="px-2 py-2 text-slate-700">
-                {{ a.meta }}
+              <td class="px-3 py-2.5">
+                <span
+                  v-if="a.meta !== '-'"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                  :class="a.metaAlcancada ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'"
+                >
+                  <i class="fas text-[9px]" :class="a.metaAlcancada ? 'fa-check' : 'fa-times'"></i>
+                  {{ a.metaAlcancada ? 'Dentro' : 'Fora' }}
+                </span>
+                <span v-else class="text-slate-400">-</span>
               </td>
-              <td class="px-2 py-2 text-right text-amber-700 font-semibold">
-                {{ a.parcial != null ? `${a.parcial.toFixed(2)}%` : '' }}
+              <td class="px-3 py-2.5 text-right">
+                <span v-if="a.parcial != null" class="font-semibold" :class="a.parcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ a.parcial.toFixed(2) }}%</span>
               </td>
-              <td class="px-2 py-2 text-right text-blue-700 font-semibold">
-                {{ a.conclusao != null ? `${a.conclusao.toFixed(2)}%` : '' }}
+              <td class="px-3 py-2.5 text-right">
+                <span v-if="a.conclusao != null" class="text-blue-700 font-semibold">{{ a.conclusao.toFixed(2) }}%</span>
               </td>
-              <td class="px-2 py-2 text-right text-slate-700">
-                {{ a.totalItens }}
-              </td>
-              <td class="px-2 py-2 text-right text-amber-700 font-semibold">
-                {{ a.pendentes }}
-              </td>
-              <td class="px-2 py-2 text-right text-emerald-700 font-semibold">
-                {{ a.lidos }}
-              </td>
+              <td class="px-3 py-2.5 text-right text-slate-700">{{ typeof a.totalItens === 'number' ? a.totalItens.toLocaleString('pt-BR') : a.totalItens }}</td>
+              <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ typeof a.pendentes === 'number' ? a.pendentes.toLocaleString('pt-BR') : a.pendentes }}</td>
+              <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ typeof a.lidos === 'number' ? a.lidos.toLocaleString('pt-BR') : a.lidos }}</td>
             </tr>
           </tbody>
         </table>

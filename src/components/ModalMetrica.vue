@@ -136,17 +136,13 @@
 
         <div v-if="lista.length > 0" class="space-y-3 pt-4 border-t">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
-            <p class="font-bold text-gray-800">
-              <i class="fas fa-list mr-2"></i>Lista de Itens
-              <span class="text-sm font-normal text-gray-500 ml-2">({{ lista.length }} encontrados)</span>
-            </p>
             <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
               <select
                 v-if="usuariosOpcoes.length > 0"
                 v-model="filtroUsuario"
                 class="border border-gray-300 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white"
               >
-                <option value="">Todos usuários</option>
+                <option value="">Todos usuarios</option>
                 <option v-for="u in usuariosOpcoes" :key="u" :value="u">{{ u }}</option>
               </select>
               <select
@@ -179,33 +175,74 @@
                 class="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition shadow"
               >
                 <i class="fas fa-print mr-1"></i>
-                <span class="hidden sm:inline">Imprimir relatório</span>
+                <span class="hidden sm:inline">Imprimir relatorio</span>
                 <span class="sm:hidden">Imprimir</span>
               </button>
             </div>
           </div>
-          
-          <TabelaInterativaAuditoria
-            ref="tabelaListaRef"
-            :dados="lista"
-            :colunas="colunas"
-            :itensPorPagina="15"
-            :mostrarBusca="true"
-            :exibirTudo="exibirTudoTabela"
-          >
-            <template #cell-_estoque="{ item }">
-              <span class="font-mono">{{ item._estoque || 0 }}</span>
-            </template>
-            
-            <template #cell-Motivo="{ item }">
-              <span 
-                class="px-2 py-0.5 rounded text-xs font-bold"
-                :class="item._problema === 'Estoque Zero' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'"
-              >
-                {{ item._problema }}
-              </span>
-            </template>
-          </TabelaInterativaAuditoria>
+
+          <!-- Search bar -->
+          <div class="relative mb-3">
+            <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+            <input v-model="buscaLista" type="text" placeholder="Buscar por código, produto ou local..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64" @input="paginaLista = 1" />
+          </div>
+
+          <!-- Empty state -->
+          <div v-if="listaOrdenada.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+            <i class="fas fa-check-circle text-3xl mb-2"></i>
+            <p class="text-xs">Nenhum item encontrado.</p>
+          </div>
+
+          <!-- Table -->
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacao(ordenacaoLista, 'Código'); paginaLista = 1">
+                    <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoLista.coluna === 'Código' ? (ordenacaoLista.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacao(ordenacaoLista, 'Produto'); paginaLista = 1">
+                    <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoLista.coluna === 'Produto' ? (ordenacaoLista.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacao(ordenacaoLista, 'Local'); paginaLista = 1">
+                    <span class="inline-flex items-center gap-1">Local <i class="fas text-[10px]" :class="ordenacaoLista.coluna === 'Local' ? (ordenacaoLista.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacao(ordenacaoLista, '_estoque'); paginaLista = 1">
+                    <span class="inline-flex items-center gap-1 justify-end">Estoque <i class="fas text-[10px]" :class="ordenacaoLista.coluna === '_estoque' ? (ordenacaoLista.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th v-if="tipo === 'problema'" class="px-3 py-2.5 text-center font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacao(ordenacaoLista, 'Motivo'); paginaLista = 1">
+                    <span class="inline-flex items-center gap-1">Motivo <i class="fas text-[10px]" :class="ordenacaoLista.coluna === 'Motivo' ? (ordenacaoLista.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr v-for="(item, idx) in listaPaginada" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40'">
+                  <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item['Código'] }}</td>
+                  <td class="px-3 py-2.5 text-slate-700">{{ item['Produto'] }}</td>
+                  <td class="px-3 py-2.5 text-slate-600">{{ item['Local'] }}</td>
+                  <td class="px-3 py-2.5 text-right font-mono text-slate-700">{{ item._estoque || 0 }}</td>
+                  <td v-if="tipo === 'problema'" class="px-3 py-2.5 text-center">
+                    <span class="px-2 py-0.5 rounded text-xs font-bold" :class="item._problema === 'Estoque Zero' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'">{{ item._problema }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div v-if="totalPaginasLista > 1" class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
+            <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaLista - 1) * itensPorPaginaLista) + 1 }} a {{ Math.min(paginaLista * itensPorPaginaLista, listaOrdenada.length) }} de {{ listaOrdenada.length }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaLista = 1" :disabled="paginaLista === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+              <button @click="paginaLista--" :disabled="paginaLista === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+              <template v-for="p in paginasVisiveis" :key="p">
+                <button v-if="typeof p === 'number'" @click="paginaLista = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaLista ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                <span v-else class="text-slate-400 text-[11px] px-1">...</span>
+              </template>
+              <button @click="paginaLista++" :disabled="paginaLista === totalPaginasLista" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+              <button @click="paginaLista = totalPaginasLista" :disabled="paginaLista === totalPaginasLista" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -223,8 +260,7 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
-import TabelaInterativaAuditoria from './TabelaInterativaAuditoria.vue'
+import { computed, ref, watch } from 'vue'
 import { printTableInNewWindow } from '../utils/print'
 
 const props = defineProps({
@@ -237,12 +273,14 @@ const props = defineProps({
 
 const emit = defineEmits(['fechar'])
 
-const tabelaListaRef = ref(null)
-const exibirTudoTabela = ref(false)
 const filtroUsuario = ref('')
 const filtroSetor = ref('')
 const filtroLocal = ref('')
 const filtroProblema = ref('')
+const paginaLista = ref(1)
+const itensPorPaginaLista = 15
+const buscaLista = ref('')
+const ordenacaoLista = ref({ coluna: '_estoque', direcao: 'desc' })
 
 const titulo = computed(() => {
   const titulos = {
@@ -438,37 +476,67 @@ const lista = computed(() => {
   return filtrada.sort((a, b) => (b._estoque || 0) - (a._estoque || 0))
 })
 
-const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
-  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
-  const root = tabelaRef.value.$el
-  const tbody = root.querySelector('tbody')
-  if (!tbody) return null
-  const trs = Array.from(tbody.querySelectorAll('tr'))
-  if (!trs.length) return null
-  const dados = []
-  trs.forEach(tr => {
-    const tds = Array.from(tr.querySelectorAll('td'))
-    if (!tds.length) return
-    const obj = {}
-    colunas.forEach((col, idx) => {
-      const td = tds[idx]
-      const texto = td ? td.textContent ?? '' : ''
-      obj[col.chave] = String(texto).trim()
-    })
-    dados.push(obj)
-  })
-  return dados
+const atualizarOrdenacao = (obj, coluna) => {
+  if (obj.coluna === coluna) {
+    obj.direcao = obj.direcao === 'asc' ? 'desc' : 'asc'
+  } else {
+    obj.coluna = coluna
+    obj.direcao = 'asc'
+  }
 }
 
-const imprimirLista = async () => {
-  if (!colunas.value.length) return
-  exibirTudoTabela.value = true
-  await nextTick()
-  const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaListaRef, colunas.value)
-  exibirTudoTabela.value = false
-  const base = dadosOrdenados && dadosOrdenados.length ? dadosOrdenados : lista.value
-  if (!base || !base.length) return
+const listaFiltradaBusca = computed(() => {
+  if (!buscaLista.value) return lista.value
+  const termo = normalizar(buscaLista.value)
+  return lista.value.filter(item =>
+    normalizar(item['Código']).includes(termo) ||
+    normalizar(item['Produto']).includes(termo) ||
+    normalizar(item['Local']).includes(termo)
+  )
+})
+
+const listaOrdenada = computed(() => {
+  const items = [...listaFiltradaBusca.value]
+  const { coluna, direcao } = ordenacaoLista.value
+  const mult = direcao === 'asc' ? 1 : -1
+  return items.sort((a, b) => {
+    const va = a[coluna] ?? ''
+    const vb = b[coluna] ?? ''
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mult
+    return String(va).localeCompare(String(vb), 'pt-BR', { numeric: true }) * mult
+  })
+})
+
+const totalPaginasLista = computed(() => Math.max(1, Math.ceil(listaOrdenada.value.length / itensPorPaginaLista)))
+
+const listaPaginada = computed(() => {
+  const pagina = Math.min(paginaLista.value, totalPaginasLista.value)
+  const inicio = (pagina - 1) * itensPorPaginaLista
+  return listaOrdenada.value.slice(inicio, inicio + itensPorPaginaLista)
+})
+
+const paginasVisiveis = computed(() => {
+  const total = totalPaginasLista.value
+  const atual = paginaLista.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = []
+  pages.push(1)
+  if (atual > 3) pages.push('...')
+  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) {
+    pages.push(i)
+  }
+  if (atual < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+})
+
+watch([buscaLista, lista], () => {
+  paginaLista.value = 1
+})
+
+const imprimirLista = () => {
+  if (!colunas.value.length || !lista.value.length) return
   const tituloRel = `Auditoria - ${titulo.value}`
-  printTableInNewWindow(base, colunas.value, tituloRel)
+  printTableInNewWindow(lista.value, colunas.value, tituloRel)
 }
 </script>

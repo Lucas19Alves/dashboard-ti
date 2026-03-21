@@ -1,11 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
-import TabelaInterativaAuditoria from '../components/TabelaInterativaAuditoria.vue'
 import { printTableInNewWindow } from '../utils/print'
 
 const normalizar = (valor) => {
@@ -90,13 +89,6 @@ const colunasGrandeEstoque = [
   { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' }
 ]
 
-const colunasMuitoTempo = [
-  { chave: 'codigo', titulo: 'Código', sortable: true },
-  { chave: 'produto', titulo: 'Produto', sortable: true },
-  { chave: 'estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
-  { chave: 'dias', titulo: 'Dias atrás', sortable: true, alinhamento: 'right' }
-]
-
 const colunasDadosBase = [
     { chave: 'Código', titulo: 'Código', sortable: true },
     { chave: 'Produto', titulo: 'Produto', sortable: true },
@@ -140,7 +132,6 @@ const filtroSetorFornecedor = ref('todos')
 const filtroSetorEstoqueZero = ref('todos')
 const filtroSetorLocalErrado = ref('todos')
 const filtroSetorGrandeEstoque = ref('todos')
-const filtroSetorMuitoTempo = ref('todos')
 const filtroSetorRuptura = ref('todos')
 const filtroUsuarioEstoqueZero = ref('todos')
 const filtroUsuarioLocalErrado = ref('todos')
@@ -153,6 +144,9 @@ const viewModeLocais = ref('grid') // 'grid' ou 'list'
 const modalRelatorioAberto = ref(false)
 const filtroItens = ref('')
 const ordenacaoUsuarios = ref({ coluna: 'totalLidos', direcao: 'desc' })
+const paginaUsuariosTab = ref(1)
+const itensPorPaginaUsuariosTab = 10
+const buscaUsuariosTab = ref('')
 const ordenacaoItens = ref({ coluna: 'Código', direcao: 'asc' })
 const filtroStatusItens = ref('todos')
 const modalUsuarioAberto = ref(false)
@@ -162,12 +156,46 @@ const modalItensAberto = ref(false)
 const itensModal = ref([])
 const tituloModalItens = ref('')
 const printAreaItens = ref(null)
-const tabelaItensRef = ref(null)
-const tabelaUsuariosRef = ref(null)
 const printAreaRelatorio = ref(null)
-const exibirTudoPDFItens = ref(false)
 const editandoSku = ref(false)
 const skuEditavel = ref('')
+
+// Paginação/ordenação das tabelas de dados críticos
+const paginaDadosEstoqueZero = ref(1)
+const paginaDadosLocalErrado = ref(1)
+const paginaDadosGrandeEstoque = ref(1)
+const paginaDadosRuptura = ref(1)
+const itensPorPaginaDados = 10
+const buscaDadosEstoqueZero = ref('')
+const buscaDadosLocalErrado = ref('')
+const buscaDadosGrandeEstoque = ref('')
+const buscaDadosRuptura = ref('')
+const ordenacaoDadosEstoqueZero = ref({ coluna: 'codigo', direcao: 'asc' })
+const ordenacaoDadosLocalErrado = ref({ coluna: 'codigo', direcao: 'asc' })
+const ordenacaoDadosGrandeEstoque = ref({ coluna: 'estoque', direcao: 'desc' })
+const ordenacaoDadosRuptura = ref({ coluna: 'custo', direcao: 'desc' })
+
+// Fornecedor table state
+const paginaFornecedorTab = ref(1)
+const buscaFornecedorTab = ref('')
+const ordenacaoFornecedorTab = ref({ coluna: 'codigo', direcao: 'asc' })
+const itensPorPaginaFornecedorTab = 10
+
+// Modal Itens table state
+const paginaModalItens = ref(1)
+const buscaModalItens = ref('')
+const ordenacaoModalItens = ref({ coluna: 'Código', direcao: 'asc' })
+const itensPorPaginaModalItens = 10
+
+// Paginação/ordenação das tabelas de estatísticas
+const paginaSetores = ref(1)
+const paginaLocais = ref(1)
+const itensPorPaginaSetores = 10
+const itensPorPaginaLocais = 12
+const buscaSetores = ref('')
+const buscaLocais = ref('')
+const ordenacaoSetores = ref({ coluna: 'percentualPendente', direcao: 'desc' })
+const ordenacaoLocais = ref({ coluna: 'pendentes', direcao: 'desc' })
 
 const iniciarEdicaoSku = () => {
   skuEditavel.value = String(auditoria.value?.sku || '')
@@ -767,9 +795,20 @@ const dadosUsuarios = computed(() => {
   const analise = auditoria.value.analise
   if (!Array.isArray(analise.usuarios)) return []
   const porUsuario = analise.porUsuario || {}
+
+  const problemasPorUsuario = {}
+  ;(analise.itensComEstoqueZeroDetalhes || []).forEach(d => {
+    const u = (d.usuario || '').trim()
+    if (u) problemasPorUsuario[u] = (problemasPorUsuario[u] || 0) + 1
+  })
+  ;(analise.itensLidoNaoPertenceDetalhes || []).forEach(d => {
+    const u = (d.usuario || '').trim()
+    if (u) problemasPorUsuario[u] = (problemasPorUsuario[u] || 0) + 1
+  })
+
   return analise.usuarios.map(u => {
       const lidos = porUsuario[u]?.lidos || 0
-      const comProblema = porUsuario[u]?.comProblema || 0
+      const comProblema = problemasPorUsuario[u] || 0
       const pendentes = porUsuario[u]?.pendentes || 0
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
@@ -811,6 +850,39 @@ const dadosUsuarios = computed(() => {
       }
     })
 })
+
+const usuariosFiltrados = computed(() => {
+  let lista = [...dadosUsuarios.value]
+  if (buscaUsuariosTab.value) {
+    const termo = buscaUsuariosTab.value.toLowerCase()
+    lista = lista.filter(u => u.nome.toLowerCase().includes(termo))
+  }
+  const col = ordenacaoUsuarios.value.coluna
+  const dir = ordenacaoUsuarios.value.direcao
+  lista.sort((a, b) => {
+    const va = a[col]
+    const vb = b[col]
+    if (typeof va === 'number' && typeof vb === 'number') return dir === 'asc' ? va - vb : vb - va
+    return dir === 'asc' ? String(va ?? '').localeCompare(String(vb ?? '')) : String(vb ?? '').localeCompare(String(va ?? ''))
+  })
+  return lista
+})
+
+const totalPaginasUsuariosTab = computed(() => Math.ceil(usuariosFiltrados.value.length / itensPorPaginaUsuariosTab))
+const usuariosPaginados = computed(() => {
+  const inicio = (paginaUsuariosTab.value - 1) * itensPorPaginaUsuariosTab
+  return usuariosFiltrados.value.slice(inicio, inicio + itensPorPaginaUsuariosTab)
+})
+
+const atualizarOrdenacaoUsuarios = (coluna) => {
+  if (ordenacaoUsuarios.value.coluna === coluna) {
+    ordenacaoUsuarios.value.direcao = ordenacaoUsuarios.value.direcao === 'asc' ? 'desc' : 'asc'
+  } else {
+    ordenacaoUsuarios.value.coluna = coluna
+    ordenacaoUsuarios.value.direcao = 'asc'
+  }
+  paginaUsuariosTab.value = 1
+}
 
 const analiseUsuarios = computed(() => {
   if (!auditoria.value?.analise) return null
@@ -1193,46 +1265,16 @@ const itensLidoNaoPertenceFiltrados = computed(() => {
   return items
 })
 
-const extrairDadosOrdenadosTabela = (tabelaRef, colunas) => {
-  if (!tabelaRef?.value || !tabelaRef.value.$el || !Array.isArray(colunas) || colunas.length === 0) return null
-  const root = tabelaRef.value.$el
-  const tbody = root.querySelector('tbody')
-  if (!tbody) return null
-  const trs = Array.from(tbody.querySelectorAll('tr'))
-  if (!trs.length) return null
-  const dados = []
-  trs.forEach(tr => {
-    const tds = Array.from(tr.querySelectorAll('td'))
-    if (!tds.length) return
-    const obj = {}
-    colunas.forEach((col, idx) => {
-      const td = tds[idx]
-      const texto = td ? td.textContent ?? '' : ''
-      obj[col.chave] = String(texto).trim()
-    })
-    dados.push(obj)
-  })
-  return dados
-}
-
 const handlePrintPDFItens = async () => {
   if (!colunasModal.value.length) return
-  exibirTudoPDFItens.value = true
-  await nextTick()
-  const dadosOrdenados = extrairDadosOrdenadosTabela(tabelaItensRef, colunasModal.value)
-  const base = dadosOrdenados && dadosOrdenados.length ? dadosOrdenados : itensModalFormatados.value
-  if (!base || !base.length) {
-    exibirTudoPDFItens.value = false
-    return
-  }
+  const base = modalItensOrdenado.value
+  if (!base || !base.length) return
   const partesNome = [
-    auditoria.value?.tipo,
-    dataAuditoriaBR.value,
+    auditoria.value?.tipo || 'Auditoria',
     tituloModalItens.value || 'Itens do Local'
   ].filter(Boolean)
   const titulo = partesNome.join(' - ')
   printTableInNewWindow(base, colunasModal.value, titulo)
-  exibirTudoPDFItens.value = false
 }
 
 const handlePrintRelatorio = () => {
@@ -1564,32 +1606,6 @@ const itensGrandeEstoqueNaoLidos = computed(() => {
     })
 })
 
-const itensMuitoTempoNaoLidos = computed(() => {
-  if (!auditoria.value?.dados) return []
-  const agora = new Date()
-  
-  return auditoria.value.dados.map(item => {
-    const dataLeitura = parseDataValor(getHoraValor(item))
-    if (!dataLeitura) return null
-    
-    const diffTime = Math.abs(agora - dataLeitura)
-    const dias = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
-    return {
-      ...item,
-      _dataLeitura: dataLeitura,
-      _diasLeitura: dias
-    }
-  })
-  .filter(item => {
-    if (item === null) return false
-    if (item._diasLeitura <= 15) return false
-    if (filtroSetorMuitoTempo.value !== 'todos' && getSetorItem(item) !== filtroSetorMuitoTempo.value) return false
-    return true
-  })
-  .sort((a, b) => b._diasLeitura - a._diasLeitura)
-})
-
 const itensGrandeEstoqueFormatados = computed(() => {
   return itensGrandeEstoqueNaoLidos.value.map(item => ({
     codigo: item['Código'],
@@ -1598,16 +1614,118 @@ const itensGrandeEstoqueFormatados = computed(() => {
   }))
 })
 
-const itensMuitoTempoFormatados = computed(() => {
-  return itensMuitoTempoNaoLidos.value.map(item => {
-    const estoque = item._estoque !== undefined ? item._estoque : extrairEstoque(item)
-    return {
-      codigo: item['Código'],
-      produto: item['Produto'],
-      estoque: estoque,
-      dias: item._diasLeitura
-    }
+// Helper genérico para ordenar/filtrar/paginar tabelas de dados
+const sortDados = (lista, ordenacao) => {
+  const col = ordenacao.coluna
+  const dir = ordenacao.direcao
+  return [...lista].sort((a, b) => {
+    const va = a[col]; const vb = b[col]
+    if (typeof va === 'number' && typeof vb === 'number') return dir === 'asc' ? va - vb : vb - va
+    return dir === 'asc' ? String(va ?? '').localeCompare(String(vb ?? '')) : String(vb ?? '').localeCompare(String(va ?? ''))
   })
+}
+
+const filtrarBuscaDados = (lista, termo) => {
+  if (!termo) return lista
+  const t = termo.toLowerCase()
+  return lista.filter(item => Object.values(item).some(v => String(v).toLowerCase().includes(t)))
+}
+
+const atualizarOrdenacaoDados = (obj, coluna) => {
+  if (obj.coluna === coluna) {
+    obj.direcao = obj.direcao === 'asc' ? 'desc' : 'asc'
+  } else {
+    obj.coluna = coluna
+    obj.direcao = 'asc'
+  }
+}
+
+const paginasVisiveisFn = (total, atual) => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [1]
+  if (atual > 3) pages.push('...')
+  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) pages.push(i)
+  if (atual < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+}
+
+// Fornecedor tab table computeds
+const fornecedorTabBusca = computed(() => filtrarBuscaDados(itensFornecedorFormatados.value, buscaFornecedorTab.value))
+const fornecedorTabOrdenado = computed(() => sortDados(fornecedorTabBusca.value, ordenacaoFornecedorTab.value))
+const totalPaginasFornecedorTab = computed(() => Math.max(1, Math.ceil(fornecedorTabOrdenado.value.length / itensPorPaginaFornecedorTab)))
+const fornecedorTabPaginado = computed(() => {
+  const p = Math.min(paginaFornecedorTab.value, totalPaginasFornecedorTab.value)
+  const i = (p - 1) * itensPorPaginaFornecedorTab
+  return fornecedorTabOrdenado.value.slice(i, i + itensPorPaginaFornecedorTab)
+})
+
+// Modal Itens table computeds
+const modalItensBusca = computed(() => filtrarBuscaDados(itensModalFormatados.value, buscaModalItens.value))
+const modalItensOrdenado = computed(() => sortDados(modalItensBusca.value, ordenacaoModalItens.value))
+const totalPaginasModalItens = computed(() => Math.max(1, Math.ceil(modalItensOrdenado.value.length / itensPorPaginaModalItens)))
+const modalItensPaginado = computed(() => {
+  const p = Math.min(paginaModalItens.value, totalPaginasModalItens.value)
+  const i = (p - 1) * itensPorPaginaModalItens
+  return modalItensOrdenado.value.slice(i, i + itensPorPaginaModalItens)
+})
+
+// Estoque Zero: filtrado + ordenado + paginado
+const estoqueZeroFiltradoOrdenado = computed(() => {
+  let lista = itensLidosEstoqueZeroFiltrados.value.map(i => ({
+    codigo: i.codigo || i['Código'] || '',
+    produto: i.produto || i['Produto'] || '',
+    local: i.local || i['Local'] || '',
+    usuario: i.usuario || ''
+  }))
+  lista = filtrarBuscaDados(lista, buscaDadosEstoqueZero.value)
+  return sortDados(lista, ordenacaoDadosEstoqueZero.value)
+})
+const totalPaginasEstoqueZero = computed(() => Math.ceil(estoqueZeroFiltradoOrdenado.value.length / itensPorPaginaDados))
+const estoqueZeroPaginado = computed(() => {
+  const inicio = (paginaDadosEstoqueZero.value - 1) * itensPorPaginaDados
+  return estoqueZeroFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaDados)
+})
+
+// Local Errado: filtrado + ordenado + paginado
+const localErradoFiltradoOrdenado = computed(() => {
+  let lista = itensLidoNaoPertenceFiltrados.value.map(i => ({
+    codigo: i.codigo || i['Código'] || '',
+    produto: i.produto || i['Produto'] || '',
+    local: i.local || i['Local'] || '',
+    usuario: i.usuario || ''
+  }))
+  lista = filtrarBuscaDados(lista, buscaDadosLocalErrado.value)
+  return sortDados(lista, ordenacaoDadosLocalErrado.value)
+})
+const totalPaginasLocalErrado = computed(() => Math.ceil(localErradoFiltradoOrdenado.value.length / itensPorPaginaDados))
+const localErradoPaginado = computed(() => {
+  const inicio = (paginaDadosLocalErrado.value - 1) * itensPorPaginaDados
+  return localErradoFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaDados)
+})
+
+// Grande Estoque: filtrado + ordenado + paginado
+const grandeEstoqueFiltradoOrdenado = computed(() => {
+  let lista = [...itensGrandeEstoqueFormatados.value]
+  lista = filtrarBuscaDados(lista, buscaDadosGrandeEstoque.value)
+  return sortDados(lista, ordenacaoDadosGrandeEstoque.value)
+})
+const totalPaginasGrandeEstoque = computed(() => Math.ceil(grandeEstoqueFiltradoOrdenado.value.length / itensPorPaginaDados))
+const grandeEstoquePaginado = computed(() => {
+  const inicio = (paginaDadosGrandeEstoque.value - 1) * itensPorPaginaDados
+  return grandeEstoqueFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaDados)
+})
+
+// Ruptura: filtrado + ordenado + paginado (will link after itensRupturaFormatados is defined)
+const rupturaFiltradoOrdenado = computed(() => {
+  let lista = [...(itensRupturaFormatados.value || [])]
+  lista = filtrarBuscaDados(lista, buscaDadosRuptura.value)
+  return sortDados(lista, ordenacaoDadosRuptura.value)
+})
+const totalPaginasRuptura = computed(() => Math.ceil(rupturaFiltradoOrdenado.value.length / itensPorPaginaDados))
+const rupturaPaginado = computed(() => {
+  const inicio = (paginaDadosRuptura.value - 1) * itensPorPaginaDados
+  return rupturaFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaDados)
 })
 
 const isSemPresencaSemEstoque = (item) => {
@@ -1759,6 +1877,36 @@ const locaisComAnalise = computed(() => {
     .sort((a, b) => b.pendentes - a.pendentes)
   
   return locais
+})
+
+// Setores: filtrado + ordenado + paginado
+const setoresFiltradoOrdenado = computed(() => {
+  let lista = [...setoresComAnalise.value]
+  if (buscaSetores.value) {
+    const t = buscaSetores.value.toLowerCase()
+    lista = lista.filter(s => s.nome.toLowerCase().includes(t) || s.classificacao.toLowerCase().includes(t))
+  }
+  return sortDados(lista, ordenacaoSetores.value)
+})
+const totalPaginasSetores = computed(() => Math.ceil(setoresFiltradoOrdenado.value.length / itensPorPaginaSetores))
+const setoresPaginados = computed(() => {
+  const inicio = (paginaSetores.value - 1) * itensPorPaginaSetores
+  return setoresFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaSetores)
+})
+
+// Locais: filtrado + ordenado + paginado
+const locaisFiltradoOrdenado = computed(() => {
+  let lista = [...locaisComAnalise.value]
+  if (buscaLocais.value) {
+    const t = buscaLocais.value.toLowerCase()
+    lista = lista.filter(l => l.nome.toLowerCase().includes(t))
+  }
+  return sortDados(lista, ordenacaoLocais.value)
+})
+const totalPaginasLocais = computed(() => Math.ceil(locaisFiltradoOrdenado.value.length / itensPorPaginaLocais))
+const locaisPaginados = computed(() => {
+  const inicio = (paginaLocais.value - 1) * itensPorPaginaLocais
+  return locaisFiltradoOrdenado.value.slice(inicio, inicio + itensPorPaginaLocais)
 })
 
 // Dados para o relatório
@@ -1976,33 +2124,15 @@ const handlePrintCard = (dados, colunas, tituloCard) => {
 }
 
 const handlePrintUsuarios = () => {
-  // Tentar obter dados ordenados/filtrados da tabela se disponível
-  let dadosBase = null
-  const tabela = tabelaUsuariosRef.value
-  
-  if (tabela && tabela.dadosFiltrados) {
-    // Verificar se é uma ref (tem .value) ou já é o array
-    dadosBase = Array.isArray(tabela.dadosFiltrados) 
-      ? tabela.dadosFiltrados 
-      : tabela.dadosFiltrados.value
-  }
-  
-  // Fallback para dados originais se não conseguir extrair
-  if (!dadosBase) {
-    dadosBase = dadosUsuarios.value
-  }
-  
+  const dadosBase = usuariosFiltrados.value
   if (!dadosBase || dadosBase.length === 0) return
-  
-  // Filtrar colunas para remover 'acoes'
-  const colunasPrint = colunasUsuario.filter(c => c.chave !== 'acoes')
-  
-  // Preparar dados
+
+  const colunasPrint = colunasUsuario.filter(c => c.chave !== 'acoes' && c.chave !== 'statusBadge')
+
   const dadosPrint = dadosBase.map(u => ({
     ...u,
-    // Formatar se necessário
   }))
-  
+
   const titulo = `Relatório de Usuários - ${auditoria.value.tipo} - ${dataAuditoriaBR.value}`
   printTableInNewWindow(dadosPrint, colunasPrint, titulo)
 }
@@ -2368,46 +2498,194 @@ const fecharRelatorio = () => {
           <div class="flex justify-end">
             <button
               @click="handlePrintUsuarios"
-              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium shadow-sm flex items-center gap-2"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium shadow-sm hover:bg-indigo-700 transition"
             >
               <i class="fas fa-print"></i> Imprimir Lista
             </button>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-white rounded-lg p-6 shadow">
-              <p class="text-gray-600 text-sm font-medium">Total de Usuários</p>
-              <p class="text-3xl font-bold text-blue-600 mt-2">{{ analiseUsuarios.totalUsuarios }}</p>
+            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total de Usuários</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
+                  <i class="fas fa-users text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-blue-700">{{ analiseUsuarios.totalUsuarios }}</p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow">
-              <p class="text-gray-600 text-sm font-medium">Média de Lidos/Usuário</p>
-              <p class="text-3xl font-bold text-green-600 mt-2">{{ analiseUsuarios.mediaLidasPorUsuario }}</p>
+            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Média de Lidos/Usuário</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
+                  <i class="fas fa-chart-bar text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-emerald-700">{{ analiseUsuarios.mediaLidasPorUsuario }}</p>
             </div>
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-purple-500">
-              <p class="text-gray-600 text-sm font-medium">🌟 Melhor Desempenho</p>
-              <p class="text-2xl font-bold text-purple-600 mt-2">{{ analiseUsuarios.usuarioDestaque }}</p>
-              <p class="text-xs text-gray-500 mt-1">{{ analiseUsuarios.lidasDestaque }} lidos</p>
+            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 border-l-4 border-l-purple-500 p-5 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Melhor Desempenho</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-purple-50 text-purple-600">
+                  <i class="fas fa-trophy text-sm"></i>
+                </span>
+              </div>
+              <p class="text-2xl font-bold text-purple-700">{{ analiseUsuarios.usuarioDestaque }}</p>
+              <p class="text-[11px] text-slate-500">{{ analiseUsuarios.lidasDestaque }} lidos</p>
             </div>
           </div>
         </div>
 
         <!-- Tabela de Usuários -->
-        <TabelaInterativaAuditoria
-          ref="tabelaUsuariosRef"
-          :dados="dadosUsuarios"
-          :colunas="colunasUsuario"
-          :itensPorPagina="10"
-          :mostrarBusca="true"
-        >
-          <template #cell-acoes="{ item }">
-            <button
-              class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition"
-              @click="abrirModalUsuario(item.nome)"
-            >
-              Ver detalhes
-            </button>
-          </template>
-        </TabelaInterativaAuditoria>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <i class="fas fa-users text-indigo-600 text-sm"></i>
+            </div>
+            <h2 class="text-sm font-bold text-slate-800">Desempenho por Usuário</h2>
+            <span v-if="dadosUsuarios.length" class="text-[10px] text-slate-400 font-medium">{{ dadosUsuarios.length }} usuário(s)</span>
+            <div class="ml-auto flex items-center gap-2">
+              <div class="relative">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                <input
+                  v-model="buscaUsuariosTab"
+                  type="text"
+                  placeholder="Buscar usuário..."
+                  class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44"
+                  @input="paginaUsuariosTab = 1"
+                />
+              </div>
+            </div>
+          </div>
+          <div v-if="dadosUsuarios.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+            <i class="fas fa-users text-3xl mb-2"></i>
+            <p class="text-xs">Nenhuma informação de usuários encontrada.</p>
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('nome')">
+                    <span class="inline-flex items-center gap-1">
+                      Usuário
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'nome' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('lidos')">
+                    <span class="inline-flex items-center gap-1">
+                      Lidos Corretamente
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'lidos' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('comProblema')">
+                    <span class="inline-flex items-center gap-1">
+                      Com Problema
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'comProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('totalLidos')">
+                    <span class="inline-flex items-center gap-1">
+                      Total Lidos
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'totalLidos' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('percentualAuditoria')">
+                    <span class="inline-flex items-center gap-1">
+                      % Auditoria
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'percentualAuditoria' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
+                  <th class="px-3 py-2.5 text-center font-semibold text-slate-600">Detalhes</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr
+                  v-for="(u, idx) in usuariosPaginados"
+                  :key="u.nome"
+                  class="transition-colors"
+                  :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'"
+                >
+                  <td class="px-3 py-2.5 text-slate-700 font-medium">{{ u.nome }}</td>
+                  <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ u.lidos.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ u.totalLidos.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                        <div class="h-1.5 rounded-full bg-indigo-400 transition-all" :style="{ width: Math.min(u.percentualAuditoria, 100) + '%' }"></div>
+                      </div>
+                      <span class="text-indigo-700 font-semibold">{{ u.percentualAuditoria.toFixed(1) }}%</span>
+                    </div>
+                  </td>
+                  <td class="px-3 py-2.5 text-center">
+                    <button
+                      class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[11px] font-semibold hover:bg-indigo-100 transition"
+                      @click="abrirModalUsuario(u.nome)"
+                    >
+                      Ver detalhes
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="usuariosFiltrados.length === 0">
+                  <td colspan="6" class="px-3 py-8 text-center text-slate-400">
+                    <i class="fas fa-search text-2xl mb-2"></i>
+                    <p class="text-xs">Nenhum usuário encontrado.</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação -->
+          <div v-if="totalPaginasUsuariosTab > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <p class="text-[11px] text-slate-500">
+              Mostrando {{ ((paginaUsuariosTab - 1) * itensPorPaginaUsuariosTab) + 1 }} a {{ Math.min(paginaUsuariosTab * itensPorPaginaUsuariosTab, usuariosFiltrados.length) }} de {{ usuariosFiltrados.length }}
+            </p>
+            <div class="flex items-center gap-1">
+              <button
+                @click="paginaUsuariosTab = 1"
+                :disabled="paginaUsuariosTab === 1"
+                class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+              >
+                <i class="fas fa-angle-double-left"></i>
+              </button>
+              <button
+                @click="paginaUsuariosTab--"
+                :disabled="paginaUsuariosTab === 1"
+                class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+              >
+                <i class="fas fa-angle-left"></i>
+              </button>
+              <template v-for="p in totalPaginasUsuariosTab" :key="p">
+                <button
+                  v-if="p === 1 || p === totalPaginasUsuariosTab || (p >= paginaUsuariosTab - 1 && p <= paginaUsuariosTab + 1)"
+                  @click="paginaUsuariosTab = p"
+                  class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition"
+                  :class="p === paginaUsuariosTab ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'"
+                >
+                  {{ p }}
+                </button>
+                <span
+                  v-else-if="p === paginaUsuariosTab - 2 || p === paginaUsuariosTab + 2"
+                  class="text-slate-400 text-[11px] px-1"
+                >...</span>
+              </template>
+              <button
+                @click="paginaUsuariosTab++"
+                :disabled="paginaUsuariosTab === totalPaginasUsuariosTab"
+                class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+              >
+                <i class="fas fa-angle-right"></i>
+              </button>
+              <button
+                @click="paginaUsuariosTab = totalPaginasUsuariosTab"
+                :disabled="paginaUsuariosTab === totalPaginasUsuariosTab"
+                class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
+              >
+                <i class="fas fa-angle-double-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- Contribuição por Setor -->
         <div v-if="setoresComUsuarios.length > 0" class="mt-8">
@@ -2615,16 +2893,61 @@ const fecharRelatorio = () => {
                 Exibindo <span class="font-bold">{{ itensFornecedorFormatados.length }}</span> itens 
                 <span v-if="filtroStatusFornecedor !== 'todos'">({{ filtroStatusFornecedor }})</span>
               </p>
-              <TabelaInterativaAuditoria
-                :dados="itensFornecedorFormatados"
-                :colunas="colunasFornecedor"
-                :itensPorPagina="10"
-                :mostrarBusca="true"
-              >
-                <template #cell-statusTexto="{ item }">
-                  <span :class="item.statusClass">{{ item.statusTexto }}</span>
-                </template>
-              </TabelaInterativaAuditoria>
+              <!-- Search -->
+              <div class="relative mb-3">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                <input v-model="buscaFornecedorTab" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64" @input="paginaFornecedorTab = 1" />
+              </div>
+              <div v-if="fornecedorTabOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+                <i class="fas fa-inbox text-3xl mb-2"></i>
+                <p class="text-xs">Nenhum item encontrado.</p>
+              </div>
+              <div v-else class="overflow-x-auto">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr class="border-b-2 border-slate-100">
+                      <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoFornecedorTab, 'codigo'); paginaFornecedorTab = 1">
+                        <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoFornecedorTab.coluna === 'codigo' ? (ordenacaoFornecedorTab.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                      </th>
+                      <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoFornecedorTab, 'produto'); paginaFornecedorTab = 1">
+                        <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoFornecedorTab.coluna === 'produto' ? (ordenacaoFornecedorTab.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                      </th>
+                      <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoFornecedorTab, 'setor'); paginaFornecedorTab = 1">
+                        <span class="inline-flex items-center gap-1">Setor <i class="fas text-[10px]" :class="ordenacaoFornecedorTab.coluna === 'setor' ? (ordenacaoFornecedorTab.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                      </th>
+                      <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoFornecedorTab, 'estoque'); paginaFornecedorTab = 1">
+                        <span class="inline-flex items-center gap-1 justify-end">Estoque <i class="fas text-[10px]" :class="ordenacaoFornecedorTab.coluna === 'estoque' ? (ordenacaoFornecedorTab.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                      </th>
+                      <th class="px-3 py-2.5 text-center font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoFornecedorTab, 'statusTexto'); paginaFornecedorTab = 1">
+                        <span class="inline-flex items-center gap-1">Status <i class="fas text-[10px]" :class="ordenacaoFornecedorTab.coluna === 'statusTexto' ? (ordenacaoFornecedorTab.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-50">
+                    <tr v-for="(item, idx) in fornecedorTabPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40'">
+                      <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
+                      <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                      <td class="px-3 py-2.5 text-slate-600">{{ item.setor }}</td>
+                      <td class="px-3 py-2.5 text-right font-mono text-slate-700">{{ item.estoque }}</td>
+                      <td class="px-3 py-2.5 text-center"><span :class="item.statusClass">{{ item.statusTexto }}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- Pagination -->
+              <div v-if="totalPaginasFornecedorTab > 1" class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
+                <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaFornecedorTab - 1) * itensPorPaginaFornecedorTab) + 1 }} a {{ Math.min(paginaFornecedorTab * itensPorPaginaFornecedorTab, fornecedorTabOrdenado.length) }} de {{ fornecedorTabOrdenado.length }}</p>
+                <div class="flex items-center gap-1">
+                  <button @click="paginaFornecedorTab = 1" :disabled="paginaFornecedorTab === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+                  <button @click="paginaFornecedorTab--" :disabled="paginaFornecedorTab === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+                  <template v-for="p in paginasVisiveisFn(totalPaginasFornecedorTab, paginaFornecedorTab)" :key="p">
+                    <button v-if="typeof p === 'number'" @click="paginaFornecedorTab = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaFornecedorTab ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                    <span v-else class="text-slate-400 text-[11px] px-1">...</span>
+                  </template>
+                  <button @click="paginaFornecedorTab++" :disabled="paginaFornecedorTab === totalPaginasFornecedorTab" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+                  <button @click="paginaFornecedorTab = totalPaginasFornecedorTab" :disabled="paginaFornecedorTab === totalPaginasFornecedorTab" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+                </div>
+              </div>
             </div>
             <div v-else class="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
               <p class="text-gray-500">Nenhum item encontrado com os filtros selecionados.</p>
@@ -2636,323 +2959,466 @@ const fecharRelatorio = () => {
         </div>
 
         <!-- Análises de Dados Críticos -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Itens Lidos com Estoque Zero -->
-          <div class="bg-white rounded-lg p-6 shadow">
-            <div class="flex justify-between items-start mb-4">
-                <h4 class="font-bold text-lg text-red-600">
-                  <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ Lidos com Estoque Zero
-                </h4>
-                <button
-                   v-if="itensLidosEstoqueZeroFiltrados.length > 0"
-                   @click="handlePrintCard(itensLidosEstoqueZeroFiltrados, colunasEstoqueZero, 'Lidos com Estoque Zero')"
-                   class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
-                 >
-                   <i class="fas fa-print"></i> Imprimir
-                 </button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div>
-                <p class="text-3xl font-bold text-red-600 mb-1">{{ itensLidosEstoqueZeroFiltrados.length }}</p>
-                <p class="text-sm text-gray-600">Itens com presença confirmada mas sem estoque no sistema</p>
+        <div class="space-y-6">
+
+          <!-- 1. Lidos com Estoque Zero -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center">
+                <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-                <select
-                  v-model="filtroSetorEstoqueZero"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
-                >
+              <h2 class="text-sm font-bold text-slate-800">Lidos com Estoque Zero</h2>
+              <span v-if="itensLidosEstoqueZeroFiltrados.length" class="text-[10px] text-slate-400 font-medium">{{ itensLidosEstoqueZeroFiltrados.length }} item(ns)</span>
+              <div class="ml-auto flex items-center gap-2 flex-wrap">
+                <select v-model="filtroSetorEstoqueZero" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500" @change="paginaDadosEstoqueZero = 1">
                   <option value="todos">Todos os setores</option>
                   <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
                 </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
-                <select
-                  v-model="filtroUsuarioEstoqueZero"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
-                >
+                <select v-model="filtroUsuarioEstoqueZero" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500" @change="paginaDadosEstoqueZero = 1">
                   <option value="todos">Todos os usuários</option>
                   <option v-for="u in usuariosUnicosDados" :key="u" :value="u">{{ u }}</option>
                 </select>
+                <div class="relative">
+                  <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                  <input v-model="buscaDadosEstoqueZero" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500 w-36" @input="paginaDadosEstoqueZero = 1" />
+                </div>
+                <button v-if="itensLidosEstoqueZeroFiltrados.length > 0" @click="handlePrintCard(itensLidosEstoqueZeroFiltrados, colunasEstoqueZero, 'Lidos com Estoque Zero')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-medium shadow-sm hover:bg-red-700 transition">
+                  <i class="fas fa-print"></i> Imprimir
+                </button>
               </div>
             </div>
-            <TabelaInterativaAuditoria
-              v-if="itensLidosEstoqueZeroFiltrados.length > 0"
-              :dados="itensLidosEstoqueZeroFiltrados"
-              :colunas="colunasEstoqueZero"
-              :itensPorPagina="5"
-              :mostrarBusca="false"
-              rowClass="bg-red-50 hover:bg-red-100"
-            >
-              <template #cell-produto="{ item }">
-                <p class="font-bold text-red-800">{{ item.codigo }}</p>
-                <p class="font-medium text-red-900">{{ item.produto }}</p>
-              </template>
-            </TabelaInterativaAuditoria>
-            <div v-else class="text-gray-600">
-              <p class="text-sm">Nenhum item encontrado com os filtros selecionados.</p>
+            <div v-if="estoqueZeroFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+              <i class="fas fa-check-circle text-3xl mb-2"></i>
+              <p class="text-xs">Nenhum item encontrado.</p>
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-red-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosEstoqueZero, 'codigo'); paginaDadosEstoqueZero = 1">
+                      <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoDadosEstoqueZero.coluna === 'codigo' ? (ordenacaoDadosEstoqueZero.direcao === 'asc' ? 'fa-sort-up text-red-600' : 'fa-sort-down text-red-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-red-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosEstoqueZero, 'produto'); paginaDadosEstoqueZero = 1">
+                      <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoDadosEstoqueZero.coluna === 'produto' ? (ordenacaoDadosEstoqueZero.direcao === 'asc' ? 'fa-sort-up text-red-600' : 'fa-sort-down text-red-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-red-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosEstoqueZero, 'local'); paginaDadosEstoqueZero = 1">
+                      <span class="inline-flex items-center gap-1">Local <i class="fas text-[10px]" :class="ordenacaoDadosEstoqueZero.coluna === 'local' ? (ordenacaoDadosEstoqueZero.direcao === 'asc' ? 'fa-sort-up text-red-600' : 'fa-sort-down text-red-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-red-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosEstoqueZero, 'usuario'); paginaDadosEstoqueZero = 1">
+                      <span class="inline-flex items-center gap-1">Usuário <i class="fas text-[10px]" :class="ordenacaoDadosEstoqueZero.coluna === 'usuario' ? (ordenacaoDadosEstoqueZero.direcao === 'asc' ? 'fa-sort-up text-red-600' : 'fa-sort-down text-red-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <tr v-for="(item, idx) in estoqueZeroPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-red-50/40' : 'bg-slate-50/60 hover:bg-red-50/40'">
+                    <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
+                    <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                    <td class="px-3 py-2.5 text-slate-600">{{ item.local }}</td>
+                    <td class="px-3 py-2.5 text-slate-600">{{ item.usuario }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Paginação -->
+            <div v-if="totalPaginasEstoqueZero > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaDadosEstoqueZero - 1) * itensPorPaginaDados) + 1 }} a {{ Math.min(paginaDadosEstoqueZero * itensPorPaginaDados, estoqueZeroFiltradoOrdenado.length) }} de {{ estoqueZeroFiltradoOrdenado.length }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaDadosEstoqueZero = 1" :disabled="paginaDadosEstoqueZero === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+                <button @click="paginaDadosEstoqueZero--" :disabled="paginaDadosEstoqueZero === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+                <template v-for="p in totalPaginasEstoqueZero" :key="p">
+                  <button v-if="p === 1 || p === totalPaginasEstoqueZero || (p >= paginaDadosEstoqueZero - 1 && p <= paginaDadosEstoqueZero + 1)" @click="paginaDadosEstoqueZero = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaDadosEstoqueZero ? 'bg-red-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                  <span v-else-if="p === paginaDadosEstoqueZero - 2 || p === paginaDadosEstoqueZero + 2" class="text-slate-400 text-[11px] px-1">...</span>
+                </template>
+                <button @click="paginaDadosEstoqueZero++" :disabled="paginaDadosEstoqueZero === totalPaginasEstoqueZero" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+                <button @click="paginaDadosEstoqueZero = totalPaginasEstoqueZero" :disabled="paginaDadosEstoqueZero === totalPaginasEstoqueZero" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+              </div>
             </div>
           </div>
 
-          <!-- Itens Lido Não Pertence -->
-          <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white rounded-lg p-6 shadow">
-            <div class="flex justify-between items-start mb-4">
-                <h4 class="font-bold text-lg text-yellow-600">
-                  <i class="fas fa-map-marker-alt mr-2"></i>⚠️ Lido no Local Errado
-                </h4>
-                <button
-                   v-if="itensLidoNaoPertenceFiltrados.length > 0"
-                   @click="handlePrintCard(itensLidoNaoPertenceFiltrados, colunasLocalErrado, 'Lido no Local Errado')"
-                   class="px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
-                 >
-                   <i class="fas fa-print"></i> Imprimir
-                 </button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div>
-                <p class="text-3xl font-bold text-yellow-600 mb-1">{{ itensLidoNaoPertenceFiltrados.length }}</p>
-                <p class="text-sm text-gray-600">Itens lidos mas no local incorreto</p>
+          <!-- 2. Lido no Local Errado -->
+          <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                <i class="fas fa-map-marker-alt text-amber-600 text-sm"></i>
               </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-                <select
-                  v-model="filtroSetorLocalErrado"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500 bg-white"
-                >
+              <h2 class="text-sm font-bold text-slate-800">Lido no Local Errado</h2>
+              <span v-if="itensLidoNaoPertenceFiltrados.length" class="text-[10px] text-slate-400 font-medium">{{ itensLidoNaoPertenceFiltrados.length }} item(ns)</span>
+              <div class="ml-auto flex items-center gap-2 flex-wrap">
+                <select v-model="filtroSetorLocalErrado" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500" @change="paginaDadosLocalErrado = 1">
                   <option value="todos">Todos os setores</option>
                   <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
                 </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Usuário</label>
-                <select
-                  v-model="filtroUsuarioLocalErrado"
-                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-yellow-500 bg-white"
-                >
+                <select v-model="filtroUsuarioLocalErrado" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500" @change="paginaDadosLocalErrado = 1">
                   <option value="todos">Todos os usuários</option>
                   <option v-for="u in usuariosUnicosDados" :key="u" :value="u">{{ u }}</option>
                 </select>
+                <div class="relative">
+                  <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                  <input v-model="buscaDadosLocalErrado" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500 w-36" @input="paginaDadosLocalErrado = 1" />
+                </div>
+                <button v-if="itensLidoNaoPertenceFiltrados.length > 0" @click="handlePrintCard(itensLidoNaoPertenceFiltrados, colunasLocalErrado, 'Lido no Local Errado')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-medium shadow-sm hover:bg-amber-700 transition">
+                  <i class="fas fa-print"></i> Imprimir
+                </button>
               </div>
             </div>
-            <TabelaInterativaAuditoria
-              v-if="itensLidoNaoPertenceFiltrados.length > 0"
-              :dados="itensLidoNaoPertenceFiltrados"
-              :colunas="colunasLocalErrado"
-              :itensPorPagina="5"
-              :mostrarBusca="false"
-              rowClass="bg-yellow-50 hover:bg-yellow-100"
-            >
-              <template #cell-produto="{ item }">
-                <p class="font-bold text-yellow-800">{{ item.codigo }}</p>
-                <p class="font-medium text-yellow-900">{{ item.produto }}</p>
-              </template>
-            </TabelaInterativaAuditoria>
-            <div v-else class="text-gray-600">
-              <p class="text-sm">Nenhum item encontrado com os filtros selecionados.</p>
+            <div v-if="localErradoFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+              <i class="fas fa-check-circle text-3xl mb-2"></i>
+              <p class="text-xs">Nenhum item encontrado.</p>
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-amber-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosLocalErrado, 'codigo'); paginaDadosLocalErrado = 1">
+                      <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoDadosLocalErrado.coluna === 'codigo' ? (ordenacaoDadosLocalErrado.direcao === 'asc' ? 'fa-sort-up text-amber-600' : 'fa-sort-down text-amber-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-amber-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosLocalErrado, 'produto'); paginaDadosLocalErrado = 1">
+                      <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoDadosLocalErrado.coluna === 'produto' ? (ordenacaoDadosLocalErrado.direcao === 'asc' ? 'fa-sort-up text-amber-600' : 'fa-sort-down text-amber-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-amber-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosLocalErrado, 'local'); paginaDadosLocalErrado = 1">
+                      <span class="inline-flex items-center gap-1">Local <i class="fas text-[10px]" :class="ordenacaoDadosLocalErrado.coluna === 'local' ? (ordenacaoDadosLocalErrado.direcao === 'asc' ? 'fa-sort-up text-amber-600' : 'fa-sort-down text-amber-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-amber-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosLocalErrado, 'usuario'); paginaDadosLocalErrado = 1">
+                      <span class="inline-flex items-center gap-1">Usuário <i class="fas text-[10px]" :class="ordenacaoDadosLocalErrado.coluna === 'usuario' ? (ordenacaoDadosLocalErrado.direcao === 'asc' ? 'fa-sort-up text-amber-600' : 'fa-sort-down text-amber-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <tr v-for="(item, idx) in localErradoPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-amber-50/40' : 'bg-slate-50/60 hover:bg-amber-50/40'">
+                    <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
+                    <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                    <td class="px-3 py-2.5 text-slate-600">{{ item.local }}</td>
+                    <td class="px-3 py-2.5 text-slate-600">{{ item.usuario }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Paginação -->
+            <div v-if="totalPaginasLocalErrado > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaDadosLocalErrado - 1) * itensPorPaginaDados) + 1 }} a {{ Math.min(paginaDadosLocalErrado * itensPorPaginaDados, localErradoFiltradoOrdenado.length) }} de {{ localErradoFiltradoOrdenado.length }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaDadosLocalErrado = 1" :disabled="paginaDadosLocalErrado === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+                <button @click="paginaDadosLocalErrado--" :disabled="paginaDadosLocalErrado === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+                <template v-for="p in totalPaginasLocalErrado" :key="p">
+                  <button v-if="p === 1 || p === totalPaginasLocalErrado || (p >= paginaDadosLocalErrado - 1 && p <= paginaDadosLocalErrado + 1)" @click="paginaDadosLocalErrado = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaDadosLocalErrado ? 'bg-amber-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                  <span v-else-if="p === paginaDadosLocalErrado - 2 || p === paginaDadosLocalErrado + 2" class="text-slate-400 text-[11px] px-1">...</span>
+                </template>
+                <button @click="paginaDadosLocalErrado++" :disabled="paginaDadosLocalErrado === totalPaginasLocalErrado" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+                <button @click="paginaDadosLocalErrado = totalPaginasLocalErrado" :disabled="paginaDadosLocalErrado === totalPaginasLocalErrado" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+              </div>
             </div>
           </div>
 
-          <!-- Grande Estoque não Lido -->
-          <div class="bg-white rounded-lg p-6 shadow">
-            <div class="flex justify-between items-start mb-4">
-                <h4 class="font-bold text-lg text-orange-600">
-                  <i class="fas fa-boxes mr-2"></i>Grande Estoque Não Lido
-                </h4>
-                <button
-                   v-if="itensGrandeEstoqueFormatados.length > 0"
-                   @click="handlePrintCard(itensGrandeEstoqueFormatados, colunasGrandeEstoque, 'Grande Estoque Não Lido')"
-                   class="px-2 py-1 bg-orange-600 text-white rounded hover:bg-orange-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
-                 >
-                   <i class="fas fa-print"></i> Imprimir
-                 </button>
+          <!-- 3. Grande Estoque Não Lido -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center">
+                <i class="fas fa-boxes text-orange-600 text-sm"></i>
+              </div>
+              <h2 class="text-sm font-bold text-slate-800">Grande Estoque Não Lido</h2>
+              <span v-if="itensGrandeEstoqueFormatados.length" class="text-[10px] text-slate-400 font-medium">{{ itensGrandeEstoqueFormatados.length }} item(ns)</span>
+              <div class="ml-auto flex items-center gap-2 flex-wrap">
+                <select v-model="filtroSetorGrandeEstoque" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-500" @change="paginaDadosGrandeEstoque = 1">
+                  <option value="todos">Todos os setores</option>
+                  <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+                </select>
+                <div class="relative">
+                  <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                  <input v-model="buscaDadosGrandeEstoque" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-500 w-36" @input="paginaDadosGrandeEstoque = 1" />
+                </div>
+                <button v-if="itensGrandeEstoqueFormatados.length > 0" @click="handlePrintCard(itensGrandeEstoqueFormatados, colunasGrandeEstoque, 'Grande Estoque Não Lido')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 text-white text-[11px] font-medium shadow-sm hover:bg-orange-700 transition">
+                  <i class="fas fa-print"></i> Imprimir
+                </button>
+              </div>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-              <select
-                v-model="filtroSetorGrandeEstoque"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 bg-white"
-              >
-                <option value="todos">Todos os setores</option>
-                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
-              </select>
+            <div v-if="grandeEstoqueFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+              <i class="fas fa-check-circle text-3xl mb-2"></i>
+              <p class="text-xs">Nenhum item encontrado.</p>
             </div>
-            <p class="text-3xl font-bold text-orange-600 mb-3">{{ itensGrandeEstoqueNaoLidos.length }}</p>
-            <p class="text-sm text-gray-600 mb-4">Produtos com estoque > 100 itens ainda não confirmados</p>
-            <TabelaInterativaAuditoria
-              v-if="itensGrandeEstoqueFormatados.length > 0"
-              :dados="itensGrandeEstoqueFormatados"
-              :colunas="colunasGrandeEstoque"
-              :itensPorPagina="5"
-              :mostrarBusca="false"
-              rowClass="bg-orange-50 hover:bg-orange-100"
-            >
-              <template #cell-produto="{ item }">
-                <p class="font-bold text-orange-800">{{ item.codigo }}</p>
-                <p class="font-medium text-orange-900">{{ item.produto }}</p>
-              </template>
-            </TabelaInterativaAuditoria>
-          </div>
-
-          <!-- Muito Tempo sem Leitura -->
-          <div class="bg-white rounded-lg p-6 shadow">
-            <div class="flex justify-between items-start mb-4">
-                <h4 class="font-bold text-lg text-red-600">
-                  <i class="fas fa-calendar-times mr-2"></i>Muito Tempo sem Leitura
-                </h4>
-                <button
-                   v-if="itensMuitoTempoFormatados.length > 0"
-                   @click="handlePrintCard(itensMuitoTempoFormatados, colunasMuitoTempo, 'Muito Tempo sem Leitura')"
-                   class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
-                 >
-                   <i class="fas fa-print"></i> Imprimir
-                 </button>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-orange-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosGrandeEstoque, 'codigo'); paginaDadosGrandeEstoque = 1">
+                      <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoDadosGrandeEstoque.coluna === 'codigo' ? (ordenacaoDadosGrandeEstoque.direcao === 'asc' ? 'fa-sort-up text-orange-600' : 'fa-sort-down text-orange-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-orange-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosGrandeEstoque, 'produto'); paginaDadosGrandeEstoque = 1">
+                      <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoDadosGrandeEstoque.coluna === 'produto' ? (ordenacaoDadosGrandeEstoque.direcao === 'asc' ? 'fa-sort-up text-orange-600' : 'fa-sort-down text-orange-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                    <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-orange-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosGrandeEstoque, 'estoque'); paginaDadosGrandeEstoque = 1">
+                      <span class="inline-flex items-center gap-1">Estoque <i class="fas text-[10px]" :class="ordenacaoDadosGrandeEstoque.coluna === 'estoque' ? (ordenacaoDadosGrandeEstoque.direcao === 'asc' ? 'fa-sort-up text-orange-600' : 'fa-sort-down text-orange-600') : 'fa-sort text-slate-300'" /></span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <tr v-for="(item, idx) in grandeEstoquePaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-orange-50/40' : 'bg-slate-50/60 hover:bg-orange-50/40'">
+                    <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
+                    <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                    <td class="px-3 py-2.5 text-right text-orange-700 font-semibold">{{ item.estoque?.toLocaleString('pt-BR') }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-              <select
-                v-model="filtroSetorMuitoTempo"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500 bg-white"
-              >
-                <option value="todos">Todos os setores</option>
-                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
-              </select>
+            <!-- Paginação -->
+            <div v-if="totalPaginasGrandeEstoque > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaDadosGrandeEstoque - 1) * itensPorPaginaDados) + 1 }} a {{ Math.min(paginaDadosGrandeEstoque * itensPorPaginaDados, grandeEstoqueFiltradoOrdenado.length) }} de {{ grandeEstoqueFiltradoOrdenado.length }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaDadosGrandeEstoque = 1" :disabled="paginaDadosGrandeEstoque === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+                <button @click="paginaDadosGrandeEstoque--" :disabled="paginaDadosGrandeEstoque === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+                <template v-for="p in totalPaginasGrandeEstoque" :key="p">
+                  <button v-if="p === 1 || p === totalPaginasGrandeEstoque || (p >= paginaDadosGrandeEstoque - 1 && p <= paginaDadosGrandeEstoque + 1)" @click="paginaDadosGrandeEstoque = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaDadosGrandeEstoque ? 'bg-orange-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                  <span v-else-if="p === paginaDadosGrandeEstoque - 2 || p === paginaDadosGrandeEstoque + 2" class="text-slate-400 text-[11px] px-1">...</span>
+                </template>
+                <button @click="paginaDadosGrandeEstoque++" :disabled="paginaDadosGrandeEstoque === totalPaginasGrandeEstoque" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+                <button @click="paginaDadosGrandeEstoque = totalPaginasGrandeEstoque" :disabled="paginaDadosGrandeEstoque === totalPaginasGrandeEstoque" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+              </div>
             </div>
-            <p class="text-3xl font-bold text-red-600 mb-3">{{ itensMuitoTempoNaoLidos.length }}</p>
-            <p class="text-sm text-gray-600 mb-4">Itens não confirmados há mais de 15 dias</p>
-            <TabelaInterativaAuditoria
-              v-if="itensMuitoTempoFormatados.length > 0"
-              :dados="itensMuitoTempoFormatados"
-              :colunas="colunasMuitoTempo"
-              :itensPorPagina="5"
-              :mostrarBusca="false"
-              rowClass="bg-red-50 hover:bg-red-100"
-            >
-              <template #cell-produto="{ item }">
-                <p class="font-bold text-red-800">{{ item.codigo }}</p>
-                <p class="font-medium text-red-900">{{ item.produto }}</p>
-              </template>
-              <template #cell-dias="{ item }">
-                <span class="text-red-700 font-bold">{{ item.dias }} dias</span>
-              </template>
-            </TabelaInterativaAuditoria>
           </div>
         </div>
 
-        <!-- Itens Ruptura Menor Custo -->
-        <div class="bg-white rounded-lg p-6 shadow">
-          <div class="flex justify-between items-start mb-4">
-              <h4 class="font-bold text-lg text-blue-600">
-                <i class="fas fa-coins mr-2"></i>Itens de Ruptura - Menor Custo
-              </h4>
-              <button
-                 v-if="itensRupturaFormatados.length > 0"
-                 @click="handlePrintCard(itensRupturaFormatados, colunasRuptura, 'Itens de Ruptura - Menor Custo')"
-                 class="px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-xs font-medium shadow-sm flex items-center gap-1"
-               >
-                 <i class="fas fa-print"></i> Imprimir
-               </button>
+        <!-- 4. Itens Ruptura Menor Custo -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <i class="fas fa-coins text-blue-600 text-sm"></i>
+            </div>
+            <h2 class="text-sm font-bold text-slate-800">Itens de Ruptura - Menor Custo</h2>
+            <span v-if="itensRupturaFormatados.length" class="text-[10px] text-slate-400 font-medium">{{ itensRupturaFormatados.length }} item(ns)</span>
+            <div class="ml-auto flex items-center gap-2 flex-wrap">
+              <select v-model="filtroSetorRuptura" class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500" @change="paginaDadosRuptura = 1">
+                <option value="todos">Todos os setores</option>
+                <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
+              </select>
+              <div class="relative">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                <input v-model="buscaDadosRuptura" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" @input="paginaDadosRuptura = 1" />
+              </div>
+              <button v-if="itensRupturaFormatados.length > 0" @click="handlePrintCard(itensRupturaFormatados, colunasRuptura, 'Itens de Ruptura - Menor Custo')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-medium shadow-sm hover:bg-blue-700 transition">
+                <i class="fas fa-print"></i> Imprimir
+              </button>
+            </div>
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Setor</label>
-            <select
-              v-model="filtroSetorRuptura"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-white"
-            >
-              <option value="todos">Todos os setores</option>
-              <option v-for="setor in setoresUnicosDados" :key="setor" :value="setor">{{ setor }}</option>
-            </select>
+          <div v-if="rupturaFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+            <i class="fas fa-check-circle text-3xl mb-2"></i>
+            <p class="text-xs">Nenhum item com custo de ruptura encontrado.</p>
           </div>
-          <TabelaInterativaAuditoria
-            v-if="itensRupturaFormatados.length > 0"
-            :dados="itensRupturaFormatados"
-            :colunas="colunasRuptura"
-            :itensPorPagina="5"
-            :mostrarBusca="false"
-          />
-          <div v-else class="text-gray-600">Nenhum item com custo de ruptura encontrado</div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'codigo'); paginaDadosRuptura = 1">
+                    <span class="inline-flex items-center gap-1">Código <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'codigo' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'produto'); paginaDadosRuptura = 1">
+                    <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'produto' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'custo'); paginaDadosRuptura = 1">
+                    <span class="inline-flex items-center gap-1">Custo <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'custo' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'fornecedor'); paginaDadosRuptura = 1">
+                    <span class="inline-flex items-center gap-1">Fornecedor <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'fornecedor' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr v-for="(item, idx) in rupturaPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40'">
+                  <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
+                  <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                  <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">R$ {{ parseFloat(item.custo).toFixed(2) }}</td>
+                  <td class="px-3 py-2.5 text-slate-600">{{ item.fornecedor }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação -->
+          <div v-if="totalPaginasRuptura > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaDadosRuptura - 1) * itensPorPaginaDados) + 1 }} a {{ Math.min(paginaDadosRuptura * itensPorPaginaDados, rupturaFiltradoOrdenado.length) }} de {{ rupturaFiltradoOrdenado.length }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaDadosRuptura = 1" :disabled="paginaDadosRuptura === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+              <button @click="paginaDadosRuptura--" :disabled="paginaDadosRuptura === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+              <template v-for="p in totalPaginasRuptura" :key="p">
+                <button v-if="p === 1 || p === totalPaginasRuptura || (p >= paginaDadosRuptura - 1 && p <= paginaDadosRuptura + 1)" @click="paginaDadosRuptura = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaDadosRuptura ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                <span v-else-if="p === paginaDadosRuptura - 2 || p === paginaDadosRuptura + 2" class="text-slate-400 text-[11px] px-1">...</span>
+              </template>
+              <button @click="paginaDadosRuptura++" :disabled="paginaDadosRuptura === totalPaginasRuptura" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+              <button @click="paginaDadosRuptura = totalPaginasRuptura" :disabled="paginaDadosRuptura === totalPaginasRuptura" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- ESTATÍSTICAS -->
-      <div v-if="abaAtiva === 'estatisticas'" class="space-y-8">
+      <div v-if="abaAtiva === 'estatisticas'" class="space-y-6">
         <!-- Setores -->
-        <div class="bg-white rounded-2xl p-5 md:p-6 shadow border border-gray-100">
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-            <h2 class="text-2xl font-bold text-gray-800">
-              <i class="fas fa-chart-pie text-blue-600 mr-2"></i>Setores
-            </h2>
-            <div class="flex flex-wrap items-center gap-2 text-xs">
-              <span class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100">
-                {{ setoresComAnalise.length }} setores
-              </span>
-              <span class="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 font-semibold border border-orange-100">
-                {{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta
-              </span>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <i class="fas fa-chart-pie text-indigo-600 text-sm"></i>
+            </div>
+            <h2 class="text-sm font-bold text-slate-800">Parcial por Setor</h2>
+            <span v-if="setoresComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ setoresComAnalise.length }} setor(es)</span>
+            <span v-if="setoresComAnalise.filter(s => s.percentualPendente > 3).length" class="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium border border-orange-100">{{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta</span>
+            <div class="ml-auto flex items-center gap-2">
+              <div class="relative">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                <input v-model="buscaSetores" type="text" placeholder="Buscar setor..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44" @input="paginaSetores = 1" />
+              </div>
             </div>
           </div>
-
-          <TabelaInterativaAuditoria
-            :dados="setoresComAnalise"
-            :colunas="colunasSetor"
-            :itensPorPagina="8"
-            clickable
-            @click-row="abrirModalSetorLocal('setor', [$event])"
-          >
-            <template #cell-classificacao="{ item }">
-              <span :class="item.classificacaoClass" class="font-bold">
-                {{ item.classificacao }}
-              </span>
-            </template>
-            <template #cell-percentualConclusao="{ item }">
-              <div class="flex flex-col items-end w-full">
-                <span>{{ item.percentualConclusao.toFixed(2) }}%</span>
-                <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1">
-                  <div 
-                    :style="{ width: Math.min(item.percentualConclusao, 100) + '%' }"
-                    class="h-full bg-green-500"
-                  />
-                </div>
-              </div>
-            </template>
-          </TabelaInterativaAuditoria>
+          <div v-if="setoresFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+            <i class="fas fa-chart-pie text-3xl mb-2"></i>
+            <p class="text-xs">Nenhum setor encontrado.</p>
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'nome'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Setor <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'nome' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'total'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Total <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'total' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'lidos'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Lidos <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'pendentes'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'pendentes' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'percentualConclusao'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Conclusão <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percentualConclusao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-center font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'classificacao'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Classificação <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'classificacao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr
+                  v-for="(s, idx) in setoresPaginados"
+                  :key="s.nome"
+                  class="transition-colors cursor-pointer"
+                  :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'"
+                  @click="abrirModalSetorLocal('setor', [s])"
+                >
+                  <td class="px-3 py-2.5 text-slate-700 font-medium">{{ s.nome }}</td>
+                  <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ s.total.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ s.lidos.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-orange-600 font-semibold">{{ s.pendentes.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <div class="w-14 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                        <div class="h-1.5 rounded-full bg-emerald-400 transition-all" :style="{ width: Math.min(s.percentualConclusao, 100) + '%' }"></div>
+                      </div>
+                      <span class="text-slate-700 font-semibold">{{ s.percentualConclusao.toFixed(2) }}%</span>
+                    </div>
+                  </td>
+                  <td class="px-3 py-2.5 text-center">
+                    <span class="px-2 py-1 rounded-full text-[10px] font-bold" :class="s.classificacaoClass">{{ s.classificacao }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação -->
+          <div v-if="totalPaginasSetores > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaSetores - 1) * itensPorPaginaSetores) + 1 }} a {{ Math.min(paginaSetores * itensPorPaginaSetores, setoresFiltradoOrdenado.length) }} de {{ setoresFiltradoOrdenado.length }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaSetores = 1" :disabled="paginaSetores === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+              <button @click="paginaSetores--" :disabled="paginaSetores === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+              <template v-for="p in totalPaginasSetores" :key="p">
+                <button v-if="p === 1 || p === totalPaginasSetores || (p >= paginaSetores - 1 && p <= paginaSetores + 1)" @click="paginaSetores = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaSetores ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                <span v-else-if="p === paginaSetores - 2 || p === paginaSetores + 2" class="text-slate-400 text-[11px] px-1">...</span>
+              </template>
+              <button @click="paginaSetores++" :disabled="paginaSetores === totalPaginasSetores" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+              <button @click="paginaSetores = totalPaginasSetores" :disabled="paginaSetores === totalPaginasSetores" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+            </div>
+          </div>
         </div>
 
         <!-- Locais -->
-        <div class="bg-white rounded-2xl p-5 md:p-6 shadow border border-gray-100">
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
-            <h2 class="text-2xl font-bold text-gray-800">
-              <i class="fas fa-map-marker-alt text-red-600 mr-2"></i>Locais
-            </h2>
-            <div class="flex flex-wrap items-center gap-2 text-xs">
-              <span class="px-3 py-1.5 rounded-full bg-red-50 text-red-700 font-semibold border border-red-100">
-                {{ locaisComAnalise.length }} locais
-              </span>
-              <span class="px-3 py-1.5 rounded-full bg-yellow-50 text-yellow-700 font-semibold border border-yellow-100">
-                {{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência
-              </span>
+        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="h-8 w-8 rounded-lg bg-rose-50 flex items-center justify-center">
+              <i class="fas fa-map-marker-alt text-rose-600 text-sm"></i>
+            </div>
+            <h2 class="text-sm font-bold text-slate-800">Locais</h2>
+            <span v-if="locaisComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ locaisComAnalise.length }} local(is)</span>
+            <span v-if="locaisComAnalise.filter(l => l.pendentes > 0).length" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium border border-amber-100">{{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência</span>
+            <div class="ml-auto flex items-center gap-2">
+              <div class="relative">
+                <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+                <input v-model="buscaLocais" type="text" placeholder="Buscar local..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-44" @input="paginaLocais = 1" />
+              </div>
             </div>
           </div>
-
-          <TabelaInterativaAuditoria 
-            :dados="locaisComAnalise" 
-            :colunas="colunasLocal" 
-            :itensPorPagina="12"
-            clickable
-            @click-row="abrirModalSetorLocal('local', [$event])"
-          >
-            <template #cell-percentualLido="{ item }">
-              <div class="flex flex-col items-end w-full">
-                <span>{{ item.percentualLido.toFixed(2) }}%</span>
-                <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-1">
-                  <div 
-                    :style="{ width: Math.min(item.percentualLido, 100) + '%' }"
-                    class="h-full bg-linear-to-r from-blue-500 to-green-500"
-                  />
-                </div>
-              </div>
-            </template>
-          </TabelaInterativaAuditoria>
+          <div v-if="locaisFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+            <i class="fas fa-map-marker-alt text-3xl mb-2"></i>
+            <p class="text-xs">Nenhum local encontrado.</p>
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b-2 border-slate-100">
+                  <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'nome'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Local <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'nome' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'lidos'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Lidos <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'lidos' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'pendentes'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'pendentes' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'comProblema'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Problema <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'comProblema' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'total'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Total <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'total' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'percentualLido'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">% Lido <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'percentualLido' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr
+                  v-for="(l, idx) in locaisPaginados"
+                  :key="l.nome"
+                  class="transition-colors cursor-pointer"
+                  :class="idx % 2 === 0 ? 'bg-white hover:bg-rose-50/40' : 'bg-slate-50/60 hover:bg-rose-50/40'"
+                  @click="abrirModalSetorLocal('local', [l])"
+                >
+                  <td class="px-3 py-2.5 text-slate-700 font-medium">{{ l.nome }}</td>
+                  <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ l.lidos.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-orange-600 font-semibold">{{ l.pendentes.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ l.comProblema.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ l.total.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <div class="w-14 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                        <div class="h-1.5 rounded-full transition-all" :class="l.percentualLido >= 97 ? 'bg-emerald-400' : l.percentualLido >= 90 ? 'bg-amber-400' : 'bg-red-400'" :style="{ width: Math.min(l.percentualLido, 100) + '%' }"></div>
+                      </div>
+                      <span class="font-bold" :class="l.percentualLido >= 97 ? 'text-emerald-700' : l.percentualLido >= 90 ? 'text-amber-700' : 'text-red-700'">{{ l.percentualLido.toFixed(2) }}%</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Paginação -->
+          <div v-if="totalPaginasLocais > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaLocais - 1) * itensPorPaginaLocais) + 1 }} a {{ Math.min(paginaLocais * itensPorPaginaLocais, locaisFiltradoOrdenado.length) }} de {{ locaisFiltradoOrdenado.length }}</p>
+            <div class="flex items-center gap-1">
+              <button @click="paginaLocais = 1" :disabled="paginaLocais === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+              <button @click="paginaLocais--" :disabled="paginaLocais === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+              <template v-for="p in totalPaginasLocais" :key="p">
+                <button v-if="p === 1 || p === totalPaginasLocais || (p >= paginaLocais - 1 && p <= paginaLocais + 1)" @click="paginaLocais = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaLocais ? 'bg-rose-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                <span v-else-if="p === paginaLocais - 2 || p === paginaLocais + 2" class="text-slate-400 text-[11px] px-1">...</span>
+              </template>
+              <button @click="paginaLocais++" :disabled="paginaLocais === totalPaginasLocais" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+              <button @click="paginaLocais = totalPaginasLocais" :disabled="paginaLocais === totalPaginasLocais" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -3026,23 +3492,62 @@ const fecharRelatorio = () => {
               <div><strong>Local:</strong> {{ tituloModalItens }}</div>
             </div>
             
-            <TabelaInterativaAuditoria
-              ref="tabelaItensRef"
-              :dados="itensModalFormatados"
-              :colunas="colunasModal"
-              :itensPorPagina="10"
-              :mostrarBusca="true"
-              :exibirTudo="exibirTudoPDFItens"
-            >
-                <template #cell-status="{ item }">
-                    <span class="pdf-hide" :class="item.statusClass">
-                      {{ item.status }}
-                    </span>
-                    <span class="pdf-only text-gray-800 font-semibold">
-                      {{ item.lido ? 'Lido' : 'Não lido' }}
-                    </span>
+            <!-- Search -->
+            <div class="relative mb-3">
+              <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+              <input v-model="buscaModalItens" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64" @input="paginaModalItens = 1" />
+            </div>
+            <div v-if="modalItensOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
+              <i class="fas fa-inbox text-3xl mb-2"></i>
+              <p class="text-xs">Nenhum item encontrado.</p>
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b-2 border-slate-100">
+                    <th v-for="col in colunasModal" :key="col.chave"
+                      :class="['px-3 py-2.5 font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors', col.alinhamento === 'right' ? 'text-right' : col.alinhamento === 'center' ? 'text-center' : 'text-left', col.classeHeader || '']"
+                      @click="atualizarOrdenacaoDados(ordenacaoModalItens, col.chave); paginaModalItens = 1"
+                    >
+                      <span class="inline-flex items-center gap-1" :class="col.alinhamento === 'right' ? 'justify-end' : ''">
+                        {{ col.titulo }}
+                        <i class="fas text-[10px]" :class="ordenacaoModalItens.coluna === col.chave ? (ordenacaoModalItens.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" />
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <tr v-for="(item, idx) in modalItensPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40'">
+                    <td v-for="col in colunasModal" :key="col.chave"
+                      :class="['px-3 py-2.5', col.alinhamento === 'right' ? 'text-right' : col.alinhamento === 'center' ? 'text-center' : 'text-left', col.classeCell || '', col.chave === 'Código' ? 'font-semibold text-slate-700' : 'text-slate-600']"
+                    >
+                      <template v-if="col.chave === 'status'">
+                        <span class="pdf-hide" :class="item.statusClass">{{ item.status }}</span>
+                        <span class="pdf-only text-gray-800 font-semibold">{{ item.lido ? 'Lido' : 'Não lido' }}</span>
+                      </template>
+                      <template v-else-if="col.chave === '_estoque'">
+                        <span class="font-mono">{{ item._estoque || 0 }}</span>
+                      </template>
+                      <template v-else>{{ item[col.chave] }}</template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- Pagination -->
+            <div v-if="totalPaginasModalItens > 1" class="flex items-center justify-between pt-2 border-t border-slate-100 mt-3">
+              <p class="text-[11px] text-slate-500">Mostrando {{ ((paginaModalItens - 1) * itensPorPaginaModalItens) + 1 }} a {{ Math.min(paginaModalItens * itensPorPaginaModalItens, modalItensOrdenado.length) }} de {{ modalItensOrdenado.length }}</p>
+              <div class="flex items-center gap-1">
+                <button @click="paginaModalItens = 1" :disabled="paginaModalItens === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
+                <button @click="paginaModalItens--" :disabled="paginaModalItens === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
+                <template v-for="p in paginasVisiveisFn(totalPaginasModalItens, paginaModalItens)" :key="p">
+                  <button v-if="typeof p === 'number'" @click="paginaModalItens = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaModalItens ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+                  <span v-else class="text-slate-400 text-[11px] px-1">...</span>
                 </template>
-            </TabelaInterativaAuditoria>
+                <button @click="paginaModalItens++" :disabled="paginaModalItens === totalPaginasModalItens" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
+                <button @click="paginaModalItens = totalPaginasModalItens" :disabled="paginaModalItens === totalPaginasModalItens" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-right"></i></button>
+              </div>
+            </div>
           </div>
         </div>
 
