@@ -5,7 +5,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
-import { printTableInNewWindow } from '../utils/print'
+import { printTableInNewWindow, printHtmlInNewWindow } from '../utils/print'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -57,6 +57,7 @@ const colunasUsuario = [
 const colunasRuptura = [
   { chave: 'codigo', titulo: 'Código', sortable: true },
   { chave: 'produto', titulo: 'Produto', sortable: true },
+  { chave: 'estoque', titulo: 'Qtd Estoque', sortable: true, alinhamento: 'right' },
   { chave: 'custo', titulo: 'Custo', sortable: true, alinhamento: 'right', format: (v) => 'R$ ' + parseFloat(v).toFixed(2) },
   { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true }
 ]
@@ -1428,19 +1429,8 @@ const handlePrintRelatorio = () => {
   doc.write(html)
   doc.close()
   win.document.title = safeTitle
-  const handle = () => {
-    try {
-      win.focus()
-      win.print()
-    } finally {
-      win.close()
-    }
-  }
-  if (win.document.readyState === 'complete') {
-    handle()
-  } else {
-    win.onload = handle
-  }
+  win.onafterprint = () => { win.close() }
+  setTimeout(() => { win.focus(); win.print() }, 300)
 }
 
 // Funções auxiliares para processar dados da planilha
@@ -1789,12 +1779,25 @@ const itensPorFornecedor = computed(() => {
 const setoresComAnalise = computed(() => {
   if (!auditoria.value?.analise || !auditoria.value.analise.porSetor) return []
   const analise = auditoria.value.analise
-  
+
+  // Contar itens com problema por setor
+  const problemaPorSetor = {}
+  const detalhesEstoqueZero = analise.itensComEstoqueZeroDetalhes || []
+  const detalhesLidoNaoPertence = analise.itensLidoNaoPertenceDetalhes || []
+  detalhesEstoqueZero.forEach(item => {
+    const set = (item.setor || 'Não especificado').toString().trim()
+    problemaPorSetor[set] = (problemaPorSetor[set] || 0) + 1
+  })
+  detalhesLidoNaoPertence.forEach(item => {
+    const set = (item.setor || 'Não especificado').toString().trim()
+    problemaPorSetor[set] = (problemaPorSetor[set] || 0) + 1
+  })
+
   return Object.entries(analise.porSetor)
     .map(([setor, dados]) => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
-      const comProblema = dados.comProblema || 0
+      const comProblema = problemaPorSetor[setor] || 0
       let desatualizados = dados.desatualizados || 0
       if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
         const soma = (auditoria.value.dados || []).reduce((acc, item) => {
@@ -1848,15 +1851,39 @@ const locaisComAnalise = computed(() => {
   if (!auditoria.value?.analise || !auditoria.value.analise.porLocal) return []
   const analise = auditoria.value.analise
   const dadosCompletos = auditoria.value.dados || []
-  
+
+  // Contar itens com problema por local
+  const problemaPorLocal = {}
+  const detalhesEstoqueZero = analise.itensComEstoqueZeroDetalhes || []
+  const detalhesLidoNaoPertence = analise.itensLidoNaoPertenceDetalhes || []
+  detalhesEstoqueZero.forEach(item => {
+    const loc = (item.local || 'Não especificado').toString().trim()
+    problemaPorLocal[loc] = (problemaPorLocal[loc] || 0) + 1
+  })
+  detalhesLidoNaoPertence.forEach(item => {
+    const loc = (item.local || 'Não especificado').toString().trim()
+    problemaPorLocal[loc] = (problemaPorLocal[loc] || 0) + 1
+  })
+
   const locais = Object.entries(analise.porLocal)
     .map(([local, dados]) => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
-      const comProblema = dados.comProblema || 0
+      const nomeLocal = (local || 'Não especificado').toString().trim()
+      const comProblema = problemaPorLocal[nomeLocal] || 0
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
-      const nomeLocal = (local || 'Não especificado').toString().trim()
+
+      // Contar desatualizados por local
+      let desatualizados = 0
+      if (Array.isArray(dadosCompletos)) {
+        desatualizados = dadosCompletos.reduce((acc, item) => {
+          const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+          const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
+          return acc + ((itemLocal === nomeLocal && s.includes('desatualizad')) ? 1 : 0)
+        }, 0)
+      }
+
       const itensDoLocal = dadosCompletos.filter(item => {
         const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
         return itemLocal === nomeLocal
@@ -1866,6 +1893,7 @@ const locaisComAnalise = computed(() => {
         lidos: lidos,
         pendentes: pendentes,
         comProblema: comProblema,
+        desatualizados: desatualizados,
         totalLidos: totalLidos,
         total: total,
         percentualPendente: total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0,
@@ -1875,7 +1903,7 @@ const locaisComAnalise = computed(() => {
     })
     .filter(local => local.total > 0)
     .sort((a, b) => b.pendentes - a.pendentes)
-  
+
   return locais
 })
 
@@ -2094,6 +2122,7 @@ const itensRupturaFormatados = computed(() => {
     return {
       codigo: item['Código'],
       produto: item['Produto'],
+      estoque: item._estoque !== undefined ? item._estoque : (extrairEstoque(item) || 0),
       custo: parseFloat(item['Custo Ruptura']),
       fornecedor: item['Fornecedor']
     }
@@ -2123,18 +2152,117 @@ const handlePrintCard = (dados, colunas, tituloCard) => {
   printTableInNewWindow(dados, colunas, titulo)
 }
 
+const colunasSetoresEstat = [
+  { chave: 'nome', titulo: 'Setor', sortable: true },
+  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
+  { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right' },
+  { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right' },
+  { chave: 'comProblema', titulo: 'Problemas', sortable: true, alinhamento: 'right' },
+  { chave: 'desatualizados', titulo: 'Desatualizados', sortable: true, alinhamento: 'right' },
+  { chave: 'percentualConclusao', titulo: '% Conclusão', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%' },
+  { chave: 'classificacao', titulo: 'Classificação', sortable: true, alinhamento: 'center' }
+]
+
+const handlePrintSetores = () => {
+  handlePrintCard(setoresFiltradoOrdenado.value, colunasSetoresEstat, 'Parcial por Setor')
+}
+
+const colunasLocaisEstat = [
+  { chave: 'nome', titulo: 'Local', sortable: true },
+  { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right' },
+  { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right' },
+  { chave: 'comProblema', titulo: 'Problemas', sortable: true, alinhamento: 'right' },
+  { chave: 'desatualizados', titulo: 'Desatualizados', sortable: true, alinhamento: 'right' },
+  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
+  { chave: 'percentualLido', titulo: '% Lido', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%' }
+]
+
+const handlePrintLocais = () => {
+  handlePrintCard(locaisFiltradoOrdenado.value, colunasLocaisEstat, 'Locais')
+}
+
 const handlePrintUsuarios = () => {
   const dadosBase = usuariosFiltrados.value
   if (!dadosBase || dadosBase.length === 0) return
 
+  const escapeHtml = (v) => {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
   const colunasPrint = colunasUsuario.filter(c => c.chave !== 'acoes' && c.chave !== 'statusBadge')
 
-  const dadosPrint = dadosBase.map(u => ({
-    ...u,
-  }))
+  const headers = colunasPrint
+    .map(c => `<th style="text-align:${c.alinhamento || 'left'};">${escapeHtml(c.titulo)}</th>`)
+    .join('')
+
+  const rows = dadosBase.map(u => {
+    const cells = colunasPrint.map(c => {
+      let val = u[c.chave]
+      if (c.format && val != null) val = c.format(val)
+      return `<td style="text-align:${c.alinhamento || 'left'};">${escapeHtml(val)}</td>`
+    }).join('')
+    return `<tr>${cells}</tr>`
+  }).join('')
+
+  const cores = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#ec4899', '#06b6d4', '#f97316']
+
+  const setores = setoresComUsuarios.value
+  let setoresHtml = ''
+  if (setores.length > 0) {
+    const setorCards = setores.map(setorData => {
+      const barSegments = setorData.usuarios.map((u, idx) => {
+        const cor = cores[idx % cores.length]
+        return `<div style="width:${u.percentual}%;background:${cor};height:100%;display:inline-block;" title="${escapeHtml(u.usuario)}: ${u.percentual}%"></div>`
+      }).join('')
+
+      const legendItems = setorData.usuarios.map((u, idx) => {
+        const cor = cores[idx % cores.length]
+        return `<div style="display:flex;align-items:center;gap:6px;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+          <div style="display:flex;align-items:center;gap:5px;min-width:0;">
+            <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0;"></div>
+            <span style="font-weight:600;color:#374151;">${escapeHtml(u.usuario)}</span>
+          </div>
+          <span style="color:#6b7280;flex-shrink:0;">${u.percentual}% (${u.lidos})</span>
+        </div>`
+      }).join('')
+
+      return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;background:#fff;break-inside:avoid;">
+        <div style="font-weight:700;font-size:13px;color:#1f2937;margin-bottom:2px;">${escapeHtml(setorData.setor)}</div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;">Total: ${setorData.totalLidos} itens lidos</div>
+        <div style="height:20px;border-radius:6px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:10px;font-size:0;line-height:0;white-space:nowrap;">${barSegments}</div>
+        ${legendItems}
+      </div>`
+    }).join('')
+
+    setoresHtml = `
+      <div class="section">
+        <h2>Contribuição por Setor</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          ${setorCards}
+        </div>
+      </div>`
+  }
 
   const titulo = `Relatório de Usuários - ${auditoria.value.tipo} - ${dataAuditoriaBR.value}`
-  printTableInNewWindow(dadosPrint, colunasPrint, titulo)
+
+  const bodyHtml = `
+    <h1>${escapeHtml(titulo)}</h1>
+    <div class="section">
+      <h2>Usuários</h2>
+      <table>
+        <thead><tr>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${setoresHtml}
+  `
+
+  printHtmlInNewWindow(titulo, bodyHtml)
 }
 
 const abrirRelatorio = () => {
@@ -2848,7 +2976,7 @@ const fecharRelatorio = () => {
              </h3>
              <button
                v-if="filtroFornecedor && itensFornecedorFormatados.length > 0"
-               @click="handlePrintCard(itensFornecedorFormatados, colunasFornecedor, `Fornecedor ${filtroFornecedor}`)"
+               @click="handlePrintCard(fornecedorTabOrdenado, colunasFornecedor, `Fornecedor ${filtroFornecedor}`)"
                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium shadow-sm flex items-center gap-2"
              >
                <i class="fas fa-print"></i> Imprimir Lista
@@ -2993,7 +3121,7 @@ const fecharRelatorio = () => {
                   <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                   <input v-model="buscaDadosEstoqueZero" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-red-500 w-36" @input="paginaDadosEstoqueZero = 1" />
                 </div>
-                <button v-if="itensLidosEstoqueZeroFiltrados.length > 0" @click="handlePrintCard(itensLidosEstoqueZeroFiltrados, colunasEstoqueZero, 'Lidos com Estoque Zero')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-medium shadow-sm hover:bg-red-700 transition">
+                <button v-if="itensLidosEstoqueZeroFiltrados.length > 0" @click="handlePrintCard(estoqueZeroFiltradoOrdenado, colunasEstoqueZero, 'Lidos com Estoque Zero')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-medium shadow-sm hover:bg-red-700 transition">
                   <i class="fas fa-print"></i> Imprimir
                 </button>
               </div>
@@ -3067,7 +3195,7 @@ const fecharRelatorio = () => {
                   <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                   <input v-model="buscaDadosLocalErrado" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-500 w-36" @input="paginaDadosLocalErrado = 1" />
                 </div>
-                <button v-if="itensLidoNaoPertenceFiltrados.length > 0" @click="handlePrintCard(itensLidoNaoPertenceFiltrados, colunasLocalErrado, 'Lido no Local Errado')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-medium shadow-sm hover:bg-amber-700 transition">
+                <button v-if="itensLidoNaoPertenceFiltrados.length > 0" @click="handlePrintCard(localErradoFiltradoOrdenado, colunasLocalErrado, 'Lido no Local Errado')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-medium shadow-sm hover:bg-amber-700 transition">
                   <i class="fas fa-print"></i> Imprimir
                 </button>
               </div>
@@ -3137,7 +3265,7 @@ const fecharRelatorio = () => {
                   <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                   <input v-model="buscaDadosGrandeEstoque" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-500 w-36" @input="paginaDadosGrandeEstoque = 1" />
                 </div>
-                <button v-if="itensGrandeEstoqueFormatados.length > 0" @click="handlePrintCard(itensGrandeEstoqueFormatados, colunasGrandeEstoque, 'Grande Estoque Não Lido')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 text-white text-[11px] font-medium shadow-sm hover:bg-orange-700 transition">
+                <button v-if="itensGrandeEstoqueFormatados.length > 0" @click="handlePrintCard(grandeEstoqueFiltradoOrdenado, colunasGrandeEstoque, 'Grande Estoque Não Lido')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 text-white text-[11px] font-medium shadow-sm hover:bg-orange-700 transition">
                   <i class="fas fa-print"></i> Imprimir
                 </button>
               </div>
@@ -3204,7 +3332,7 @@ const fecharRelatorio = () => {
                 <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                 <input v-model="buscaDadosRuptura" type="text" placeholder="Buscar..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-36" @input="paginaDadosRuptura = 1" />
               </div>
-              <button v-if="itensRupturaFormatados.length > 0" @click="handlePrintCard(itensRupturaFormatados, colunasRuptura, 'Itens de Ruptura - Menor Custo')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-medium shadow-sm hover:bg-blue-700 transition">
+              <button v-if="itensRupturaFormatados.length > 0" @click="handlePrintCard(rupturaFiltradoOrdenado, colunasRuptura, 'Itens de Ruptura - Menor Custo')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-medium shadow-sm hover:bg-blue-700 transition">
                 <i class="fas fa-print"></i> Imprimir
               </button>
             </div>
@@ -3223,6 +3351,9 @@ const fecharRelatorio = () => {
                   <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'produto'); paginaDadosRuptura = 1">
                     <span class="inline-flex items-center gap-1">Produto <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'produto' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'estoque'); paginaDadosRuptura = 1">
+                    <span class="inline-flex items-center gap-1">Qtd Estoque <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'estoque' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-blue-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoDadosRuptura, 'custo'); paginaDadosRuptura = 1">
                     <span class="inline-flex items-center gap-1">Custo <i class="fas text-[10px]" :class="ordenacaoDadosRuptura.coluna === 'custo' ? (ordenacaoDadosRuptura.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
@@ -3235,6 +3366,7 @@ const fecharRelatorio = () => {
                 <tr v-for="(item, idx) in rupturaPaginado" :key="idx" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40'">
                   <td class="px-3 py-2.5 text-slate-700 font-semibold">{{ item.codigo }}</td>
                   <td class="px-3 py-2.5 text-slate-700">{{ item.produto }}</td>
+                  <td class="px-3 py-2.5 text-right text-slate-700 font-mono">{{ item.estoque }}</td>
                   <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">R$ {{ parseFloat(item.custo).toFixed(2) }}</td>
                   <td class="px-3 py-2.5 text-slate-600">{{ item.fornecedor }}</td>
                 </tr>
@@ -3274,6 +3406,9 @@ const fecharRelatorio = () => {
                 <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                 <input v-model="buscaSetores" type="text" placeholder="Buscar setor..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44" @input="paginaSetores = 1" />
               </div>
+              <button v-if="setoresFiltradoOrdenado.length > 0" @click="handlePrintSetores" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-medium shadow-sm hover:bg-indigo-700 transition">
+                <i class="fas fa-print"></i> Imprimir
+              </button>
             </div>
           </div>
           <div v-if="setoresFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
@@ -3296,6 +3431,12 @@ const fecharRelatorio = () => {
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'pendentes'); paginaSetores = 1">
                     <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'pendentes' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'comProblema'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Problemas <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'desatualizados'); paginaSetores = 1">
+                    <span class="inline-flex items-center gap-1">Desatualiz. <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'desatualizados' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'percentualConclusao'); paginaSetores = 1">
                     <span class="inline-flex items-center gap-1">Conclusão <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percentualConclusao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
@@ -3316,6 +3457,8 @@ const fecharRelatorio = () => {
                   <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ s.total.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ s.lidos.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-orange-600 font-semibold">{{ s.pendentes.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ s.comProblema.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-yellow-600 font-semibold">{{ s.desatualizados.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex items-center justify-end gap-2">
                       <div class="w-14 bg-slate-100 rounded-full h-1.5 hidden sm:block">
@@ -3361,6 +3504,9 @@ const fecharRelatorio = () => {
                 <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
                 <input v-model="buscaLocais" type="text" placeholder="Buscar local..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-44" @input="paginaLocais = 1" />
               </div>
+              <button v-if="locaisFiltradoOrdenado.length > 0" @click="handlePrintLocais" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[11px] font-medium shadow-sm hover:bg-rose-700 transition">
+                <i class="fas fa-print"></i> Imprimir
+              </button>
             </div>
           </div>
           <div v-if="locaisFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
@@ -3381,7 +3527,10 @@ const fecharRelatorio = () => {
                     <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'pendentes' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'comProblema'); paginaLocais = 1">
-                    <span class="inline-flex items-center gap-1">Problema <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'comProblema' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                    <span class="inline-flex items-center gap-1">Problemas <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'comProblema' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
+                  </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'desatualizados'); paginaLocais = 1">
+                    <span class="inline-flex items-center gap-1">Desatualiz. <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'desatualizados' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
                   </th>
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-rose-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoLocais, 'total'); paginaLocais = 1">
                     <span class="inline-flex items-center gap-1">Total <i class="fas text-[10px]" :class="ordenacaoLocais.coluna === 'total' ? (ordenacaoLocais.direcao === 'asc' ? 'fa-sort-up text-rose-600' : 'fa-sort-down text-rose-600') : 'fa-sort text-slate-300'" /></span>
@@ -3403,6 +3552,7 @@ const fecharRelatorio = () => {
                   <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ l.lidos.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-orange-600 font-semibold">{{ l.pendentes.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ l.comProblema.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right text-yellow-600 font-semibold">{{ l.desatualizados.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ l.total.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex items-center justify-end gap-2">
