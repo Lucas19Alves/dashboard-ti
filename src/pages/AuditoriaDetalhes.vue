@@ -153,6 +153,7 @@ const filtroStatusItens = ref('todos')
 const modalUsuarioAberto = ref(false)
 const usuarioSelecionado = ref(null)
 const mostrarUploadSubstituir = ref(false)
+const skuSubstituir = ref('')
 const modalItensAberto = ref(false)
 const itensModal = ref([])
 const tituloModalItens = ref('')
@@ -268,15 +269,21 @@ onMounted(() => {
 
 const handleUploadCompleto = async ({ dados, analise }) => {
   if (auditoria.value) {
-    // Manter o SKU existente da auditoria (não atualizar pelo arquivo)
-    await store.updateAuditoria(auditoria.value.id, {
+    const updateData = {
       dados: dados,
       analise: analise,
       parcial: analise.parcialPercentual,
       total: analise.totalItens
-    })
+    }
+    const novoSku = parseInt(skuSubstituir.value) || 0
+    if (novoSku > 0) {
+      updateData.sku = novoSku
+      updateData.total = novoSku
+    }
+    await store.updateAuditoria(auditoria.value.id, updateData)
     store.addToast('Dados importados com sucesso!', 'success')
     mostrarUploadSubstituir.value = false
+    skuSubstituir.value = ''
   }
 }
 
@@ -2332,7 +2339,7 @@ const fecharRelatorio = () => {
             </button>
             <button
               v-if="!readOnly"
-              @click="mostrarUploadSubstituir = true"
+              @click="skuSubstituir = String(auditoria?.sku || ''); mostrarUploadSubstituir = true"
               class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
             >
               <i class="fas fa-upload mr-2"></i>Atualizar dados
@@ -2895,6 +2902,21 @@ const fecharRelatorio = () => {
           <p class="text-gray-600 mb-4">
             Ao carregar uma nova planilha, os dados atuais serão substituídos completamente.
           </p>
+          <div class="mb-5 bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <label class="block text-sm font-semibold text-gray-700 mb-2">
+              <i class="fas fa-barcode text-blue-600 mr-1.5"></i>SKU da Loja
+            </label>
+            <div class="relative">
+              <input
+                v-model="skuSubstituir"
+                type="number"
+                min="1"
+                placeholder="Quantidade de SKUs"
+                class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              />
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1.5">Deixe vazio para manter o SKU atual</p>
+          </div>
           <UploadAnaliseAuditoria
             :auditoria="auditoria"
             @analiseCompleta="handleUploadCompleto"
