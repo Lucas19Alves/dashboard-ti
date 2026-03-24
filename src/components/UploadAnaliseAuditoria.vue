@@ -4,7 +4,7 @@
     <div class="bg-white rounded-lg shadow-lg p-8" @click.stop>
       <h3 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
         <i class="fas fa-file-upload text-green-600"></i>
-        Carregar Dados do Auditoria
+        Carregar Dados da Auditoria
       </h3>
 
       <div class="space-y-4" @click.stop>
