@@ -535,8 +535,8 @@ watch([buscaLista, lista], () => {
 })
 
 const imprimirLista = () => {
-  if (!colunas.value.length || !lista.value.length) return
+  if (!colunas.value.length || !listaOrdenada.value.length) return
   const tituloRel = `Auditoria - ${titulo.value}`
-  printTableInNewWindow(lista.value, colunas.value, tituloRel)
+  printTableInNewWindow(listaOrdenada.value, colunas.value, tituloRel)
 }
 </script>

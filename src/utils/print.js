@@ -84,14 +84,15 @@ export const printTableInNewWindow = (data, columns, title = 'Relatório') => {
       .replace(/'/g, '&#39;')
   }
   const headers = columns
-    .map(c => `<th>${escapeHtml(c.titulo)}</th>`)
+    .map(c => `<th style="text-align:${c.alinhamento || 'left'};">${escapeHtml(c.titulo)}</th>`)
     .join('')
   const rows = data
     .map(item => {
       const cells = columns
         .map(c => {
-          const val = item?.[c.chave]
-          return `<td>${escapeHtml(val)}</td>`
+          let val = item?.[c.chave]
+          if (c.format && val != null) val = c.format(val)
+          return `<td style="text-align:${c.alinhamento || 'left'};">${escapeHtml(val)}</td>`
         })
         .join('')
       return `<tr>${cells}</tr>`
