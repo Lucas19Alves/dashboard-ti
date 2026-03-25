@@ -161,6 +161,8 @@ const printAreaItens = ref(null)
 const printAreaRelatorio = ref(null)
 const editandoSku = ref(false)
 const skuEditavel = ref('')
+const filtroHorarioUsuario = ref('todos')
+const filtroHorarioSetor = ref('todos')
 
 // Paginação/ordenação das tabelas de dados críticos
 const paginaDadosEstoqueZero = ref(1)
@@ -551,6 +553,104 @@ const formatHoras = (valor) => {
   return `${hStr}:${mStr}`
 }
 
+const toHour = (valor) => {
+  if (!valor) return null
+  if (typeof valor === 'string') {
+    const d = new Date(valor)
+    if (!isNaN(d.getTime())) return d.getHours()
+    const m = valor.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+    if (m) return Math.max(0, Math.min(23, parseInt(m[1], 10)))
+    return null
+  }
+  if (typeof valor === 'number') {
+    if (valor > 1e12) {
+      const d = new Date(valor)
+      return isNaN(d.getTime()) ? null : d.getHours()
+    }
+    const base = new Date(Date.UTC(1899, 11, 30))
+    const d = new Date(base.getTime() + valor * 864e5)
+    return isNaN(d.getTime()) ? null : d.getUTCHours()
+  }
+  if (valor instanceof Date) return valor.getHours()
+  return null
+}
+
+// Extrai a hora de trabalho de um item, tentando todas as colunas "Auditado em" (incluindo _1, _2, etc.)
+const getItemHour = (item) => {
+  // Primeiro, tentar o valor principal
+  let h = toHour(getHoraValor(item))
+  if (h != null && h > 0) return h
+
+  // Se a hora é 0 (meia-noite) ou null, a coluna pode ter o valor de DATA e não de HORA.
+  // XLSX renomeia colunas duplicadas com sufixos _1, _2, etc.
+  // Tentar todas as variações de "Auditado em" para encontrar a coluna de horário.
+  const chaves = Object.keys(item).filter(k => {
+    const n = k.toLowerCase()
+    return n.startsWith('auditado em') || n.startsWith('auditado_em')
+  })
+  for (const chave of chaves) {
+    const tentativa = toHour(item[chave])
+    if (tentativa != null && tentativa > 0) return tentativa
+  }
+  return h
+}
+
+// Converte serial Excel ou valor para data ISO YYYY-MM-DD (seguro para timezone)
+const serialToDateISO = (valor) => {
+  if (typeof valor === 'number' && valor > 100 && valor < 200000) {
+    // Serial Excel (dias desde 1899-12-30) - usar UTC para evitar offset de timezone
+    const d = new Date(Date.UTC(1899, 11, 30) + valor * 864e5)
+    if (!isNaN(d.getTime())) {
+      const ano = d.getUTCFullYear()
+      if (ano >= 2020 && ano <= 2040) {
+        return `${ano}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+      }
+    }
+    return null
+  }
+  if (typeof valor === 'string') {
+    const d = parseDataValor(valor)
+    if (d) {
+      const ano = d.getFullYear()
+      if (ano >= 2020 && ano <= 2040) {
+        return `${ano}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+    }
+  }
+  if (valor instanceof Date && !isNaN(valor.getTime())) {
+    const ano = valor.getFullYear()
+    if (ano >= 2020 && ano <= 2040) {
+      return `${ano}-${String(valor.getMonth() + 1).padStart(2, '0')}-${String(valor.getDate()).padStart(2, '0')}`
+    }
+  }
+  return null
+}
+
+// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
+const getItemDateISO = (item) => {
+  // Tentar todas as variações "Auditado em" (incluindo _1, _2 do XLSX)
+  const chaves = Object.keys(item).filter(k => {
+    const n = k.toLowerCase()
+    return n.startsWith('auditado em') || n.startsWith('auditado_em')
+  })
+  for (const chave of chaves) {
+    const resultado = serialToDateISO(item[chave])
+    if (resultado) return resultado
+  }
+  // Fallback: tentar getHoraValor
+  const horaValor = getHoraValor(item)
+  return serialToDateISO(horaValor)
+}
+
+const isItemLido = (item) => {
+  if (item._temPresenca) return true
+  const valor = item['Lido não pertence']
+  if (valor === undefined || valor === null) return false
+  if (valor === true) return true
+  if (typeof valor === 'string') return valor.toLowerCase().includes('sim')
+  return false
+}
+
 const leituraPorHora = computed(() => {
   if (!auditoria.value?.dados) return null
   const dados = auditoria.value.dados
@@ -558,50 +658,9 @@ const leituraPorHora = computed(() => {
   const contagem = {}
   for (let h = 8; h <= 18; h++) contagem[h] = 0
 
-  const toHour = (valor) => {
-    if (!valor) return null
-    // String com data/hora
-    if (typeof valor === 'string') {
-      const d = new Date(valor)
-      if (!isNaN(d.getTime())) return d.getHours()
-      // tenta HH:mm
-      const m = valor.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/)
-      if (m) return Math.max(0, Math.min(23, parseInt(m[1], 10)))
-      return null
-    }
-    // Timestamp numérico (ms)
-    if (typeof valor === 'number') {
-      if (valor > 1e12) {
-        const d = new Date(valor)
-        return isNaN(d.getTime()) ? null : d.getHours()
-      }
-      // Serial do Excel (dias desde 1899-12-30)
-      const base = new Date(Date.UTC(1899, 11, 30))
-      const d = new Date(base.getTime() + valor * 864e5)
-      return isNaN(d.getTime()) ? null : d.getUTCHours()
-    }
-    // Objeto Date
-    if (valor instanceof Date) return valor.getHours()
-    return null
-  }
-
-  const isLidoNaoPertence = (item) => {
-    const valor = item['Lido não pertence']
-    if (valor === undefined || valor === null) return false
-    if (valor === true) return true
-    if (typeof valor === 'string') return valor.toLowerCase().includes('sim')
-    return false
-  }
-
   dados.forEach(item => {
-    const lidoNaoPertence = isLidoNaoPertence(item)
-    const efetivamenteTemPresenca = item._temPresenca || lidoNaoPertence
-    if (!efetivamenteTemPresenca) return
-    
-    // Tentar diferentes colunas de data/hora
-    const horaValor = getHoraValor(item)
-    
-    const h = toHour(horaValor)
+    if (!isItemLido(item)) return
+    const h = getItemHour(item)
     if (h != null && h >= 8 && h <= 18) {
       contagem[h] = (contagem[h] || 0) + 1
     }
@@ -614,6 +673,107 @@ const leituraPorHora = computed(() => {
   }
   const max = serie.reduce((m, p) => Math.max(m, p.valor), 0)
   return { serie, max }
+})
+
+const leituraPorHoraFiltrada = computed(() => {
+  if (!auditoria.value?.dados) return null
+  const dados = auditoria.value.dados
+  const auditoriaDia = auditoria.value.data // ISO string YYYY-MM-DD
+
+  const contagem = {}
+  for (let h = 6; h <= 22; h++) contagem[h] = 0
+
+  let totalLeituras = 0
+
+  dados.forEach(item => {
+    if (!isItemLido(item)) return
+
+    // Filtro de data: somente itens auditados no dia da auditoria
+    if (auditoriaDia) {
+      const dataItemISO = getItemDateISO(item)
+      if (dataItemISO && dataItemISO !== auditoriaDia) return
+    }
+
+    // Filtro de usuário
+    if (filtroHorarioUsuario.value !== 'todos') {
+      const usuario = (item['Usuário'] || item['Usuario'] || '').toString().trim()
+      if (usuario !== filtroHorarioUsuario.value) return
+    }
+
+    // Filtro de setor
+    if (filtroHorarioSetor.value !== 'todos') {
+      const setor = getSetorItem(item)
+      if (setor !== filtroHorarioSetor.value) return
+    }
+
+    const h = getItemHour(item)
+    if (h != null && h >= 6 && h <= 22) {
+      contagem[h] = (contagem[h] || 0) + 1
+      totalLeituras++
+    }
+  })
+
+  // Construir série e calcular variações
+  const serie = []
+  let horasComLeitura = 0
+  for (let h = 6; h <= 22; h++) {
+    const valor = contagem[h] || 0
+    if (valor > 0) horasComLeitura++
+    const label = String(h).padStart(2, '0') + ':00'
+    serie.push({ hora: label, horaNum: h, valor, variacao: 0 })
+  }
+
+  // Calcular variação % entre horas consecutivas
+  for (let i = 1; i < serie.length; i++) {
+    const anterior = serie[i - 1].valor
+    const atual = serie[i].valor
+    if (anterior > 0 && atual > 0) {
+      serie[i].variacao = Math.round(((atual - anterior) / anterior) * 100)
+    } else if (anterior === 0 && atual > 0) {
+      serie[i].variacao = 100
+    } else if (anterior > 0 && atual === 0) {
+      serie[i].variacao = -100
+    }
+  }
+
+  const max = serie.reduce((m, p) => Math.max(m, p.valor), 0)
+  const media = horasComLeitura > 0 ? Math.round(totalLeituras / horasComLeitura) : 0
+
+  // Filtrar série para exibir somente horários relevantes (com dados OU entre horários com dados)
+  let primeiroIdx = serie.findIndex(s => s.valor > 0)
+  let ultimoIdx = serie.length - 1
+  for (let i = serie.length - 1; i >= 0; i--) {
+    if (serie[i].valor > 0) { ultimoIdx = i; break }
+  }
+  const serieVisivel = primeiroIdx >= 0 ? serie.slice(Math.max(0, primeiroIdx - 1), ultimoIdx + 2) : serie
+
+  // Insights
+  const comLeitura = serie.filter(s => s.valor > 0)
+  const pico = comLeitura.length > 0 ? comLeitura.reduce((a, b) => a.valor >= b.valor ? a : b) : null
+  const baixa = comLeitura.length > 0 ? comLeitura.reduce((a, b) => a.valor <= b.valor ? a : b) : null
+
+  let maiorSubida = null
+  let maiorQueda = null
+  for (let i = 1; i < serie.length; i++) {
+    if (serie[i].valor === 0 && serie[i - 1].valor === 0) continue
+    if (serie[i].variacao > 0 && (!maiorSubida || serie[i].variacao > maiorSubida.variacao)) {
+      maiorSubida = { de: serie[i - 1].hora, para: serie[i].hora, variacao: serie[i].variacao }
+    }
+    if (serie[i].variacao < 0 && (!maiorQueda || serie[i].variacao < maiorQueda.variacao)) {
+      maiorQueda = { de: serie[i - 1].hora, para: serie[i].hora, variacao: serie[i].variacao }
+    }
+  }
+
+  return {
+    serie: serieVisivel,
+    max,
+    totalLeituras,
+    media,
+    pico,
+    baixa,
+    maiorSubida,
+    maiorQueda
+  }
 })
 
 const getHoraValor = (item) => {
@@ -1065,43 +1225,11 @@ const leiturasPorUsuarioHora = computed(() => {
     cont[u] = {}
     for (let h = 8; h <= 18; h++) cont[u][h] = 0
   })
-  const toHour = (valor) => {
-    if (!valor) return null
-    if (typeof valor === 'string') {
-      const d = new Date(valor)
-      if (!isNaN(d.getTime())) return d.getHours()
-      const m = valor.match(/(\d{1,2}):(\d{2})/)
-      if (m) return Math.max(0, Math.min(23, parseInt(m[1], 10)))
-      return null
-    }
-    if (typeof valor === 'number') {
-      if (valor > 1e12) {
-        const d = new Date(valor)
-        return isNaN(d.getTime()) ? null : d.getHours()
-      }
-      const base = new Date(Date.UTC(1899, 11, 30))
-      const d = new Date(base.getTime() + valor * 864e5)
-      return isNaN(d.getTime()) ? null : d.getUTCHours()
-    }
-    if (valor instanceof Date) return valor.getHours()
-    return null
-  }
-  const isLidoNaoPertence = (item) => {
-    if (item._lidoNaoPertence !== undefined) return !!item._lidoNaoPertence
-    const valor = item['Lido não pertence']
-    if (valor === undefined || valor === null) return false
-    if (valor === true) return true
-    if (typeof valor === 'string') return valor.toLowerCase().includes('sim')
-    return false
-  }
   auditoria.value.dados.forEach(item => {
     const u = (item['Usuário'] || '').toString().trim()
     if (!u || !cont[u]) return
-    const lnp = isLidoNaoPertence(item)
-    const tem = item._temPresenca || lnp
-    if (!tem) return
-    const horaValor = item['Auditado em'] || item['Data'] || item['Hora'] || item['Lido em'] || item['Carimbo de data/hora']
-    const h = toHour(horaValor)
+    if (!isItemLido(item)) return
+    const h = getItemHour(item)
     if (h != null && h >= 8 && h <= 18) {
       cont[u][h] = (cont[u][h] || 0) + 1
     }
@@ -1128,20 +1256,10 @@ const locaisMaisLidosPorUsuario = computed(() => {
   if (usuarios.length === 0) return []
   const mapa = {}
   usuarios.forEach(u => { mapa[u] = {} })
-  const isLidoNaoPertence = (item) => {
-    if (item._lidoNaoPertence !== undefined) return !!item._lidoNaoPertence
-    const valor = item['Lido não pertence']
-    if (valor === undefined || valor === null) return false
-    if (valor === true) return true
-    if (typeof valor === 'string') return valor.toLowerCase().includes('sim')
-    return false
-  }
   auditoria.value.dados.forEach(item => {
     const u = (item['Usuário'] || '').toString().trim()
     if (!u || !(u in mapa)) return
-    const lnp = isLidoNaoPertence(item)
-    const tem = item._temPresenca || lnp
-    if (!tem) return
+    if (!isItemLido(item)) return
     const local = (item['Local'] || 'Não especificado').toString().trim()
     mapa[u][local] = (mapa[u][local] || 0) + 1
   })
@@ -2407,63 +2525,91 @@ const fecharRelatorio = () => {
         <!-- Métricas Gerais -->
         <template v-else>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div 
+            <div
               @click="abrirModalMetrica('total')"
-              class="bg-white rounded-lg p-6 shadow border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition"
+              class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
             >
-              <p class="text-gray-600 text-sm font-medium">Total Auditável</p>
-              <p class="text-4xl font-bold text-blue-600 mt-2">{{ metricasGerais?.totalItens }}</p>
-              <p class="text-xs text-gray-500 mt-1">Itens para auditar</p>
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Auditável</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
+                  <i class="fas fa-clipboard-list text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-blue-700">{{ metricasGerais?.totalItens }}</p>
+              <p class="text-[11px] text-slate-400">Itens para auditar</p>
             </div>
-            <div 
+            <div
               @click="abrirModalMetrica('lidos')"
-              class="bg-white rounded-lg p-6 shadow border-l-4 border-green-500 cursor-pointer hover:shadow-lg transition"
+              class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
             >
-              <p class="text-gray-600 text-sm font-medium">✅ Total Lidos</p>
-              <p class="text-4xl font-bold text-green-600 mt-2">{{ metricasGerais?.totalLidos }}</p>
-              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído</p>
-              <p class="text-xs text-gray-400 mt-1">Meta: {{ metricasGerais?.metaConclusao }}%</p>
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Lidos</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
+                  <i class="fas fa-check-circle text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.totalLidos }}</p>
+              <p class="text-[11px] text-slate-400">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído  |  Meta: {{ metricasGerais?.metaConclusao }}%</p>
             </div>
-            <div 
+            <div
               @click="abrirModalMetrica('pendentes')"
-              class="bg-white rounded-lg p-6 shadow border-l-4 border-orange-500 cursor-pointer hover:shadow-lg transition"
+              class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
             >
-              <p class="text-gray-600 text-sm font-medium">⏳ Pendentes</p>
-              <p class="text-4xl font-bold text-orange-600 mt-2">{{ metricasGerais?.pendentes }}</p>
-              <p class="text-xs text-gray-500 mt-1">{{ metricasGerais?.percentualPendente?.toFixed(2) }}% pendente</p>
-              <p class="text-xs" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-red-600'">
-                Meta: {{ metricasGerais?.metaPendente }}% 
-                <span v-if="metricasGerais?.faltaParaMeta > 0">(+{{ metricasGerais?.faltaParaMeta.toFixed(2) }}%)</span>
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Pendentes</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-amber-50 text-amber-600">
+                  <i class="fas fa-hourglass-half text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-amber-700">{{ metricasGerais?.pendentes }}</p>
+              <p class="text-[11px]" :class="metricasGerais?.percentualPendente <= 3 ? 'text-emerald-500' : 'text-red-500'">
+                {{ metricasGerais?.percentualPendente?.toFixed(2) }}% pendente  |  Meta: {{ metricasGerais?.metaPendente }}%
+                <span v-if="metricasGerais?.faltaParaMeta > 0"> (+{{ metricasGerais?.faltaParaMeta.toFixed(2) }}%)</span>
               </p>
             </div>
-            <div 
+            <div
               @click="abrirModalMetrica('problema')"
-              class="bg-white rounded-lg p-6 shadow border-l-4 border-red-500 cursor-pointer hover:shadow-lg transition"
+              class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
             >
-              <p class="text-gray-600 text-sm font-medium">⚠️ Com Problema</p>
-              <p class="text-4xl font-bold text-red-600 mt-2">{{ metricasGerais?.comProblema }}</p>
-              <p class="text-xs text-gray-500 mt-1">Requer atenção</p>
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Com Problema</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-50 text-red-600">
+                  <i class="fas fa-exclamation-triangle text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-red-700">{{ metricasGerais?.comProblema }}</p>
+              <p class="text-[11px] text-slate-400">Requer atenção</p>
             </div>
           </div>
 
-          <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mt-4">
-            <div class="bg-white rounded-lg p-6 shadow border-l-4 border-emerald-500">
-              <p class="text-gray-600 text-sm font-medium">✅ Atualizado</p>
-              <p class="text-4xl font-bold text-emerald-600 mt-2">{{ metricasGerais?.atualizados || 0 }}</p>
-              <p class="text-xs text-gray-500 mt-1">Lidos e corretos</p>
+          <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Atualizado</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
+                  <i class="fas fa-sync-alt text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.atualizados || 0 }}</p>
+              <p class="text-[11px] text-slate-400">Lidos e corretos</p>
             </div>
-            <div 
+            <div
               @click="abrirModalMetrica('desatualizado')"
-              class="bg-white rounded-lg p-6 shadow border-l-4 border-yellow-500 cursor-pointer hover:shadow-lg transition"
+              class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
             >
-              <p class="text-gray-600 text-sm font-medium">🛠️ Desatualizado</p>
-              <p class="text-4xl font-bold text-yellow-600 mt-2">{{ metricasGerais?.desatualizados || 0 }}</p>
-              <p class="text-xs text-gray-500 mt-1">Lidos mas desatualizados</p>
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Desatualizado</p>
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-yellow-50 text-yellow-600">
+                  <i class="fas fa-history text-sm"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-yellow-600">{{ metricasGerais?.desatualizados || 0 }}</p>
+              <p class="text-[11px] text-slate-400">Lidos mas desatualizados</p>
             </div>
           </div>
 
           <!-- Progress Geral -->
-          <div class="bg-white rounded-lg p-6 shadow">
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
             <h3 class="font-bold text-lg text-gray-800 mb-4">Progresso Geral da Auditoria</h3>
             <div class="space-y-3">
               <div class="space-y-4">
@@ -2510,79 +2656,75 @@ const fecharRelatorio = () => {
           </div>
 
           <!-- Análises Inteligentes -->
-          <div class="bg-white rounded-lg p-6 shadow space-y-6">
-            <h3 class="font-bold text-lg text-gray-800">Análises Inteligentes</h3>
-            
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm space-y-6">
+            <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+              <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-50 text-violet-600">
+                <i class="fas fa-brain text-sm"></i>
+              </span>
+              Análises Inteligentes
+            </h3>
+
             <!-- Auditoria em Andamento -->
             <template v-if="!readOnly">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="rounded-lg border-l-4 border-indigo-500 bg-indigo-50 p-4">
-                  <p class="text-sm text-gray-600">Ritmo Atual (itens/h)</p>
-                  <p class="text-3xl font-bold text-indigo-700 mt-1">{{ projecoes?.ritmoHora?.toFixed(1) || 0 }}</p>
-                  <p class="text-xs text-gray-500 mt-1">Desde {{ horarioInicio }} até agora</p>
+                <div class="rounded-2xl bg-indigo-50/70 p-4 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-semibold text-indigo-500 uppercase tracking-wide">Ritmo Atual</p>
+                    <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600">
+                      <i class="fas fa-tachometer-alt text-xs"></i>
+                    </span>
+                  </div>
+                  <p class="text-3xl font-bold text-indigo-700">{{ projecoes?.ritmoHora?.toFixed(1) || 0 }} <span class="text-sm font-medium text-indigo-400">itens/h</span></p>
+                  <p class="text-[11px] text-indigo-400">Desde {{ horarioInicio }} até agora</p>
                 </div>
-                <div class="rounded-lg border-l-4 border-blue-500 bg-blue-50 p-4">
-                  <p class="text-sm text-gray-600">Horas Restantes</p>
-                  <p class="text-3xl font-bold text-blue-700 mt-1">{{ projecoes ? formatHoras(projecoes.horasRestantes) : '00:00' }}</p>
-                  <p class="text-xs text-gray-500 mt-1">Fim programado: {{ horarioFim }}</p>
+                <div class="rounded-2xl bg-blue-50/70 p-4 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-semibold text-blue-500 uppercase tracking-wide">Horas Restantes</p>
+                    <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-100 text-blue-600">
+                      <i class="fas fa-clock text-xs"></i>
+                    </span>
+                  </div>
+                  <p class="text-3xl font-bold text-blue-700">{{ projecoes ? formatHoras(projecoes.horasRestantes) : '00:00' }}</p>
+                  <p class="text-[11px] text-blue-400">Fim programado: {{ horarioFim }}</p>
                 </div>
-                <div class="rounded-lg border-l-4 border-green-500 bg-green-50 p-4">
-                  <p class="text-sm text-gray-600">Projeção até {{ horarioFim }}</p>
-                  <p class="text-3xl font-bold text-green-700 mt-1">
-                    +{{ projecoes?.projItens || 0 }} itens
-                  </p>
-                  <p class="text-xs text-gray-600 mt-1">
-                    Percentual final: {{ projecoes?.projPercentualFinal?.toFixed(2) || 0 }}%
-                  </p>
+                <div class="rounded-2xl bg-emerald-50/70 p-4 flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Projeção</p>
+                    <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-emerald-100 text-emerald-600">
+                      <i class="fas fa-chart-line text-xs"></i>
+                    </span>
+                  </div>
+                  <p class="text-3xl font-bold text-emerald-700">+{{ projecoes?.projItens || 0 }} <span class="text-sm font-medium text-emerald-400">itens</span></p>
+                  <p class="text-[11px] text-emerald-400">Percentual final: {{ projecoes?.projPercentualFinal?.toFixed(2) || 0 }}%</p>
                 </div>
               </div>
 
-              <!-- Mapa de Leituras por Horário -->
-              <div>
-                <h4 class="font-semibold text-gray-800 mb-3">
-                  <i class="fas fa-clock text-blue-600 mr-2"></i>Mapa de Leituras por Horário
-                </h4>
-                <div v-if="leituraPorHora && leituraPorHora.max > 0" class="space-y-2">
-                  <div v-for="p in leituraPorHora.serie" :key="p.hora" class="flex items-center gap-3">
-                    <div class="w-16 text-xs text-gray-600">{{ p.hora }}</div>
-                    <div class="flex-1 h-3 bg-gray-200 rounded">
-                      <div
-                        class="h-3 bg-blue-500 rounded"
-                        :style="{ width: ((p.valor / leituraPorHora.max) * 100) + '%' }"
-                        title="Itens lidos na hora"
-                      />
-                    </div>
-                    <div class="w-10 text-right text-xs font-medium text-gray-700">{{ p.valor }}</div>
-                  </div>
-                </div>
-                <div v-else class="text-sm text-gray-500">
-                  Não há dados de horário suficientes para montar o mapa.
-                </div>
-              </div>
+              <!-- Mapa de Leituras por Horário (movido para fora do v-if) -->
             </template>
 
             <!-- Auditoria Fechada (Insights de Melhoria) -->
             <template v-else>
               <div v-if="improvementInsights && improvementInsights.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div 
-                  v-for="(insight, idx) in improvementInsights" 
+                <div
+                  v-for="(insight, idx) in improvementInsights"
                   :key="idx"
-                  class="rounded-lg p-4 border-l-4 shadow-sm"
-                  :class="insight.tipo === 'sucesso' ? 'bg-green-50 border-green-500' : insight.tipo === 'critico' ? 'bg-red-50 border-red-500' : 'bg-orange-50 border-orange-500'"
+                  class="rounded-2xl p-4 flex items-start gap-3"
+                  :class="insight.tipo === 'sucesso' ? 'bg-emerald-50/70' : insight.tipo === 'critico' ? 'bg-red-50/70' : 'bg-amber-50/70'"
                 >
-                  <div class="flex items-start gap-3">
-                    <div class="p-2 rounded-full bg-white shadow-sm">
-                      <i :class="[insight.icon, insight.tipo === 'sucesso' ? 'text-green-600' : insight.tipo === 'critico' ? 'text-red-600' : 'text-orange-600']" class="text-lg"></i>
-                    </div>
-                    <div>
-                      <p class="text-sm font-medium text-gray-600">{{ insight.titulo }}</p>
-                      <p class="text-xl font-bold mt-1" :class="insight.tipo === 'sucesso' ? 'text-green-800' : insight.tipo === 'critico' ? 'text-red-800' : 'text-orange-800'">
-                        {{ insight.valor }}
-                      </p>
-                      <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                        {{ insight.descricao }}
-                      </p>
-                    </div>
+                  <span
+                    class="inline-flex items-center justify-center h-8 w-8 rounded-lg shrink-0"
+                    :class="insight.tipo === 'sucesso' ? 'bg-emerald-100 text-emerald-600' : insight.tipo === 'critico' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'"
+                  >
+                    <i :class="insight.icon" class="text-sm"></i>
+                  </span>
+                  <div class="min-w-0">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide" :class="insight.tipo === 'sucesso' ? 'text-emerald-500' : insight.tipo === 'critico' ? 'text-red-500' : 'text-amber-500'">{{ insight.titulo }}</p>
+                    <p class="text-xl font-bold mt-0.5" :class="insight.tipo === 'sucesso' ? 'text-emerald-700' : insight.tipo === 'critico' ? 'text-red-700' : 'text-amber-700'">
+                      {{ insight.valor }}
+                    </p>
+                    <p class="text-[11px] mt-1 leading-relaxed" :class="insight.tipo === 'sucesso' ? 'text-emerald-400' : insight.tipo === 'critico' ? 'text-red-400' : 'text-amber-400'">
+                      {{ insight.descricao }}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -2590,6 +2732,117 @@ const fecharRelatorio = () => {
                 <p>Nenhum insight de melhoria disponível para esta auditoria.</p>
               </div>
             </template>
+
+            <!-- Mapa de Leituras por Horário - Avançado -->
+            <div class="mt-2">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h4 class="font-semibold text-gray-800">
+                  <i class="fas fa-clock text-blue-600 mr-2"></i>Mapa de Leituras por Horário
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <select
+                    v-model="filtroHorarioUsuario"
+                    class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="todos">Todos os usuários</option>
+                    <option v-for="u in (auditoria?.analise?.usuarios || [])" :key="u" :value="u">{{ u }}</option>
+                  </select>
+                  <select
+                    v-model="filtroHorarioSetor"
+                    class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="todos">Todos os setores</option>
+                    <option v-for="s in Object.keys(auditoria?.analise?.porSetor || {})" :key="s" :value="s">{{ s }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div v-if="leituraPorHoraFiltrada && leituraPorHoraFiltrada.totalLeituras > 0">
+                <!-- Cards Resumo -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                  <div class="rounded-2xl bg-blue-50/70 p-3 text-center">
+                    <p class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Total Leituras</p>
+                    <p class="text-2xl font-bold text-blue-700 mt-1">{{ leituraPorHoraFiltrada.totalLeituras.toLocaleString() }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-emerald-50/70 p-3 text-center">
+                    <p class="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Horário de Pico</p>
+                    <p class="text-2xl font-bold text-emerald-700 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
+                    <p class="text-[10px] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
+                  </div>
+                  <div class="rounded-2xl bg-indigo-50/70 p-3 text-center">
+                    <p class="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide">Média/Hora</p>
+                    <p class="text-2xl font-bold text-indigo-700 mt-1">{{ leituraPorHoraFiltrada.media }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-amber-50/70 p-3 text-center">
+                    <p class="text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Horário de Baixa</p>
+                    <p class="text-2xl font-bold text-amber-700 mt-1">{{ leituraPorHoraFiltrada.baixa?.hora || '--' }}</p>
+                    <p class="text-[10px] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
+                  </div>
+                </div>
+
+                <!-- Barras Horizontais -->
+                <div class="space-y-1.5">
+                  <div v-for="(p, idx) in leituraPorHoraFiltrada.serie" :key="p.hora" class="flex items-center gap-2">
+                    <div class="w-12 text-[11px] font-medium text-gray-600 text-right">{{ p.hora }}</div>
+                    <div class="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden relative">
+                      <div
+                        class="h-5 rounded-md transition-all duration-300"
+                        :class="[
+                          p.valor === leituraPorHoraFiltrada.max ? 'bg-green-500' :
+                          p.valor === leituraPorHoraFiltrada.baixa?.valor && p.valor > 0 ? 'bg-orange-400' :
+                          'bg-blue-500'
+                        ]"
+                        :style="{ width: leituraPorHoraFiltrada.max > 0 ? ((p.valor / leituraPorHoraFiltrada.max) * 100) + '%' : '0%' }"
+                      />
+                      <span v-if="p.valor > 0" class="absolute inset-y-0 left-2 flex items-center text-[10px] font-bold text-white drop-shadow">
+                        {{ p.valor }}
+                      </span>
+                    </div>
+                    <div class="w-14 text-right">
+                      <span
+                        v-if="idx > 0 && p.variacao !== 0 && p.valor > 0"
+                        class="text-[10px] font-semibold px-1 py-0.5 rounded"
+                        :class="p.variacao > 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'"
+                      >
+                        {{ p.variacao > 0 ? '+' : '' }}{{ p.variacao }}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Insights de Variação -->
+                <div v-if="leituraPorHoraFiltrada.maiorSubida || leituraPorHoraFiltrada.maiorQueda" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div v-if="leituraPorHoraFiltrada.maiorSubida" class="flex items-center gap-3 rounded-2xl bg-emerald-50/70 p-3">
+                    <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
+                      <i class="fas fa-arrow-up text-sm"></i>
+                    </span>
+                    <div>
+                      <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Maior Subida</p>
+                      <p class="text-xs text-emerald-700 font-medium">
+                        {{ leituraPorHoraFiltrada.maiorSubida.de }} → {{ leituraPorHoraFiltrada.maiorSubida.para }}
+                        <span class="font-bold">(+{{ leituraPorHoraFiltrada.maiorSubida.variacao }}%)</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="leituraPorHoraFiltrada.maiorQueda" class="flex items-center gap-3 rounded-2xl bg-red-50/70 p-3">
+                    <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-100 text-red-600 shrink-0">
+                      <i class="fas fa-arrow-down text-sm"></i>
+                    </span>
+                    <div>
+                      <p class="text-[11px] font-semibold text-red-500 uppercase tracking-wide">Maior Queda</p>
+                      <p class="text-xs text-red-700 font-medium">
+                        {{ leituraPorHoraFiltrada.maiorQueda.de }} → {{ leituraPorHoraFiltrada.maiorQueda.para }}
+                        <span class="font-bold">({{ leituraPorHoraFiltrada.maiorQueda.variacao }}%)</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-sm text-gray-500 py-4 text-center">
+                <i class="fas fa-chart-bar text-gray-300 text-2xl mb-2"></i>
+                <p>Não há dados de horário suficientes para montar o mapa.</p>
+              </div>
+            </div>
 
             <!-- Resumo Histórico (Collapsible) -->
             <div v-if="historicoResumo" class="mt-8">
