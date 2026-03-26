@@ -907,6 +907,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           })
         }
 
+        // Agrupar itens com problema por USUÁRIO
+        const usuarioProblema = (item['Usuário'] || '').trim()
+        if (usuarioProblema && usuarioProblema !== '' && usuarioProblema !== 'undefined') {
+          if (!analise.porUsuario[usuarioProblema]) {
+            analise.porUsuario[usuarioProblema] = { lidos: 0, pendentes: 0, comProblema: 0 }
+            analise.usuarios.push(usuarioProblema)
+          }
+          if (!analise.porUsuario[usuarioProblema].comProblema) analise.porUsuario[usuarioProblema].comProblema = 0
+          analise.porUsuario[usuarioProblema].comProblema++
+        }
+
+        // Agrupar itens com problema por SETOR
+        const setorProblema = (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim()
+        if (!analise.porSetor[setorProblema]) {
+          analise.porSetor[setorProblema] = { lidos: 0, pendentes: 0, comProblema: 0 }
+        }
+        if (!analise.porSetor[setorProblema].comProblema) analise.porSetor[setorProblema].comProblema = 0
+        analise.porSetor[setorProblema].comProblema++
+
+        // Agrupar itens com problema por LOCAL
+        const localProblema = (item['Local'] || 'Não especificado').trim()
+        if (!analise.porLocal[localProblema]) {
+          analise.porLocal[localProblema] = { lidos: 0, pendentes: 0, comProblema: 0 }
+        }
+        if (!analise.porLocal[localProblema].comProblema) analise.porLocal[localProblema].comProblema = 0
+        analise.porLocal[localProblema].comProblema++
+
         return // Pular para o próximo item
       }
 
@@ -922,7 +949,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         if (!analise.porUsuario[usuario]) {
           analise.porUsuario[usuario] = {
             lidos: 0,      // Com presença e sem problemas
-            pendentes: 0   // Sem presença
+            pendentes: 0,  // Sem presença
+            comProblema: 0
           }
           analise.usuarios.push(usuario)
         }
@@ -939,7 +967,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       if (!analise.porSetor[setor]) {
         analise.porSetor[setor] = {
           lidos: 0,
-          pendentes: 0
+          pendentes: 0,
+          comProblema: 0
         }
       }
       if (efetivamenteTemPresenca) {
@@ -1103,6 +1132,33 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           })
         }
 
+        // Agrupar itens com problema por USUÁRIO
+        const usuarioProblema = (item['Usuário'] || '').trim()
+        if (usuarioProblema && usuarioProblema !== '' && usuarioProblema !== 'undefined') {
+          if (!analise.porUsuario[usuarioProblema]) {
+            analise.porUsuario[usuarioProblema] = { lidos: 0, pendentes: 0, comProblema: 0 }
+            analise.usuarios.push(usuarioProblema)
+          }
+          if (!analise.porUsuario[usuarioProblema].comProblema) analise.porUsuario[usuarioProblema].comProblema = 0
+          analise.porUsuario[usuarioProblema].comProblema++
+        }
+
+        // Agrupar itens com problema por SETOR
+        const setorProblema = (item['Classe de Produto Raiz'] || item['Setor'] || 'Não especificado').trim()
+        if (!analise.porSetor[setorProblema]) {
+          analise.porSetor[setorProblema] = { lidos: 0, pendentes: 0, comProblema: 0, desatualizados: 0 }
+        }
+        if (!analise.porSetor[setorProblema].comProblema) analise.porSetor[setorProblema].comProblema = 0
+        analise.porSetor[setorProblema].comProblema++
+
+        // Agrupar itens com problema por LOCAL
+        const localProblema = (item['Local'] || 'Não especificado').trim()
+        if (!analise.porLocal[localProblema]) {
+          analise.porLocal[localProblema] = { lidos: 0, pendentes: 0, comProblema: 0 }
+        }
+        if (!analise.porLocal[localProblema].comProblema) analise.porLocal[localProblema].comProblema = 0
+        analise.porLocal[localProblema].comProblema++
+
         return // Pular para o próximo item
       }
 
@@ -1120,7 +1176,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const usuario = (item['Usuário'] || '').trim()
       if (usuario && usuario !== '' && usuario !== 'undefined') {
         if (!analise.porUsuario[usuario]) {
-          analise.porUsuario[usuario] = { lidos: 0, pendentes: 0 }
+          analise.porUsuario[usuario] = { lidos: 0, pendentes: 0, comProblema: 0 }
           analise.usuarios.push(usuario)
         }
         if (efetivamenteTem) {
@@ -1130,7 +1186,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         }
       }
       const setor = (item['Classe de Produto Raiz'] || 'Não especificado').trim()
-      if (!analise.porSetor[setor]) analise.porSetor[setor] = { lidos: 0, pendentes: 0, desatualizados: 0 }
+      if (!analise.porSetor[setor]) analise.porSetor[setor] = { lidos: 0, pendentes: 0, comProblema: 0, desatualizados: 0 }
       if (efetivamenteTem) {
         analise.porSetor[setor].lidos++
         if (st.desatualizado) analise.porSetor[setor].desatualizados++

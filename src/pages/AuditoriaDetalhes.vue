@@ -964,19 +964,9 @@ const dadosUsuarios = computed(() => {
   if (!Array.isArray(analise.usuarios)) return []
   const porUsuario = analise.porUsuario || {}
 
-  const problemasPorUsuario = {}
-  ;(analise.itensComEstoqueZeroDetalhes || []).forEach(d => {
-    const u = (d.usuario || '').trim()
-    if (u) problemasPorUsuario[u] = (problemasPorUsuario[u] || 0) + 1
-  })
-  ;(analise.itensLidoNaoPertenceDetalhes || []).forEach(d => {
-    const u = (d.usuario || '').trim()
-    if (u) problemasPorUsuario[u] = (problemasPorUsuario[u] || 0) + 1
-  })
-
   return analise.usuarios.map(u => {
       const lidos = porUsuario[u]?.lidos || 0
-      const comProblema = problemasPorUsuario[u] || 0
+      const comProblema = porUsuario[u]?.comProblema || 0
       const pendentes = porUsuario[u]?.pendentes || 0
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
@@ -1004,6 +994,7 @@ const dadosUsuarios = computed(() => {
 
       // Get overall % contribution from percentualPorUsuario
       const percentualAuditoria = percentualPorUsuario.value[u]?.percentualGeral || 0
+      const percentualProblema = totalLidos > 0 ? Math.round((comProblema / totalLidos) * 1000) / 10 : 0
 
       return {
         nome: u,
@@ -1014,7 +1005,8 @@ const dadosUsuarios = computed(() => {
         performance,
         performanceClass,
         score,
-        percentualAuditoria
+        percentualAuditoria,
+        percentualProblema
       }
     })
 })
@@ -1905,24 +1897,11 @@ const setoresComAnalise = computed(() => {
   if (!auditoria.value?.analise || !auditoria.value.analise.porSetor) return []
   const analise = auditoria.value.analise
 
-  // Contar itens com problema por setor
-  const problemaPorSetor = {}
-  const detalhesEstoqueZero = analise.itensComEstoqueZeroDetalhes || []
-  const detalhesLidoNaoPertence = analise.itensLidoNaoPertenceDetalhes || []
-  detalhesEstoqueZero.forEach(item => {
-    const set = (item.setor || 'Não especificado').toString().trim()
-    problemaPorSetor[set] = (problemaPorSetor[set] || 0) + 1
-  })
-  detalhesLidoNaoPertence.forEach(item => {
-    const set = (item.setor || 'Não especificado').toString().trim()
-    problemaPorSetor[set] = (problemaPorSetor[set] || 0) + 1
-  })
-
   return Object.entries(analise.porSetor)
     .map(([setor, dados]) => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
-      const comProblema = problemaPorSetor[setor] || 0
+      const comProblema = dados.comProblema || 0
       let desatualizados = dados.desatualizados || 0
       if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
         const soma = (auditoria.value.dados || []).reduce((acc, item) => {
@@ -1977,25 +1956,12 @@ const locaisComAnalise = computed(() => {
   const analise = auditoria.value.analise
   const dadosCompletos = auditoria.value.dados || []
 
-  // Contar itens com problema por local
-  const problemaPorLocal = {}
-  const detalhesEstoqueZero = analise.itensComEstoqueZeroDetalhes || []
-  const detalhesLidoNaoPertence = analise.itensLidoNaoPertenceDetalhes || []
-  detalhesEstoqueZero.forEach(item => {
-    const loc = (item.local || 'Não especificado').toString().trim()
-    problemaPorLocal[loc] = (problemaPorLocal[loc] || 0) + 1
-  })
-  detalhesLidoNaoPertence.forEach(item => {
-    const loc = (item.local || 'Não especificado').toString().trim()
-    problemaPorLocal[loc] = (problemaPorLocal[loc] || 0) + 1
-  })
-
   const locais = Object.entries(analise.porLocal)
     .map(([local, dados]) => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
       const nomeLocal = (local || 'Não especificado').toString().trim()
-      const comProblema = problemaPorLocal[nomeLocal] || 0
+      const comProblema = dados.comProblema || 0
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
 
@@ -2971,6 +2937,12 @@ const fecharRelatorio = () => {
                       <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'comProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
                     </span>
                   </th>
+                  <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('percentualProblema')">
+                    <span class="inline-flex items-center gap-1">
+                      % Problemas
+                      <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'percentualProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+                    </span>
+                  </th>
                   <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoUsuarios('totalLidos')">
                     <span class="inline-flex items-center gap-1">
                       Total Lidos
@@ -2996,6 +2968,14 @@ const fecharRelatorio = () => {
                   <td class="px-3 py-2.5 text-slate-700 font-medium">{{ u.nome }}</td>
                   <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ u.lidos.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right text-red-600 font-semibold">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
+                  <td class="px-3 py-2.5 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                      <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
+                        <div class="h-1.5 rounded-full transition-all" :class="u.percentualProblema > 5 ? 'bg-red-400' : u.percentualProblema > 0 ? 'bg-amber-400' : 'bg-slate-200'" :style="{ width: Math.min(u.percentualProblema, 100) + '%' }"></div>
+                      </div>
+                      <span class="font-semibold" :class="u.percentualProblema > 5 ? 'text-red-700' : u.percentualProblema > 0 ? 'text-amber-700' : 'text-slate-400'">{{ u.percentualProblema.toFixed(1) }}%</span>
+                    </div>
+                  </td>
                   <td class="px-3 py-2.5 text-right text-blue-700 font-semibold">{{ u.totalLidos.toLocaleString('pt-BR') }}</td>
                   <td class="px-3 py-2.5 text-right">
                     <div class="flex items-center justify-end gap-2">
@@ -3015,7 +2995,7 @@ const fecharRelatorio = () => {
                   </td>
                 </tr>
                 <tr v-if="usuariosFiltrados.length === 0">
-                  <td colspan="6" class="px-3 py-8 text-center text-slate-400">
+                  <td colspan="7" class="px-3 py-8 text-center text-slate-400">
                     <i class="fas fa-search text-2xl mb-2"></i>
                     <p class="text-xs">Nenhum usuário encontrado.</p>
                   </td>
