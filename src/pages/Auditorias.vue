@@ -6,6 +6,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 const store = useAuditoriasStore()
 const router = useRouter()
 const abaAtiva = ref('calendario')
+const semanaOffset = ref(0) // 0 = atual, -1 = anterior, 1 = próxima
 
 const getPendentesExibidos = (auditoria) => {
   const a = auditoria?.analise
@@ -262,18 +263,6 @@ const abrirSeletorUpload = () => {
 }
 
 // Computed
-const diasSemana = computed(() => {
-  return [
-    { dia: 'Segunda', tipos: ['Etiqueta'] },
-    { dia: 'Terça', tipos: ['Presença'] },
-    { dia: 'Quarta', tipos: ['Ruptura'] },
-    { dia: 'Quinta', tipos: ['Etiqueta'] },
-    { dia: 'Sexta', tipos: [] },
-    { dia: 'Sábado', tipos: [] },
-    { dia: 'Domingo', tipos: [] }
-  ]
-})
-
 const auditoriasFiltradas = computed(() => {
   let auditorias = []
   
@@ -425,11 +414,22 @@ const fecharModalFechamento = () => {
   idParaFechar.value = null
 }
 
-const startOfWeek = (d) => {
+const startOfWeek = (d, offset = 0) => {
   const date = new Date(d)
   const day = date.getDay()
-  const diff = (day === 0 ? -6 : 1) - day
-  date.setDate(date.getDate() + diff)
+  // Se for Sexta (5), Sábado (6) ou Domingo (0), avançamos para a próxima Segunda (1)
+  // Caso contrário (Seg-Qui), mostramos a Segunda desta mesma semana
+  let diff
+  if (day === 0) { // Domingo
+    diff = 1
+  } else if (day >= 5) { // Sex ou Sáb
+    diff = 1 + (7 - day)
+  } else { // Seg a Qui
+    diff = 1 - day
+  }
+  
+  // Aplica o offset de semanas
+  date.setDate(date.getDate() + diff + (offset * 7))
   date.setHours(0, 0, 0, 0)
   return date
 }
@@ -450,10 +450,11 @@ const formatarDataISO = (dataISO) => {
 
 const semanaAtual = computed(() => {
   const hoje = new Date()
-  const inicio = startOfWeek(hoje)
+  const inicio = startOfWeek(hoje, semanaOffset.value)
   const dias = []
+  
   for (let i = 0; i < 7; i++) {
-    const d = new Date()
+    const d = new Date(inicio)
     d.setDate(inicio.getDate() + i)
     // Filter for Mon (1), Tue (2), Wed (3), Thu (4)
     if (d.getDay() >= 1 && d.getDay() <= 4) {
@@ -465,8 +466,32 @@ const semanaAtual = computed(() => {
       })
     }
   }
-  return dias
+  // Garante a ordem Seg (1), Ter (2), Qua (3), Qui (4)
+  return dias.sort((a, b) => a.dayIndex - b.dayIndex)
 })
+
+const labelSemanaSelecionada = computed(() => {
+  const dias = semanaAtual.value
+  if (!dias.length) return ''
+  const prim = dias[0].dia
+  const ult = dias[dias.length - 1].dia
+  
+  const f = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  const fAno = (d) => d.getFullYear()
+  
+  if (prim.getFullYear() !== ult.getFullYear()) {
+    return `${f(prim)}/${prim.getFullYear()} a ${f(ult)}/${ult.getFullYear()}`
+  }
+  return `${f(prim)} a ${f(ult)} de ${fAno(ult)}`
+})
+
+const navegarSemana = (direcao) => {
+  semanaOffset.value += direcao
+}
+
+const voltarHoje = () => {
+  semanaOffset.value = 0
+}
 
 const auditoriasPorDiaTipo = computed(() => {
   const map = {}
@@ -792,10 +817,51 @@ const classesCardDia = (d) => {
     <!-- Calendário Semanal -->
     <div v-if="abaAtiva === 'calendario'" class="mb-8 space-y-4">
       <div class="bg-white rounded-lg p-6">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <i class="fas fa-calendar-week text-blue-600"></i>
-          <span>Calendário Semanal</span>
-        </h2>
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+          <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <i class="fas fa-calendar-week text-blue-600"></i>
+            <span>Calendário Semanal</span>
+          </h2>
+          
+          <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-xs">
+            <button 
+              @click="navegarSemana(-1)"
+              class="h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-xs"
+              title="Semana Anterior"
+            >
+              <i class="fas fa-chevron-left text-[10px]"></i>
+            </button>
+            
+            <div class="px-4 py-1 text-center min-w-[180px]">
+              <span class="text-sm font-bold text-slate-700 block leading-tight">{{ labelSemanaSelecionada }}</span>
+              <span v-if="semanaOffset !== 0" class="text-[9px] text-blue-600 font-bold uppercase tracking-wider">
+                {{ semanaOffset > 0 ? 'Semana Futura' : 'Semana Passada' }}
+              </span>
+              <span v-else class="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">
+                Semana Atual
+              </span>
+            </div>
+            
+            <button 
+              @click="navegarSemana(1)"
+              class="h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-xs"
+              title="Próxima Semana"
+            >
+              <i class="fas fa-chevron-right text-[10px]"></i>
+            </button>
+            
+            <div class="w-px h-5 bg-slate-200 mx-1"></div>
+            
+            <button 
+              @click="voltarHoje"
+              class="px-3 h-9 flex items-center justify-center rounded-lg text-xs font-bold transition-all"
+              :class="semanaOffset === 0 ? 'bg-slate-100 text-slate-400 cursor-default' : 'bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 shadow-xs'"
+              :disabled="semanaOffset === 0"
+            >
+              Hoje
+            </button>
+          </div>
+        </div>
         <div class="flex gap-4 overflow-x-auto pb-2 md:flex-wrap md:justify-between md:overflow-visible">
           <div
             v-for="d in semanaAtual"
