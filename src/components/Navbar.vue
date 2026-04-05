@@ -23,6 +23,12 @@ const fecharSobre = () => {
   mostrarSobre.value = false
 }
 
+const abrirDocumentacao = () => {
+  // Abre o arquivo de documentação diretamente no navegador (se disponível no servidor)
+  // ou aponta para o link do repositório/arquivo markdown
+  window.open('https://github.com/Lucas19Alves/dashboard-ti/blob/main/DOCUMENTATION.md', '_blank', 'noopener,noreferrer')
+}
+
 const irPara = (url) => {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
@@ -160,7 +166,7 @@ const irPara = (url) => {
               Lucas Alves
             </p>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
               @click="irPara('https://github.com/Lucas19Alves')"
@@ -168,6 +174,14 @@ const irPara = (url) => {
             >
               <i class="fab fa-github"></i>
               GitHub
+            </button>
+            <button
+              type="button"
+              @click="irPara('https://www.linkedin.com/in/lucaas19alves/')"
+              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
+            >
+              <i class="fab fa-linkedin-in"></i>
+              LinkedIn
             </button>
             <button
               type="button"
@@ -179,11 +193,11 @@ const irPara = (url) => {
             </button>
             <button
               type="button"
-              @click="irPara('https://www.linkedin.com/in/lucaas19alves/')"
-              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
+              @click="abrirDocumentacao"
+              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-sm"
             >
-              <i class="fab fa-linkedin-in"></i>
-              LinkedIn
+              <i class="fas fa-book"></i>
+              Documentação
             </button>
           </div>
         </div>
