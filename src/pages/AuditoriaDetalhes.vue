@@ -492,8 +492,14 @@ const insights = computed(() => {
 })
 
 // =========== ANÁLISES INTELIGENTES ===========
-const horarioInicio = computed(() => store.horariosAuditoria?.inicio || '08:00')
-const horarioFim = computed(() => store.horariosAuditoria?.fim || '18:00')
+const horarioInicio = computed(() => {
+  const tipo = auditoria.value?.tipo
+  return tipo === 'Etiqueta' ? '08:00' : '08:00'
+})
+const horarioFim = computed(() => {
+  const tipo = auditoria.value?.tipo
+  return tipo === 'Etiqueta' ? '20:00' : '18:00'
+})
 
 const parseHoraHoje = (hhmm) => {
   try {

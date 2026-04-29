@@ -262,6 +262,25 @@ const abrirSeletorUpload = () => {
   if (input) input.click()
 }
 
+const obterHorarioFim = (tipo) => {
+  return tipo === 'Etiqueta' ? '20:00' : '18:00'
+}
+
+const obterHorarioMaximoDia = (data) => {
+  const mapa = auditoriasPorDiaTipo.value || {}
+  const porData = mapa[data]
+  if (!porData) {
+    // Se não há auditorias, verificar tipos planejados
+    const tiposDodia = tiposPlanejados.value[semanaAtual.value.find(d => d.data === data)?.dayIndex] || []
+    if (tiposDodia.includes('Etiqueta')) return '20:00'
+    return '18:00'
+  }
+  // Se há auditorias, retornar o horário máximo entre seus tipos
+  const tipos = Object.keys(porData)
+  if (tipos.includes('Etiqueta')) return '20:00'
+  return '18:00'
+}
+
 // Computed
 const auditoriasFiltradas = computed(() => {
   let auditorias = []
@@ -882,7 +901,7 @@ const classesCardDia = (d) => {
               </div>
               <div class="flex flex-col items-end text-right">
                 <span class="text-[10px] font-medium text-gray-400">Janela</span>
-                <span class="text-xs text-gray-600">08:00 - 18:00</span>
+                <span class="text-xs text-gray-600">08:00 - {{ obterHorarioMaximoDia(d.data) }}</span>
               </div>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -1246,7 +1265,7 @@ const classesCardDia = (d) => {
 
             <router-link
               :to="`/auditoria/${auditoria.id}`"
-              class="block no-underline text-inherit"
+              class="block no-underline text-inherit flex flex-col h-full"
             >
               <!-- Header -->
               <div class="flex flex-col mb-4">
@@ -1270,7 +1289,7 @@ const classesCardDia = (d) => {
               </div>
 
               <!-- Progress Section -->
-              <div v-if="auditoria.total > 0" class="space-y-4">
+              <div v-if="auditoria.total > 0" class="space-y-4 flex-1">
                 <div>
                   <div class="flex justify-between items-end mb-1.5">
                     <span class="text-xs font-semibold text-gray-500">Progresso</span>
@@ -1317,17 +1336,17 @@ const classesCardDia = (d) => {
               </div>
 
               <!-- Empty State -->
-              <div v-else class="text-center py-6 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+              <div v-else class="text-center py-6 border border-dashed border-gray-200 rounded-lg bg-gray-50/50 flex-1">
                 <i class="fas fa-inbox text-gray-300 text-2xl mb-2"></i>
                 <p class="text-xs font-medium text-gray-500">Sem dados</p>
               </div>
+
+              <!-- Footer Action -->
+              <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between group-hover:text-blue-600 transition-colors">
+                <span class="text-xs font-semibold text-gray-500 group-hover:text-blue-600 transition-colors">Acessar Painel</span>
+                <i class="fas fa-arrow-right text-xs text-gray-300 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-all"></i>
+              </div>
             </router-link>
-          </div>
-          
-          <!-- Footer Action -->
-          <div class="pl-7 pr-5 py-3 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between group-hover:bg-blue-50/30 transition-colors">
-            <span class="text-xs font-semibold text-gray-500 group-hover:text-blue-600 transition-colors">Acessar Painel</span>
-            <i class="fas fa-arrow-right text-xs text-gray-300 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-all"></i>
           </div>
         </div>
       </div>
