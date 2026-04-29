@@ -1,12 +1,14 @@
 <script setup>
 import Navbar from './components/Navbar.vue'
 import Toast from './components/Toast.vue'
+import { Analytics } from '@vercel/analytics/vue'
 </script>
 
 <template>
   <div class="bg-gray-50 min-h-screen">
     <Navbar />
     <Toast />
+    <Analytics />
     <router-view />
   </div>
 </template>
