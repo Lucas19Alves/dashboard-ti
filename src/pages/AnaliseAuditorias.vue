@@ -134,9 +134,11 @@ const agrupadoPorMesBase = computed(() => {
   const mapa = {}
   auditoriasFiltradas.value.forEach(a => {
     if (!a.data) return
-    const d = new Date(a.data)
-    if (Number.isNaN(d.getTime())) return
-    const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const partes = String(a.data).split('T')[0].split('-')
+    if (partes.length !== 3) return
+    const ano = partes[0]
+    const mes = partes[1]
+    const chave = `${ano}-${mes}`
     if (!mapa[chave]) {
       mapa[chave] = {
         mes: chave,
