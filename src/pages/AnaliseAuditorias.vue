@@ -389,6 +389,26 @@ const desempenhoUsuariosPaginado = computed(() => {
 const desempenhoSetores = computed(() => ordenarLista(desempenhoSetoresBase.value, ordenacaoSetores))
 const auditoriasParaTabela = computed(() => ordenarLista(auditoriasParaTabelaBase.value, ordenacaoAuditorias))
 
+const totalSetores = computed(() => {
+  const setores = desempenhoSetoresBase.value
+  if (!setores.length) return null
+
+  const lidos = setores.reduce((sum, s) => sum + (s.lidos || 0), 0)
+  const pendentes = setores.reduce((sum, s) => sum + (s.pendentes || 0), 0)
+  const comProblema = setores.reduce((sum, s) => sum + (s.comProblema || 0), 0)
+  const total = lidos + pendentes + comProblema
+
+  return {
+    setor: 'GERAL',
+    lidos,
+    comProblema,
+    pendentes,
+    total,
+    percPendente: total > 0 ? (pendentes / total) * 100 : 0,
+    percProblema: total > 0 ? (comProblema / total) * 100 : 0
+  }
+})
+
 const atualizarOrdenacao = (estado, coluna) => {
   if (estado.coluna === coluna) {
     estado.direcao = estado.direcao === 'asc' ? 'desc' : 'asc'
@@ -562,6 +582,15 @@ const gerarRelatorioPDF = () => {
   })()
   const tabelaSetores = (() => {
     if (!desempenhoSetores.value.length) return ''
+    const linhaGeral = totalSetores.value ? `
+      <tr style="background-color: #f1f5f9; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+        <td>${escapeHtml(totalSetores.value.setor)}</td>
+        <td style="text-align:right;">${escapeHtml(totalSetores.value.lidos)}</td>
+        <td style="text-align:right;">${escapeHtml(totalSetores.value.comProblema)}</td>
+        <td style="text-align:right;">${formatPercent(totalSetores.value.percPendente)}</td>
+        <td style="text-align:right;">${formatPercent(totalSetores.value.percProblema)}</td>
+      </tr>
+    ` : ''
     const linhas = desempenhoSetores.value.map(s => {
       return `
         <tr>
@@ -587,7 +616,7 @@ const gerarRelatorioPDF = () => {
             </tr>
           </thead>
           <tbody>
-            ${linhas}
+            ${linhaGeral}${linhas}
           </tbody>
         </table>
       </div>
@@ -1245,6 +1274,27 @@ const gerarRelatorioPDF = () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
+              <tr v-if="totalSetores" class="bg-slate-100 border-b-2 border-slate-200">
+                <td class="px-3 py-2.5 text-slate-800 font-bold">{{ totalSetores.setor }}</td>
+                <td class="px-3 py-2.5 text-right text-slate-800 font-bold">{{ totalSetores.lidos.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right text-slate-800 font-bold">{{ totalSetores.comProblema.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-10 bg-slate-200 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full transition-all" :class="totalSetores.percPendente > 3 ? 'bg-amber-500' : 'bg-emerald-500'" :style="{ width: Math.min(totalSetores.percPendente, 100) + '%' }"></div>
+                    </div>
+                    <span class="font-bold" :class="totalSetores.percPendente > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ totalSetores.percPendente.toFixed(2) }}%</span>
+                  </div>
+                </td>
+                <td class="px-3 py-2.5 text-right">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-10 bg-slate-200 rounded-full h-1.5 hidden sm:block">
+                      <div class="h-1.5 rounded-full transition-all" :class="totalSetores.percProblema > 3 ? 'bg-red-500' : 'bg-slate-400'" :style="{ width: Math.min(totalSetores.percProblema, 100) + '%' }"></div>
+                    </div>
+                    <span class="font-bold" :class="totalSetores.percProblema > 3 ? 'text-red-700' : 'text-slate-700'">{{ totalSetores.percProblema.toFixed(2) }}%</span>
+                  </div>
+                </td>
+              </tr>
               <tr v-for="(s, idx) in desempenhoSetores" :key="s.setor" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
                 <td class="px-3 py-2.5 text-slate-700 font-medium">{{ s.setor }}</td>
                 <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ s.lidos.toLocaleString('pt-BR') }}</td>
