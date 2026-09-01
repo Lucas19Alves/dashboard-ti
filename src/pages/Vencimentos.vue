@@ -1,9 +1,12 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { toPng } from 'html-to-image'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { printTableInNewWindow } from '../utils/print'
 
+const router = useRouter()
 const store = useVencimentosStore()
 const toastStore = useAuditoriasStore()
 
@@ -57,6 +60,7 @@ const paginaFornecedorModal = ref(1)
 const buscaFornecedorModal = ref('')
 const ordenacaoFornecedorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
 const itensPorPaginaFornecedorModal = 12
+const detalhamentoSetorExportRef = ref(null)
 
 // Status filter pills config
 const statusPills = [
@@ -110,6 +114,19 @@ const limparDados = async () => {
   mostrarUpload.value = true
   abaAtiva.value = 'visao'
   toastStore.addToast('Dados de vencimentos removidos.', 'info')
+}
+
+const fecharModalUpload = () => {
+  mostrarUpload.value = false
+
+  if (store.itens.length > 0) return
+
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  router.push('/')
 }
 
 // --- Formatacao ---
@@ -174,7 +191,7 @@ const linhasSetores = computed(() => {
     hoje: dados.hoje || 0,
     ate3: dados.ate3 || 0
   }))
-  .sort((a, b) => b.vencidos - a.vencidos || b.hoje - a.hoje || b.ate3 - a.ate3)
+    .sort((a, b) => b.vencidos - a.vencidos || b.hoje - a.hoje || b.ate3 - a.ate3)
 })
 
 const setoresAnalise = computed(() => {
@@ -469,6 +486,63 @@ const imprimirAnalise = (alvo) => {
     if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Ranking de Fornecedores')
   }
 }
+
+const normalizarNomeArquivo = (texto) => {
+  return String(texto || 'imagem')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\-_ ]/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+}
+
+const exportarDetalhamentoSetor = async () => {
+  if (!detalhamentoSetorExportRef.value || typeof window === 'undefined') return
+
+  try {
+    const elemento = detalhamentoSetorExportRef.value
+    const rect = elemento.getBoundingClientRect?.() || {}
+    const largura = Math.max(Math.round(rect.width || elemento.scrollWidth || elemento.clientWidth || 1200), 1)
+    const altura = Math.max(Math.round(rect.height || elemento.scrollHeight || elemento.clientHeight || 700), 1)
+
+    const botoesOcultos = elemento.querySelectorAll('.export-button-hidden')
+    botoesOcultos.forEach(botao => {
+      botao.style.display = 'none'
+    })
+
+    const dataUrl = await toPng(elemento, {
+      cacheBust: true,
+      pixelRatio: 1,
+      backgroundColor: '#f8fafc',
+      width: largura,
+      height: altura,
+      skipFonts: false,
+      style: {
+        margin: '0',
+        padding: '0',
+        boxSizing: 'border-box',
+        transform: 'none',
+        maxWidth: 'none',
+        maxHeight: 'none'
+      }
+    })
+
+    botoesOcultos.forEach(botao => {
+      botao.style.display = ''
+    })
+
+    const link = document.createElement('a')
+    link.download = `${normalizarNomeArquivo('vencimentos-atencao-detalhamento-setor')}.png`
+    link.href = dataUrl
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } catch (error) {
+    console.error('Erro ao exportar imagem do detalhamento por setor:', error)
+    window.alert('Não foi possível gerar a imagem do detalhamento por setor. Tente novamente.')
+  }
+}
 </script>
 
 <template>
@@ -478,7 +552,8 @@ const imprimirAnalise = (alvo) => {
       <!-- ===== HEADER ===== -->
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="flex items-center gap-3">
-          <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <div
+            class="h-12 w-12 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
             <i class="fas fa-calendar-alt text-2xl text-white"></i>
           </div>
           <div>
@@ -499,15 +574,17 @@ const imprimirAnalise = (alvo) => {
       </div>
 
       <!-- ===== UPLOAD MODAL ===== -->
-      <div v-if="mostrarUpload" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        @click="store.itens.length > 0 ? (mostrarUpload = false) : null">
+      <div v-if="mostrarUpload"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        @click="fecharModalUpload">
         <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden" @click.stop>
           <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
             <div>
               <h2 class="text-lg font-bold">Importar Planilha de Vencimentos</h2>
               <p class="text-blue-100 text-sm mt-0.5">Arraste ou selecione um arquivo .xlsx</p>
             </div>
-            <button v-if="store.itens.length > 0" @click="mostrarUpload = false" class="text-white hover:opacity-80 transition">
+            <button v-if="store.itens.length > 0" @click="fecharModalUpload"
+              class="text-white hover:opacity-80 transition">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
@@ -515,10 +592,12 @@ const imprimirAnalise = (alvo) => {
             <div
               class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition cursor-pointer"
               :class="hoverDrop ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'"
-              @dragover="onDragOverArquivo" @dragleave="onDragLeaveArquivo" @drop="onDropArquivo" @click="dispararSelecao">
+              @dragover="onDragOverArquivo" @dragleave="onDragLeaveArquivo" @drop="onDropArquivo"
+              @click="dispararSelecao">
               <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
               <p class="text-gray-700 font-medium" v-if="!arquivo">Solte o arquivo aqui ou clique para selecionar</p>
-              <p class="text-gray-700 font-medium" v-else>{{ arquivo.name }} ({{ Math.ceil(arquivo.size / 1024) }} KB)</p>
+              <p class="text-gray-700 font-medium" v-else>{{ arquivo.name }} ({{ Math.ceil(arquivo.size / 1024) }} KB)
+              </p>
               <input ref="inputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="escolherArquivo" />
             </div>
             <div class="flex items-center gap-2">
@@ -527,6 +606,10 @@ const imprimirAnalise = (alvo) => {
                 <i v-if="!carregando" class="fas fa-file-import mr-2"></i>
                 <i v-else class="fas fa-spinner fa-spin mr-2"></i>
                 {{ carregando ? 'Processando...' : 'Importar' }}
+              </button>
+              <button v-if="store.itens.length === 0" @click="fecharModalUpload"
+                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition">
+                Dispensar
               </button>
               <button @click="arquivo = null" :disabled="carregando"
                 class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition">
@@ -538,23 +621,25 @@ const imprimirAnalise = (alvo) => {
       </div>
 
       <!-- ===== EMPTY STATE ===== -->
-      <div v-if="store.itens.length === 0 && !mostrarUpload" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
+      <div v-if="store.itens.length === 0 && !mostrarUpload"
+        class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
         <i class="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
         <p class="text-lg font-semibold text-gray-700">Nenhum dado de vencimento carregado</p>
         <p class="text-sm text-gray-500 mt-1 mb-4">Importe uma planilha para comecar a monitorar as validades.</p>
-        <button @click="mostrarUpload = true" class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm">
+        <button @click="mostrarUpload = true"
+          class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm">
           <i class="fas fa-file-upload mr-2"></i>Importar Planilha
         </button>
       </div>
 
       <!-- ===== TAB BAR ===== -->
-      <div v-if="store.itens.length > 0" class="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm -mx-4 md:-mx-8 px-4 md:px-8">
+      <div v-if="store.itens.length > 0"
+        class="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm -mx-4 md:-mx-8 px-4 md:px-8">
         <div class="max-w-7xl mx-auto flex gap-0">
-          <button v-for="tab in abas" :key="tab" @click="abaAtiva = tab"
-            :class="['px-6 py-4 font-medium transition-all border-b-2 text-sm',
-              abaAtiva === tab
-                ? 'border-orange-600 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300']">
+          <button v-for="tab in abas" :key="tab" @click="abaAtiva = tab" :class="['px-6 py-4 font-medium transition-all border-b-2 text-sm',
+            abaAtiva === tab
+              ? 'border-orange-600 text-orange-600'
+              : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300']">
             <i :class="iconeAba(tab)" class="mr-2"></i>{{ abasDisplay[tab] }}
           </button>
         </div>
@@ -564,107 +649,131 @@ const imprimirAnalise = (alvo) => {
       <!-- ===== TAB 1: VISAO GERAL ===== -->
       <!-- ============================================================ -->
       <template v-if="store.itens.length > 0 && abaAtiva === 'visao'">
-
-        <!-- Alert Banner -->
-        <div class="rounded-2xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
-          <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" :class="alertaBanner.iconeCor">
-            <i :class="alertaBanner.icone" class="text-xl"></i>
+        <div ref="detalhamentoSetorExportRef" class="space-y-4">
+          <!-- Alert Banner -->
+          <div class="rounded-2xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
+            <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" :class="alertaBanner.iconeCor">
+              <i :class="alertaBanner.icone" class="text-xl"></i>
+            </div>
+            <p class="text-sm font-medium flex-1">{{ alertaBanner.texto }}</p>
+            <button v-if="resumo.vencidos > 0" @click="verCriticos"
+              class="px-3 py-1.5 rounded-lg bg-white/80 text-sm font-semibold shadow-sm hover:bg-white transition shrink-0 border border-red-300 text-red-700">
+              Ver itens <i class="fas fa-arrow-right ml-1 text-xs"></i>
+            </button>
           </div>
-          <p class="text-sm font-medium flex-1">{{ alertaBanner.texto }}</p>
-          <button v-if="resumo.vencidos > 0" @click="verCriticos"
-            class="px-3 py-1.5 rounded-lg bg-white/80 text-sm font-semibold shadow-sm hover:bg-white transition shrink-0 border border-red-300 text-red-700">
-            Ver itens <i class="fas fa-arrow-right ml-1 text-xs"></i>
-          </button>
-        </div>
-
-        <!-- Hero Metrics Row -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <!-- Total -->
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-blue-600 rounded-l-2xl"></div>
-            <div class="flex items-start justify-between">
+  
+          <!-- Hero Metrics Row -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Total -->
+            <div
+              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-blue-600 rounded-l-2xl">
+              </div>
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total de Itens</p>
+                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-blue-700 tabular-nums">{{ resumo.total }}</p>
+                  <p class="mt-1.5 text-xs text-slate-400">Itens com validade monitorada</p>
+                </div>
+                <div
+                  class="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <i class="fas fa-boxes text-lg text-blue-500"></i>
+                </div>
+              </div>
+            </div>
+            <!-- Vencidos -->
+            <div
+              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-red-500 to-red-600 rounded-l-2xl"></div>
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
+                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
+                  <p class="mt-1.5 text-xs text-red-400">Requer acao imediata</p>
+                </div>
+                <div
+                  class="h-11 w-11 rounded-xl bg-red-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <i class="fas fa-exclamation-triangle text-lg text-red-500"></i>
+                </div>
+              </div>
+            </div>
+            <!-- Hoje -->
+            <div
+              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-orange-500 rounded-l-2xl">
+              </div>
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencem Hoje</p>
+                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-orange-600 tabular-nums">{{ resumo.hoje }}</p>
+                  <p class="mt-1.5 text-xs text-orange-400">Planejar acoes promocionais</p>
+                </div>
+                <div
+                  class="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <i class="fas fa-sun text-lg text-orange-500"></i>
+                </div>
+              </div>
+            </div>
+            <!-- Ate 3 dias -->
+            <div
+              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-yellow-500 rounded-l-2xl">
+              </div>
+              <div class="flex items-start justify-between">
+                <div>
+                  <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Ate 3 Dias</p>
+                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
+                  <p class="mt-1.5 text-xs text-yellow-500">Remarcacao e giro de estoque</p>
+                </div>
+                <div
+                  class="h-11 w-11 rounded-xl bg-yellow-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <i class="fas fa-hourglass-half text-lg text-yellow-500"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <!-- Sector Breakdown (Table) -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div class="px-5 pt-5 md:px-6 md:pt-6 pb-3 flex items-center justify-between gap-3">
               <div>
-                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total de Itens</p>
-                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-blue-700 tabular-nums">{{ resumo.total }}</p>
-                <p class="mt-1.5 text-xs text-slate-400">Itens com validade monitorada</p>
+                <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Distribuicao de itens por status em cada setor. Clique para ver
+                  detalhes.</p>
               </div>
-              <div class="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <i class="fas fa-boxes text-lg text-blue-500"></i>
-              </div>
-            </div>
-          </div>
-          <!-- Vencidos -->
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-red-500 to-red-600 rounded-l-2xl"></div>
-            <div class="flex items-start justify-between">
-              <div>
-                <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
-                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
-                <p class="mt-1.5 text-xs text-red-400">Requer acao imediata</p>
-              </div>
-              <div class="h-11 w-11 rounded-xl bg-red-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <i class="fas fa-exclamation-triangle text-lg text-red-500"></i>
+              <div class="flex items-center gap-2">
+                <button @click="exportarDetalhamentoSetor"
+                  class="export-button-hidden inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition text-xs font-semibold shadow-sm print:hidden">
+                  <i class="fas fa-image"></i>
+                  Salvar imagem
+                </button>
+                <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
               </div>
             </div>
-          </div>
-          <!-- Hoje -->
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-orange-500 rounded-l-2xl"></div>
-            <div class="flex items-start justify-between">
-              <div>
-                <p class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencem Hoje</p>
-                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-orange-600 tabular-nums">{{ resumo.hoje }}</p>
-                <p class="mt-1.5 text-xs text-orange-400">Planejar acoes promocionais</p>
-              </div>
-              <div class="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <i class="fas fa-sun text-lg text-orange-500"></i>
-              </div>
-            </div>
-          </div>
-          <!-- Ate 3 dias -->
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-            <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-yellow-500 rounded-l-2xl"></div>
-            <div class="flex items-start justify-between">
-              <div>
-                <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Ate 3 Dias</p>
-                <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
-                <p class="mt-1.5 text-xs text-yellow-500">Remarcacao e giro de estoque</p>
-              </div>
-              <div class="h-11 w-11 rounded-xl bg-yellow-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <i class="fas fa-hourglass-half text-lg text-yellow-500"></i>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sector Breakdown (Table) -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-          <div class="px-5 pt-5 md:px-6 md:pt-6 pb-3 flex items-center justify-between">
-            <div>
-              <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
-              <p class="text-xs text-slate-500 mt-0.5">Distribuicao de itens por status em cada setor. Clique para ver detalhes.</p>
-            </div>
-            <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
               <thead>
                 <tr class="bg-slate-50 border-y border-slate-200">
-                  <th class="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Setor</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">Total</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-red-500 uppercase tracking-wider w-24">Vencidos</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-orange-500 uppercase tracking-wider w-20">Hoje</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-yellow-600 uppercase tracking-wider w-20">Ate 3d</th>
+                  <th class="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Setor
+                  </th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">
+                    Total</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-red-500 uppercase tracking-wider w-24">
+                    Vencidos</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-orange-500 uppercase tracking-wider w-20">
+                    Hoje</th>
+                  <th class="px-4 py-3 text-center text-[11px] font-bold text-yellow-600 uppercase tracking-wider w-20">
+                    Ate 3d</th>
                   <th class="w-10"></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="setor in setoresAnalise" :key="setor.nome"
-                  @click="abrirModalSetor(setor.nome)"
+                <tr v-for="setor in setoresAnalise" :key="setor.nome" @click="abrirModalSetor(setor.nome)"
                   class="cursor-pointer hover:bg-orange-50/60 transition-colors group"
                   :class="setor.vencidos > 0 ? 'bg-red-50/60' : setor.hoje > 0 ? 'bg-orange-50/50' : setor.ate3 > 0 ? 'bg-yellow-50/50' : ''">
                   <td class="px-5 py-3.5">
-                    <p class="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">{{ setor.nome }}</p>
+                    <p class="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">{{ setor.nome
+                      }}</p>
                   </td>
                   <td class="px-4 py-3.5 text-center">
                     <span class="font-bold text-slate-700 tabular-nums">{{ setor.total }}</span>
@@ -691,13 +800,15 @@ const imprimirAnalise = (alvo) => {
                     <span v-else class="text-slate-300 text-xs">—</span>
                   </td>
                   <td class="px-2 py-3.5 text-center">
-                    <i class="fas fa-chevron-right text-slate-300 group-hover:text-orange-400 transition-colors text-xs"></i>
+                    <i
+                      class="fas fa-chevron-right text-slate-300 group-hover:text-orange-400 transition-colors text-xs"></i>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+      </div>
 
         <!-- Critical Items (Timeline Style) -->
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
@@ -740,15 +851,14 @@ const imprimirAnalise = (alvo) => {
                 </p>
               </div>
               <div class="text-right shrink-0">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold"
-                  :class="{
-                    'bg-red-100 text-red-700': item._prazo === 'vencidos',
-                    'bg-orange-100 text-orange-700': item._prazo === 'hoje',
-                    'bg-yellow-100 text-yellow-700': item._prazo === 'ate3'
-                  }">
-                  {{ item._diasParaVencer === 0 ? 'HOJE' : item._diasParaVencer < 0 ? `${Math.abs(item._diasParaVencer)}d atras` : `${item._diasParaVencer}d` }}
-                </span>
-                <p class="text-[10px] text-gray-400 mt-1">{{ formatarData(item._validadeDate) }}</p>
+                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold" :class="{
+                  'bg-red-100 text-red-700': item._prazo === 'vencidos',
+                  'bg-orange-100 text-orange-700': item._prazo === 'hoje',
+                  'bg-yellow-100 text-yellow-700': item._prazo === 'ate3'
+                }">
+                  {{ item._diasParaVencer === 0 ? 'HOJE' : item._diasParaVencer < 0 ?
+                    `${Math.abs(item._diasParaVencer)}d atras` : `${item._diasParaVencer}d` }} </span>
+                    <p class="text-[10px] text-gray-400 mt-1">{{ formatarData(item._validadeDate) }}</p>
               </div>
             </div>
           </div>
@@ -765,8 +875,7 @@ const imprimirAnalise = (alvo) => {
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2">Status:</span>
-            <button v-for="pill in statusPills" :key="pill.valor"
-              @click="filtroStatus = pill.valor"
+            <button v-for="pill in statusPills" :key="pill.valor" @click="filtroStatus = pill.valor"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all"
               :class="filtroStatus === pill.valor ? pill.corAtiva : pill.cor">
               <i :class="pill.icone" class="text-[10px]"></i>
@@ -839,8 +948,10 @@ const imprimirAnalise = (alvo) => {
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoItensFiltrados, col.chave)">
                     {{ col.titulo }}
                     <template v-if="col.sortable">
-                      <i v-if="ordenacaoItensFiltrados.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
-                      <i v-else-if="ordenacaoItensFiltrados.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                      <i v-if="ordenacaoItensFiltrados.coluna !== col.chave"
+                        class="fas fa-sort text-slate-300 ml-1"></i>
+                      <i v-else-if="ordenacaoItensFiltrados.direcao === 'asc'"
+                        class="fas fa-sort-up text-indigo-600 ml-1"></i>
                       <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                     </template>
                   </th>
@@ -864,7 +975,8 @@ const imprimirAnalise = (alvo) => {
                   <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
                   <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
                   <td class="px-3 py-2">
-                    <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                    <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
+                      :class="prazoBadgeClasses(item._prazo)">
                       {{ prazoBadgeLabel(item._prazo) }}
                     </span>
                   </td>
@@ -874,14 +986,20 @@ const imprimirAnalise = (alvo) => {
           </div>
 
           <!-- Pagination -->
-          <div v-if="totalPaginasItensFiltrados > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) }} de {{ totalPaginasItensFiltrados }}</p>
+          <div v-if="totalPaginasItensFiltrados > 1"
+            class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) }} de
+              {{
+              totalPaginasItensFiltrados }}</p>
             <div class="flex items-center gap-1">
-              <button @click="paginaItensFiltrados = Math.max(1, paginaItensFiltrados - 1)" :disabled="paginaItensFiltrados <= 1"
+              <button @click="paginaItensFiltrados = Math.max(1, paginaItensFiltrados - 1)"
+                :disabled="paginaItensFiltrados <= 1"
                 class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                 <i class="fas fa-chevron-left"></i>
               </button>
-              <template v-for="p in paginasVisiveisVenc(totalPaginasItensFiltrados, Math.min(paginaItensFiltrados, totalPaginasItensFiltrados))" :key="'pif'+p">
+              <template
+                v-for="p in paginasVisiveisVenc(totalPaginasItensFiltrados, Math.min(paginaItensFiltrados, totalPaginasItensFiltrados))"
+                :key="'pif' + p">
                 <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                 <button v-else @click="paginaItensFiltrados = p"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition"
@@ -889,7 +1007,8 @@ const imprimirAnalise = (alvo) => {
                   {{ p }}
                 </button>
               </template>
-              <button @click="paginaItensFiltrados = Math.min(totalPaginasItensFiltrados, paginaItensFiltrados + 1)" :disabled="paginaItensFiltrados >= totalPaginasItensFiltrados"
+              <button @click="paginaItensFiltrados = Math.min(totalPaginasItensFiltrados, paginaItensFiltrados + 1)"
+                :disabled="paginaItensFiltrados >= totalPaginasItensFiltrados"
                 class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                 <i class="fas fa-chevron-right"></i>
               </button>
@@ -925,8 +1044,10 @@ const imprimirAnalise = (alvo) => {
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedoresTab, col.chave)">
                     {{ col.titulo }}
                     <template v-if="col.sortable">
-                      <i v-if="ordenacaoFornecedoresTab.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
-                      <i v-else-if="ordenacaoFornecedoresTab.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                      <i v-if="ordenacaoFornecedoresTab.coluna !== col.chave"
+                        class="fas fa-sort text-slate-300 ml-1"></i>
+                      <i v-else-if="ordenacaoFornecedoresTab.direcao === 'asc'"
+                        class="fas fa-sort-up text-indigo-600 ml-1"></i>
                       <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                     </template>
                   </th>
@@ -940,19 +1061,24 @@ const imprimirAnalise = (alvo) => {
                   </td>
                 </tr>
                 <tr v-for="(item, idx) in fornecedoresTabPaginados" :key="item.fornecedor"
-                  @click="abrirItensFornecedor(item)"
-                  class="cursor-pointer transition-colors"
+                  @click="abrirItensFornecedor(item)" class="cursor-pointer transition-colors"
                   :class="(item.vencidos > 0 || item.hoje > 0) ? 'bg-red-50/60 hover:bg-indigo-50/40' : item.ate3 > 0 ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
                   <td class="px-3 py-2 font-medium">{{ item.fornecedor }}</td>
                   <td class="px-3 py-2 text-right tabular-nums">{{ item.total }}</td>
                   <td class="px-3 py-2 text-right">
-                    <span class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{ item.vencidos }}</span>
+                    <span
+                      class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{
+                      item.vencidos }}</span>
                   </td>
                   <td class="px-3 py-2 text-right">
-                    <span class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{ item.hoje }}</span>
+                    <span
+                      class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{
+                      item.hoje }}</span>
                   </td>
                   <td class="px-3 py-2 text-right">
-                    <span class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{ item.ate3 }}</span>
+                    <span
+                      class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{
+                      item.ate3 }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -960,14 +1086,20 @@ const imprimirAnalise = (alvo) => {
           </div>
 
           <!-- Pagination -->
-          <div v-if="totalPaginasFornecedoresTab > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) }} de {{ totalPaginasFornecedoresTab }}</p>
+          <div v-if="totalPaginasFornecedoresTab > 1"
+            class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) }}
+              de {{
+              totalPaginasFornecedoresTab }}</p>
             <div class="flex items-center gap-1">
-              <button @click="paginaFornecedoresTab = Math.max(1, paginaFornecedoresTab - 1)" :disabled="paginaFornecedoresTab <= 1"
+              <button @click="paginaFornecedoresTab = Math.max(1, paginaFornecedoresTab - 1)"
+                :disabled="paginaFornecedoresTab <= 1"
                 class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                 <i class="fas fa-chevron-left"></i>
               </button>
-              <template v-for="p in paginasVisiveisVenc(totalPaginasFornecedoresTab, Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab))" :key="'pft'+p">
+              <template
+                v-for="p in paginasVisiveisVenc(totalPaginasFornecedoresTab, Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab))"
+                :key="'pft' + p">
                 <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                 <button v-else @click="paginaFornecedoresTab = p"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition"
@@ -975,7 +1107,8 @@ const imprimirAnalise = (alvo) => {
                   {{ p }}
                 </button>
               </template>
-              <button @click="paginaFornecedoresTab = Math.min(totalPaginasFornecedoresTab, paginaFornecedoresTab + 1)" :disabled="paginaFornecedoresTab >= totalPaginasFornecedoresTab"
+              <button @click="paginaFornecedoresTab = Math.min(totalPaginasFornecedoresTab, paginaFornecedoresTab + 1)"
+                :disabled="paginaFornecedoresTab >= totalPaginasFornecedoresTab"
                 class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                 <i class="fas fa-chevron-right"></i>
               </button>
@@ -1006,33 +1139,37 @@ const imprimirAnalise = (alvo) => {
           <div class="flex items-center justify-between mb-5">
             <div>
               <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
-              <p class="text-xs text-slate-500">Distribuicao de itens por status em cada setor. Clique para ver detalhes.</p>
+              <p class="text-xs text-slate-500">Distribuicao de itens por status em cada setor. Clique para ver
+                detalhes.</p>
             </div>
           </div>
 
           <div class="space-y-3">
-            <div v-for="setor in setoresAnalise" :key="setor.nome"
-              @click="abrirModalSetor(setor.nome)"
+            <div v-for="setor in setoresAnalise" :key="setor.nome" @click="abrirModalSetor(setor.nome)"
               class="flex items-center gap-4 px-4 py-3.5 rounded-xl border cursor-pointer hover:border-orange-300 hover:shadow-sm transition-all group"
               :class="setor.vencidos > 0 ? 'bg-red-50/70 border-red-200' : setor.hoje > 0 ? 'bg-orange-50/70 border-orange-200' : setor.ate3 > 0 ? 'bg-yellow-50/70 border-yellow-200' : 'bg-white border-slate-200'">
 
               <!-- Sector name + total -->
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-gray-900 truncate group-hover:text-orange-600 transition-colors">{{ setor.nome }}</p>
+                <p class="text-sm font-bold text-gray-900 truncate group-hover:text-orange-600 transition-colors">{{
+                  setor.nome }}</p>
                 <p class="text-[11px] text-slate-400 mt-0.5">{{ setor.total }} itens</p>
               </div>
 
               <!-- Status badges -->
               <div class="flex items-center gap-2 shrink-0">
-                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 min-w-[52px]">
+                <div
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 min-w-[52px]">
                   <span class="text-sm font-bold text-red-700 tabular-nums">{{ setor.vencidos }}</span>
                   <span class="text-[9px] text-red-500 font-medium">Vencidos</span>
                 </div>
-                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 min-w-[52px]">
+                <div
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 min-w-[52px]">
                   <span class="text-sm font-bold text-orange-700 tabular-nums">{{ setor.hoje }}</span>
                   <span class="text-[9px] text-orange-500 font-medium">Hoje</span>
                 </div>
-                <div class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[52px]">
+                <div
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[52px]">
                   <span class="text-sm font-bold text-yellow-700 tabular-nums">{{ setor.ate3 }}</span>
                   <span class="text-[9px] text-yellow-600 font-medium">Ate 3d</span>
                 </div>
@@ -1058,8 +1195,7 @@ const imprimirAnalise = (alvo) => {
           </div>
 
           <div v-else class="space-y-3">
-            <div v-for="(forn, idx) in fornecedoresRanking" :key="forn.fornecedor"
-              @click="abrirItensFornecedor(forn)"
+            <div v-for="(forn, idx) in fornecedoresRanking" :key="forn.fornecedor" @click="abrirItensFornecedor(forn)"
               class="flex items-center gap-4 px-4 py-3 rounded-xl bg-white border border-slate-200 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all">
 
               <span class="text-lg font-extrabold tabular-nums shrink-0 w-8 text-center"
@@ -1080,9 +1216,12 @@ const imprimirAnalise = (alvo) => {
               </div>
 
               <div class="flex items-center gap-2 shrink-0 text-xs">
-                <span class="px-2 py-0.5 rounded-md bg-red-50 text-red-700 font-bold border border-red-200" title="Vencidos">{{ forn.vencidos }}</span>
-                <span class="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 font-bold border border-orange-200" title="Hoje">{{ forn.hoje }}</span>
-                <span class="px-2 py-0.5 rounded-md bg-yellow-50 text-yellow-700 font-bold border border-yellow-200" title="Ate 3 dias">{{ forn.ate3 }}</span>
+                <span class="px-2 py-0.5 rounded-md bg-red-50 text-red-700 font-bold border border-red-200"
+                  title="Vencidos">{{ forn.vencidos }}</span>
+                <span class="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 font-bold border border-orange-200"
+                  title="Hoje">{{ forn.hoje }}</span>
+                <span class="px-2 py-0.5 rounded-md bg-yellow-50 text-yellow-700 font-bold border border-yellow-200"
+                  title="Ate 3 dias">{{ forn.ate3 }}</span>
                 <span class="font-extrabold text-sm text-slate-700">{{ forn.criticos }}</span>
               </div>
             </div>
@@ -1096,7 +1235,8 @@ const imprimirAnalise = (alvo) => {
         @click="fecharModalSetor">
         <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
           @click.stop>
-          <div class="bg-gradient-to-r from-orange-600 to-orange-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+          <div
+            class="bg-gradient-to-r from-orange-600 to-orange-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
             <div>
               <h2 class="text-xl font-bold">{{ setorModalNome }}</h2>
               <p class="text-orange-100 text-sm mt-1">{{ itensSetorModal.length }} itens neste setor</p>
@@ -1127,7 +1267,8 @@ const imprimirAnalise = (alvo) => {
                       {{ col.titulo }}
                       <template v-if="col.sortable">
                         <i v-if="ordenacaoSetorModal.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
-                        <i v-else-if="ordenacaoSetorModal.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                        <i v-else-if="ordenacaoSetorModal.direcao === 'asc'"
+                          class="fas fa-sort-up text-indigo-600 ml-1"></i>
                         <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                       </template>
                     </th>
@@ -1151,7 +1292,8 @@ const imprimirAnalise = (alvo) => {
                     <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
                     <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
                     <td class="px-3 py-2">
-                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
+                        :class="prazoBadgeClasses(item._prazo)">
                         {{ prazoBadgeLabel(item._prazo) }}
                       </span>
                     </td>
@@ -1161,14 +1303,18 @@ const imprimirAnalise = (alvo) => {
             </div>
 
             <!-- Pagination -->
-            <div v-if="totalPaginasSetorModal > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaSetorModal, totalPaginasSetorModal) }} de {{ totalPaginasSetorModal }}</p>
+            <div v-if="totalPaginasSetorModal > 1"
+              class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaSetorModal, totalPaginasSetorModal) }} de {{
+                totalPaginasSetorModal }}</p>
               <div class="flex items-center gap-1">
                 <button @click="paginaSetorModal = Math.max(1, paginaSetorModal - 1)" :disabled="paginaSetorModal <= 1"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                   <i class="fas fa-chevron-left"></i>
                 </button>
-                <template v-for="p in paginasVisiveisVenc(totalPaginasSetorModal, Math.min(paginaSetorModal, totalPaginasSetorModal))" :key="'psm'+p">
+                <template
+                  v-for="p in paginasVisiveisVenc(totalPaginasSetorModal, Math.min(paginaSetorModal, totalPaginasSetorModal))"
+                  :key="'psm' + p">
                   <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                   <button v-else @click="paginaSetorModal = p"
                     class="px-2.5 py-1 rounded text-xs font-medium border transition"
@@ -1176,7 +1322,8 @@ const imprimirAnalise = (alvo) => {
                     {{ p }}
                   </button>
                 </template>
-                <button @click="paginaSetorModal = Math.min(totalPaginasSetorModal, paginaSetorModal + 1)" :disabled="paginaSetorModal >= totalPaginasSetorModal"
+                <button @click="paginaSetorModal = Math.min(totalPaginasSetorModal, paginaSetorModal + 1)"
+                  :disabled="paginaSetorModal >= totalPaginasSetorModal"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                   <i class="fas fa-chevron-right"></i>
                 </button>
@@ -1202,7 +1349,8 @@ const imprimirAnalise = (alvo) => {
         @click="limparFornecedor">
         <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
           @click.stop>
-          <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+          <div
+            class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
             <div>
               <h2 class="text-xl font-bold"><i class="fas fa-truck mr-2"></i>{{ fornecedorSelecionado }}</h2>
               <p class="text-blue-100 text-sm mt-1">{{ itensFornecedor.length }} itens deste fornecedor</p>
@@ -1232,8 +1380,10 @@ const imprimirAnalise = (alvo) => {
                       @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedorModal, col.chave)">
                       {{ col.titulo }}
                       <template v-if="col.sortable">
-                        <i v-if="ordenacaoFornecedorModal.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
-                        <i v-else-if="ordenacaoFornecedorModal.direcao === 'asc'" class="fas fa-sort-up text-indigo-600 ml-1"></i>
+                        <i v-if="ordenacaoFornecedorModal.coluna !== col.chave"
+                          class="fas fa-sort text-slate-300 ml-1"></i>
+                        <i v-else-if="ordenacaoFornecedorModal.direcao === 'asc'"
+                          class="fas fa-sort-up text-indigo-600 ml-1"></i>
                         <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                       </template>
                     </th>
@@ -1257,7 +1407,8 @@ const imprimirAnalise = (alvo) => {
                     <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
                     <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
                     <td class="px-3 py-2">
-                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium" :class="prazoBadgeClasses(item._prazo)">
+                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
+                        :class="prazoBadgeClasses(item._prazo)">
                         {{ prazoBadgeLabel(item._prazo) }}
                       </span>
                     </td>
@@ -1267,14 +1418,20 @@ const imprimirAnalise = (alvo) => {
             </div>
 
             <!-- Pagination -->
-            <div v-if="totalPaginasFornecedorModal > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedorModal, totalPaginasFornecedorModal) }} de {{ totalPaginasFornecedorModal }}</p>
+            <div v-if="totalPaginasFornecedorModal > 1"
+              class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedorModal, totalPaginasFornecedorModal)
+                }} de
+                {{ totalPaginasFornecedorModal }}</p>
               <div class="flex items-center gap-1">
-                <button @click="paginaFornecedorModal = Math.max(1, paginaFornecedorModal - 1)" :disabled="paginaFornecedorModal <= 1"
+                <button @click="paginaFornecedorModal = Math.max(1, paginaFornecedorModal - 1)"
+                  :disabled="paginaFornecedorModal <= 1"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                   <i class="fas fa-chevron-left"></i>
                 </button>
-                <template v-for="p in paginasVisiveisVenc(totalPaginasFornecedorModal, Math.min(paginaFornecedorModal, totalPaginasFornecedorModal))" :key="'pfm'+p">
+                <template
+                  v-for="p in paginasVisiveisVenc(totalPaginasFornecedorModal, Math.min(paginaFornecedorModal, totalPaginasFornecedorModal))"
+                  :key="'pfm' + p">
                   <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                   <button v-else @click="paginaFornecedorModal = p"
                     class="px-2.5 py-1 rounded text-xs font-medium border transition"
@@ -1282,7 +1439,9 @@ const imprimirAnalise = (alvo) => {
                     {{ p }}
                   </button>
                 </template>
-                <button @click="paginaFornecedorModal = Math.min(totalPaginasFornecedorModal, paginaFornecedorModal + 1)" :disabled="paginaFornecedorModal >= totalPaginasFornecedorModal"
+                <button
+                  @click="paginaFornecedorModal = Math.min(totalPaginasFornecedorModal, paginaFornecedorModal + 1)"
+                  :disabled="paginaFornecedorModal >= totalPaginasFornecedorModal"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
                   <i class="fas fa-chevron-right"></i>
                 </button>

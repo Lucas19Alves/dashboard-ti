@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { toPng } from 'html-to-image'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
@@ -159,6 +160,8 @@ const itensModal = ref([])
 const tituloModalItens = ref('')
 const printAreaItens = ref(null)
 const printAreaRelatorio = ref(null)
+const resultadoGeralSetorExportRef = ref(null)
+const topLocaisPendentesExportRef = ref(null)
 const editandoSku = ref(false)
 const skuEditavel = ref('')
 const filtroHorarioUsuario = ref('todos')
@@ -1399,6 +1402,72 @@ const handlePrintPDFItens = async () => {
   ].filter(Boolean)
   const titulo = partesNome.join(' - ')
   printTableInNewWindow(base, colunasModal.value, titulo)
+}
+
+const normalizarNomeArquivo = (texto) => {
+  return String(texto || 'imagem')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\-_ ]/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+}
+
+const exportarElementoComoImagem = async (elemento, nomeArquivo, descricao = 'imagem') => {
+  if (!elemento || typeof window === 'undefined') return
+
+  try {
+    const rect = elemento.getBoundingClientRect?.() || {}
+    const largura = Math.max(Math.round(rect.width || elemento.scrollWidth || elemento.clientWidth || 1200), 1)
+    const altura = Math.max(Math.round(rect.height || elemento.scrollHeight || elemento.clientHeight || 700), 1)
+
+    const botoesOcultos = elemento.querySelectorAll('.export-button-hidden')
+    botoesOcultos.forEach(botao => {
+      botao.style.display = 'none'
+    })
+
+    const dataUrl = await toPng(elemento, {
+      cacheBust: true,
+      pixelRatio: 1,
+      backgroundColor: '#ffffff',
+      width: largura,
+      height: altura,
+      skipFonts: false,
+      style: {
+        margin: '0',
+        padding: '0',
+        boxSizing: 'border-box',
+        transform: 'none',
+        maxWidth: 'none',
+        maxHeight: 'none'
+      }
+    })
+
+    botoesOcultos.forEach(botao => {
+      botao.style.display = ''
+    })
+
+    const link = document.createElement('a')
+    link.download = `${normalizarNomeArquivo(nomeArquivo)}.png`
+    link.href = dataUrl
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+  } catch (error) {
+    console.error(`Erro ao exportar ${descricao}:`, error)
+    window.alert(`Não foi possível gerar a imagem de ${descricao}. Tente novamente.`)
+  }
+}
+
+const exportarResultadoGeralSetor = async () => {
+  const nome = `${auditoria.value?.tipo || 'auditoria'}-resultado-geral-setor-${dataAuditoriaBR.value || 'data'}`
+  await exportarElementoComoImagem(resultadoGeralSetorExportRef.value, nome, 'Resultado Geral e Análise por Setor')
+}
+
+const exportarTopLocaisPendentes = async () => {
+  const nome = `${auditoria.value?.tipo || 'auditoria'}-top-locais-pendentes-${dataAuditoriaBR.value || 'data'}`
+  await exportarElementoComoImagem(topLocaisPendentesExportRef.value, nome, 'Top 10 Locais com Mais Pendentes')
 }
 
 const handlePrintRelatorio = () => {
@@ -4024,127 +4093,134 @@ const fecharRelatorio = () => {
 
         <!-- Content - Compacto para Print -->
         <div class="overflow-y-auto p-6 space-y-6 text-sm bg-slate-50">
-          <!-- Grid Principal 2x2 -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- CARD 1: Números Gerais (Topo Esquerdo) -->
-            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-              <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white px-6 py-4">
-                <h3 class="text-lg font-bold flex items-center gap-2">
-                  <i class="fas fa-chart-bar"></i>
-                  Resultado Geral
-                </h3>
-              </div>
-              <div class="p-6">
-                <!-- Status Geral -->
-                <div class="mb-6 pb-6 border-b border-slate-200">
-                  <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="bg-blue-50 rounded-lg p-3">
-                      <p class="text-xs font-semibold text-gray-600 mb-1">Total Auditável</p>
-                      <p class="text-2xl font-bold text-blue-700">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
-                    </div>
-                    <div class="bg-green-50 rounded-lg p-3">
-                      <p class="text-xs font-semibold text-gray-600 mb-1">Total Lidos</p>
-                      <p class="text-2xl font-bold text-green-700">{{ dadosRelatorio?.resultadoGeral.totalLidos }}</p>
-                    </div>
-                    <div class="bg-orange-50 rounded-lg p-3">
-                      <p class="text-xs font-semibold text-gray-600 mb-1">Pendentes</p>
-                      <p class="text-2xl font-bold text-orange-700">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
-                    </div>
-                    <div class="bg-yellow-50 rounded-lg p-3">
-                      <p class="text-xs font-semibold text-gray-600 mb-1">Desatualizados</p>
-                      <p class="text-2xl font-bold text-yellow-700">{{ dadosRelatorio?.resultadoGeral.desatualizados || 0 }}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Destaque: % Pendente e Meta -->
-                <div class="space-y-3">
-                  <div class="rounded-lg border-2 p-4" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-400 bg-green-50' : 'border-orange-400 bg-orange-50'">
-                    <p class="text-xs font-bold uppercase tracking-wide mb-1" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-700' : 'text-orange-700'">% Pendente</p>
-                    <p class="text-4xl font-bold" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
-                      {{ dadosRelatorio?.resultadoGeral.percentualPendente.toFixed(2) }}%
-                    </p>
-                    <p class="text-xs mt-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600 font-semibold' : 'text-orange-600 font-semibold'">
-                      Meta: 3%
-                    </p>
-                  </div>
-
-                  <!-- Status da Meta -->
-                  <div class="rounded-lg p-3" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'">
-                    <p class="text-xs font-semibold" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'text-red-700' : 'text-green-700'">
-                      <i :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'" class="mr-1"></i>
-                      <span v-if="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0">
-                        Faltam {{ dadosRelatorio?.resultadoGeral.faltaParaMeta.toFixed(2) }}% ({{ dadosRelatorio?.resultadoGeral.itensFaltam }} itens) para meta
-                      </span>
-                      <span v-else>
-                        Meta atingida!
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
+          <div ref="resultadoGeralSetorExportRef" class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white px-6 py-4 flex items-center justify-between gap-3">
+              <h3 class="text-lg font-bold flex items-center gap-2">
+                <i class="fas fa-chart-bar"></i>
+                Relatório Geral
+              </h3>
+              <button
+                @click="exportarResultadoGeralSetor"
+                class="export-button-hidden inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 transition text-xs font-semibold print:hidden"
+              >
+                <i class="fas fa-image"></i>
+                Salvar imagem
+              </button>
             </div>
 
-            <!-- CARD 2: Análise por Setor (Topo Direito) -->
-            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-              <div class="bg-linear-to-r from-purple-600 to-purple-800 text-white px-6 py-4">
-                <h3 class="text-lg font-bold flex items-center gap-2">
-                  <i class="fas fa-building"></i>
-                  Análise por Setor
-                </h3>
-              </div>
-              <div class="overflow-hidden">
-                <table class="w-full text-xs">
-                  <thead>
-                    <tr class="bg-slate-100 border-b border-slate-200">
-                      <th class="px-4 py-3 text-left font-bold text-gray-700">Setor</th>
-                      <th class="px-3 py-3 text-right font-bold text-gray-700">Pend.</th>
-                      <th class="px-3 py-3 text-right font-bold text-gray-700">%</th>
-                      <th class="px-3 py-3 text-center font-bold text-gray-700">Classificação</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-200">
-                    <tr
-                      v-for="setor in dadosRelatorio?.setores"
-                      :key="setor.nome"
-                      :class="[
-                        setor.classificacao === 'Excelente'
-                          ? 'bg-green-50 hover:bg-green-100'
-                          : setor.classificacao === 'Bom'
-                            ? 'bg-emerald-50 hover:bg-emerald-100'
-                            : setor.classificacao === 'Regular'
-                              ? 'bg-yellow-50 hover:bg-yellow-100'
-                              : 'bg-red-50 hover:bg-red-100'
-                      ]"
-                    >
-                      <td class="px-4 py-3 font-medium text-gray-800 truncate">{{ setor.nome }}</td>
-                      <td class="px-3 py-3 text-right font-bold" :class="setor.pendentes > 0 ? 'text-orange-600' : 'text-green-600'">{{ setor.pendentes }}</td>
-                      <td class="px-3 py-3 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">{{ setor.percentualPendente.toFixed(1) }}%</td>
-                      <td class="px-3 py-3 text-center">
-                        <span class="px-2 py-1 rounded text-xs font-semibold" :class="[
-                          setor.classificacao === 'Excelente' ? 'bg-green-200 text-green-800' :
-                          setor.classificacao === 'Bom' ? 'bg-emerald-200 text-emerald-800' :
-                          setor.classificacao === 'Regular' ? 'bg-yellow-200 text-yellow-800' :
-                          'bg-red-200 text-red-800'
-                        ]">
-                          {{ setor.classificacao }}
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-0 bg-slate-50">
+              <div class="bg-white border-r border-slate-200 overflow-hidden">
+                <div class="p-6">
+                  <div class="mb-6 pb-6 border-b border-slate-200">
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                      <div class="bg-blue-50 rounded-lg p-3">
+                        <p class="text-xs font-semibold text-gray-600 mb-1">Total Auditável</p>
+                        <p class="text-2xl font-bold text-blue-700">{{ dadosRelatorio?.resultadoGeral.totalAuditaveis }}</p>
+                      </div>
+                      <div class="bg-green-50 rounded-lg p-3">
+                        <p class="text-xs font-semibold text-gray-600 mb-1">Total Lidos</p>
+                        <p class="text-2xl font-bold text-green-700">{{ dadosRelatorio?.resultadoGeral.totalLidos }}</p>
+                      </div>
+                      <div class="bg-orange-50 rounded-lg p-3">
+                        <p class="text-xs font-semibold text-gray-600 mb-1">Pendentes</p>
+                        <p class="text-2xl font-bold text-orange-700">{{ dadosRelatorio?.resultadoGeral.pendentes }}</p>
+                      </div>
+                      <div class="bg-yellow-50 rounded-lg p-3">
+                        <p class="text-xs font-semibold text-gray-600 mb-1">Desatualizados</p>
+                        <p class="text-2xl font-bold text-yellow-700">{{ dadosRelatorio?.resultadoGeral.desatualizados || 0 }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div class="rounded-lg border-2 p-4" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'border-green-400 bg-green-50' : 'border-orange-400 bg-orange-50'">
+                      <p class="text-xs font-bold uppercase tracking-wide mb-1" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-700' : 'text-orange-700'">% Pendente</p>
+                      <p class="text-4xl font-bold" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                        {{ dadosRelatorio?.resultadoGeral.percentualPendente.toFixed(2) }}%
+                      </p>
+                      <p class="text-xs mt-2" :class="dadosRelatorio?.resultadoGeral.percentualPendente <= 3 ? 'text-green-600 font-semibold' : 'text-orange-600 font-semibold'">
+                        Meta: 3%
+                      </p>
+                    </div>
+
+                    <div class="rounded-lg p-3" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'">
+                      <p class="text-xs font-semibold" :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'text-red-700' : 'text-green-700'">
+                        <i :class="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0 ? 'fas fa-exclamation-circle' : 'fas fa-check-circle'" class="mr-1"></i>
+                        <span v-if="dadosRelatorio?.resultadoGeral.faltaParaMeta > 0">
+                          Faltam {{ dadosRelatorio?.resultadoGeral.faltaParaMeta.toFixed(2) }}% ({{ dadosRelatorio?.resultadoGeral.itensFaltam }} itens) para meta
                         </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                        <span v-else>
+                          Meta atingida!
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white overflow-hidden">
+                <div class="overflow-hidden">
+                  <table class="w-full text-xs">
+                    <thead>
+                      <tr class="bg-slate-100 border-b border-slate-200">
+                        <th class="px-4 py-3 text-left font-bold text-gray-700">Setor</th>
+                        <th class="px-3 py-3 text-right font-bold text-gray-700">Pend.</th>
+                        <th class="px-3 py-3 text-right font-bold text-gray-700">%</th>
+                        <th class="px-3 py-3 text-center font-bold text-gray-700">Classificação</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                      <tr
+                        v-for="setor in dadosRelatorio?.setores"
+                        :key="setor.nome"
+                        :class="[
+                          setor.classificacao === 'Excelente'
+                            ? 'bg-green-50 hover:bg-green-100'
+                            : setor.classificacao === 'Bom'
+                              ? 'bg-emerald-50 hover:bg-emerald-100'
+                              : setor.classificacao === 'Regular'
+                                ? 'bg-yellow-50 hover:bg-yellow-100'
+                                : 'bg-red-50 hover:bg-red-100'
+                        ]"
+                      >
+                        <td class="px-4 py-3 font-medium text-gray-800 truncate">{{ setor.nome }}</td>
+                        <td class="px-3 py-3 text-right font-bold" :class="setor.pendentes > 0 ? 'text-orange-600' : 'text-green-600'">{{ setor.pendentes }}</td>
+                        <td class="px-3 py-3 text-right font-bold" :class="setor.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">{{ setor.percentualPendente.toFixed(1) }}%</td>
+                        <td class="px-3 py-3 text-center">
+                          <span class="px-2 py-1 rounded text-xs font-semibold" :class="[
+                            setor.classificacao === 'Excelente' ? 'bg-green-200 text-green-800' :
+                            setor.classificacao === 'Bom' ? 'bg-emerald-200 text-emerald-800' :
+                            setor.classificacao === 'Regular' ? 'bg-yellow-200 text-yellow-800' :
+                            'bg-red-200 text-red-800'
+                          ]">
+                            {{ setor.classificacao }}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- CARD 3: Top 10 Locais com Mais Pendentes (Inferior Esquerda) -->
-          <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-            <div class="bg-linear-to-r from-orange-600 to-orange-800 text-white px-6 py-4">
-              <h3 class="text-lg font-bold flex items-center gap-2">
-                <i class="fas fa-map-marker-alt"></i>
-                Top 10 Locais com Mais Pendentes
-              </h3>
-              <p class="text-xs text-orange-100 mt-1">Focos de ação prioritária</p>
+          <div ref="topLocaisPendentesExportRef" class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+            <div class="bg-linear-to-r from-orange-600 to-orange-800 text-white px-6 py-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                  <i class="fas fa-map-marker-alt"></i>
+                  Top 10 Locais com Mais Pendentes
+                </h3>
+                <p class="text-xs text-orange-100 mt-1">Focos de ação prioritária</p>
+              </div>
+              <button
+                @click="exportarTopLocaisPendentes"
+                class="export-button-hidden inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 transition text-xs font-semibold print:hidden"
+              >
+                <i class="fas fa-image"></i>
+                Salvar imagem
+              </button>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-xs">
