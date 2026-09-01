@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "dexie": "^4.3.0",
     "exceljs": "^4.4.0",
+    "html-to-image": "^1.11.13",
     "html2pdf.js": "^0.14.0",
     "pinia": "^3.0.4",
     "plugin-vue": "^0.0.1-security",
