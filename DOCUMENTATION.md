@@ -98,7 +98,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 ## 🔧 6. Manutenção e Expansão
 
 ### Backup e Segurança
-- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). Isso gera um arquivo JSON contendo todo o banco de dados local. É recomendado fazer backup antes de limpezas de cache do navegador.
+- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). A exportação gera um arquivo `.json.gz`, reduzindo o tamanho sem remover informações. A importação aceita o formato compactado, backups `.json` antigos do Dashboard TI e backups regionais com `sessions`, que são migrados automaticamente para auditorias agregadas por loja. Todo conteúdo é validado antes de substituir o banco local. É recomendado fazer backup antes de limpezas de cache do navegador.
 
 ### Adicionando Novas Regras
 - **Novas Colunas Excel**: Se o layout da planilha do ERP mudar, atualize os arrays `colunasPresenca` ou `colunasEtiqueta` no `auditoriasStore.js`.

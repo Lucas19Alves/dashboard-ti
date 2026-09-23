@@ -1,9 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Inicio from '../pages/Inicio.vue'
-import Auditorias from '../pages/Auditorias.vue'
-import AuditoriaDetalhes from '../pages/AuditoriaDetalhes.vue'
-import Vencimentos from '../pages/Vencimentos.vue'
-import AnaliseAuditorias from '../pages/AnaliseAuditorias.vue'
+
+// Cada página é baixada apenas quando o usuário acessa a respectiva rota.
+const Inicio = () => import('../pages/Inicio.vue')
+const Auditorias = () => import('../pages/Auditorias.vue')
+const AuditoriaDetalhes = () => import('../pages/AuditoriaDetalhes.vue')
+const Vencimentos = () => import('../pages/Vencimentos.vue')
+const AnaliseAuditorias = () => import('../pages/AnaliseAuditorias.vue')
 
 const routes = [
   {

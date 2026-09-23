@@ -12,7 +12,8 @@ const toggleMenu = () => {
 }
 
 const isActive = (path) => {
-  return route.path === path
+  if (path === '/') return route.path === '/'
+  return route.path === path || route.path.startsWith(`${path}/`)
 }
 
 const abrirSobre = () => {
@@ -35,13 +36,15 @@ const irPara = (url) => {
 </script>
 
 <template>
-  <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+  <nav class="sticky top-0 z-40 border-b border-blue-800 bg-blue-700/95 text-white shadow-lg shadow-blue-950/10 backdrop-blur-xl">
     <div class="max-w-7xl mx-auto px-4">
       <div class="flex justify-between items-center h-16">
         <div class="flex items-center gap-4">
-          <div class="flex-shrink-0 font-bold text-2xl flex items-center gap-2">
-            <i class="fas fa-tachometer-alt"></i>
-            Dashboard TI
+          <div class="flex-shrink-0 font-bold text-xl flex items-center gap-2.5 tracking-tight">
+            <span class="inline-flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+              <i class="fas fa-chart-pie text-sm"></i>
+            </span>
+            <span>Dashboard <span class="text-blue-200">TI</span></span>
           </div>
         </div>
 
@@ -49,28 +52,28 @@ const irPara = (url) => {
           <div class="hidden md:flex space-x-2">
             <router-link 
               to="/" 
-              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
             >
               <i class="fas fa-home"></i>
               Início
             </router-link>
             <router-link 
               to="/auditorias" 
-              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', route.path === '/auditorias' || route.path.startsWith('/auditoria/') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
             >
               <i class="fas fa-search"></i>
               Auditorias
             </router-link>
             <router-link 
               to="/auditorias/analise" 
-              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/auditorias/analise') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/auditorias/analise') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
             >
               <i class="fas fa-chart-line"></i>
               Análise
             </router-link>
             <router-link 
               to="/vencimentos" 
-              :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
+              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/vencimentos') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
             >
               <i class="fas fa-calendar-alt"></i>
               Vencimentos
@@ -82,6 +85,7 @@ const irPara = (url) => {
             @click="abrirSobre"
             class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-500/80 hover:bg-blue-400 transition shadow-sm"
             title="Sobre o projeto"
+            aria-label="Sobre o projeto"
           >
             <i class="fas fa-info-circle text-lg"></i>
           </button>
@@ -89,6 +93,8 @@ const irPara = (url) => {
           <button
             @click="toggleMenu"
             class="md:hidden inline-flex items-center justify-center p-2 rounded-md hover:bg-blue-700 transition"
+            :aria-expanded="isOpen"
+            aria-label="Abrir menu de navegação"
           >
             <i class="fas fa-bars text-2xl"></i>
           </button>
@@ -103,6 +109,13 @@ const irPara = (url) => {
         >
           <i class="fas fa-home"></i>
           Início
+        </router-link>
+        <router-link
+          to="/auditorias/analise"
+          class="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition hover:bg-blue-700"
+        >
+          <i class="fas fa-chart-line"></i>
+          Análise
         </router-link>
         <router-link 
           to="/auditorias" 
@@ -131,9 +144,9 @@ const irPara = (url) => {
 
     <div
       v-if="mostrarSobre"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      class="ui-modal-backdrop"
     >
-      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div class="ui-modal">
         <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="h-9 w-9 rounded-full bg-blue-600/10 flex items-center justify-center">

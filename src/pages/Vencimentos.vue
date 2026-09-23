@@ -5,6 +5,11 @@ import { toPng } from 'html-to-image'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { printTableInNewWindow } from '../utils/print'
+import UiButton from '../components/ui/UiButton.vue'
+import UiEmptyState from '../components/ui/UiEmptyState.vue'
+import UiModal from '../components/ui/UiModal.vue'
+import UiPageHeader from '../components/ui/UiPageHeader.vue'
+import UiTabs from '../components/ui/UiTabs.vue'
 
 const router = useRouter()
 const store = useVencimentosStore()
@@ -26,6 +31,7 @@ const iconeAba = (tab) => ({
   explorar: 'fas fa-search',
   analise: 'fas fa-chart-bar'
 })[tab]
+const abasVencimentos = abas.map(tab => ({ value: tab, label: abasDisplay[tab], icon: iconeAba(tab) }))
 
 // Filtros (aba Explorar)
 const filtroSetor = ref('')
@@ -39,6 +45,9 @@ const fornecedorSelecionado = ref('')
 const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
 const modalFornecedorAberto = ref(false)
+const modalAcaoAberto = ref(false)
+const itemAcao = ref(null)
+const formularioAcao = ref({ acao: 'Verificar na gôndola', responsavel: '' })
 
 // --- Table state ---
 const paginaItensFiltrados = ref(1)
@@ -72,7 +81,6 @@ const statusPills = [
 ]
 
 onMounted(() => {
-  store.carregarVencimentosPersistidos()
   if (store.itens.length === 0) {
     mostrarUpload.value = true
   }
@@ -114,6 +122,25 @@ const limparDados = async () => {
   mostrarUpload.value = true
   abaAtiva.value = 'visao'
   toastStore.addToast('Dados de vencimentos removidos.', 'info')
+}
+
+const abrirAcao = item => {
+  itemAcao.value = item
+  formularioAcao.value = {
+    acao: item._acao || 'Verificar na gôndola',
+    responsavel: item._responsavel || ''
+  }
+  modalAcaoAberto.value = true
+}
+
+const salvarAcao = async () => {
+  try {
+    await store.registrarAcao(itemAcao.value, formularioAcao.value.acao, formularioAcao.value.responsavel)
+    toastStore.addToast('Ação registrada no histórico do item.', 'success')
+    modalAcaoAberto.value = false
+  } catch (error) {
+    toastStore.addToast(error?.message || 'Não foi possível registrar a ação.', 'error')
+  }
 }
 
 const fecharModalUpload = () => {
@@ -546,104 +573,60 @@ const exportarDetalhamentoSetor = async () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8">
+  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8">
     <div class="max-w-7xl mx-auto space-y-6">
 
       <!-- ===== HEADER ===== -->
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <div
-            class="h-12 w-12 rounded-xl bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
-            <i class="fas fa-calendar-alt text-2xl text-white"></i>
-          </div>
-          <div>
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Vencimentos</h1>
-            <p class="text-sm text-gray-500 mt-1">Controle de validades e itens criticos</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <button v-if="store.itens.length > 0" @click="mostrarUpload = true"
-            class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm text-sm">
+      <UiPageHeader title="Vencimentos" subtitle="Controle de validades e itens críticos." icon="fas fa-calendar-alt" tone="orange">
+        <template #actions>
+          <UiButton v-if="store.itens.length > 0" @click="mostrarUpload = true">
             <i class="fas fa-file-upload mr-2"></i>Nova Importacao
-          </button>
-          <button v-if="store.itens.length > 0" @click="limparDados"
-            class="px-3 py-2 rounded-lg bg-red-50 text-red-700 font-medium hover:bg-red-100 transition text-sm border border-red-200">
+          </UiButton>
+          <UiButton v-if="store.itens.length > 0" variant="dangerSoft" @click="limparDados">
             <i class="fas fa-trash-alt mr-1"></i>Limpar
-          </button>
-        </div>
-      </div>
+          </UiButton>
+        </template>
+      </UiPageHeader>
 
       <!-- ===== UPLOAD MODAL ===== -->
-      <div v-if="mostrarUpload"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        @click="fecharModalUpload">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden" @click.stop>
-          <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
-            <div>
-              <h2 class="text-lg font-bold">Importar Planilha de Vencimentos</h2>
-              <p class="text-blue-100 text-sm mt-0.5">Arraste ou selecione um arquivo .xlsx</p>
-            </div>
-            <button v-if="store.itens.length > 0" @click="fecharModalUpload"
-              class="text-white hover:opacity-80 transition">
-              <i class="fas fa-times text-xl"></i>
-            </button>
-          </div>
-          <div class="p-6 space-y-4">
+      <UiModal v-if="mostrarUpload" title="Importar planilha de vencimentos" subtitle="Arraste ou selecione um arquivo .xlsx ou .csv" @close="fecharModalUpload">
+          <div class="space-y-4">
             <div
-              class="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center text-center transition cursor-pointer"
-              :class="hoverDrop ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'"
+              class="rounded-xl border border-dashed border-slate-300 p-8 flex flex-col items-center justify-center text-center transition cursor-pointer"
+              :class="hoverDrop ? 'bg-blue-50' : 'hover:bg-slate-50'"
               @dragover="onDragOverArquivo" @dragleave="onDragLeaveArquivo" @drop="onDropArquivo"
               @click="dispararSelecao">
               <i class="fas fa-file-excel text-4xl text-green-600 mb-3"></i>
               <p class="text-gray-700 font-medium" v-if="!arquivo">Solte o arquivo aqui ou clique para selecionar</p>
               <p class="text-gray-700 font-medium" v-else>{{ arquivo.name }} ({{ Math.ceil(arquivo.size / 1024) }} KB)
               </p>
-              <input ref="inputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="escolherArquivo" />
+              <input ref="inputRef" type="file" accept=".xlsx,.csv" class="hidden" @change="escolherArquivo" />
             </div>
-            <div class="flex items-center gap-2">
-              <button @click="carregarPlanilha" :disabled="!arquivo || carregando"
-                class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed">
+            <div class="flex flex-wrap items-center gap-2">
+              <UiButton @click="carregarPlanilha" :disabled="!arquivo || carregando">
                 <i v-if="!carregando" class="fas fa-file-import mr-2"></i>
                 <i v-else class="fas fa-spinner fa-spin mr-2"></i>
                 {{ carregando ? 'Processando...' : 'Importar' }}
-              </button>
-              <button v-if="store.itens.length === 0" @click="fecharModalUpload"
-                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition">
+              </UiButton>
+              <UiButton v-if="store.itens.length === 0" variant="secondary" @click="fecharModalUpload">
                 Dispensar
-              </button>
-              <button @click="arquivo = null" :disabled="carregando"
-                class="px-3 py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition">
+              </UiButton>
+              <UiButton variant="ghost" @click="arquivo = null" :disabled="carregando">
                 Limpar
-              </button>
+              </UiButton>
             </div>
           </div>
-        </div>
-      </div>
+      </UiModal>
 
       <!-- ===== EMPTY STATE ===== -->
-      <div v-if="store.itens.length === 0 && !mostrarUpload"
-        class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
-        <i class="fas fa-box-open text-5xl text-slate-300 mb-4"></i>
-        <p class="text-lg font-semibold text-gray-700">Nenhum dado de vencimento carregado</p>
-        <p class="text-sm text-gray-500 mt-1 mb-4">Importe uma planilha para comecar a monitorar as validades.</p>
-        <button @click="mostrarUpload = true"
-          class="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition shadow-sm">
-          <i class="fas fa-file-upload mr-2"></i>Importar Planilha
-        </button>
-      </div>
+      <UiEmptyState v-if="store.itens.length === 0 && !mostrarUpload" title="Nenhum dado de vencimento carregado" description="Importe uma planilha para começar a monitorar as validades." icon="fas fa-box-open">
+        <template #actions>
+          <UiButton @click="mostrarUpload = true"><i class="fas fa-file-upload"></i>Importar planilha</UiButton>
+        </template>
+      </UiEmptyState>
 
       <!-- ===== TAB BAR ===== -->
-      <div v-if="store.itens.length > 0"
-        class="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm -mx-4 md:-mx-8 px-4 md:px-8">
-        <div class="max-w-7xl mx-auto flex gap-0">
-          <button v-for="tab in abas" :key="tab" @click="abaAtiva = tab" :class="['px-6 py-4 font-medium transition-all border-b-2 text-sm',
-            abaAtiva === tab
-              ? 'border-orange-600 text-orange-600'
-              : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300']">
-            <i :class="iconeAba(tab)" class="mr-2"></i>{{ abasDisplay[tab] }}
-          </button>
-        </div>
-      </div>
+      <UiTabs v-if="store.itens.length > 0" v-model="abaAtiva" :items="abasVencimentos" sticky />
 
       <!-- ============================================================ -->
       <!-- ===== TAB 1: VISAO GERAL ===== -->
@@ -666,9 +649,7 @@ const exportarDetalhamentoSetor = async () => {
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <!-- Total -->
             <div
-              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-blue-600 rounded-l-2xl">
-              </div>
+              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total de Itens</p>
@@ -683,8 +664,7 @@ const exportarDetalhamentoSetor = async () => {
             </div>
             <!-- Vencidos -->
             <div
-              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-red-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-red-500 to-red-600 rounded-l-2xl"></div>
+              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
@@ -699,9 +679,7 @@ const exportarDetalhamentoSetor = async () => {
             </div>
             <!-- Hoje -->
             <div
-              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-orange-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-orange-400 to-orange-500 rounded-l-2xl">
-              </div>
+              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencem Hoje</p>
@@ -716,9 +694,7 @@ const exportarDetalhamentoSetor = async () => {
             </div>
             <!-- Ate 3 dias -->
             <div
-              class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-yellow-100 p-5 relative overflow-hidden group hover:shadow-md transition-shadow">
-              <div class="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-yellow-400 to-yellow-500 rounded-l-2xl">
-              </div>
+              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Ate 3 Dias</p>
@@ -830,12 +806,7 @@ const exportarDetalhamentoSetor = async () => {
 
           <div v-else class="space-y-2.5">
             <div v-for="(item, idx) in itensCriticosPainel" :key="item._codigo + item._validadeISO + idx"
-              class="flex items-center gap-3 px-4 py-3 rounded-xl border-l-4 bg-white shadow-xs hover:shadow-sm transition-shadow border border-slate-100"
-              :class="{
-                'border-l-red-500': item._prazo === 'vencidos',
-                'border-l-orange-400': item._prazo === 'hoje',
-                'border-l-yellow-400': item._prazo === 'ate3'
-              }">
+              class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs transition-shadow hover:shadow-sm">
               <span class="px-2.5 py-1 text-[10px] rounded-lg border font-bold uppercase tracking-wide shrink-0"
                 :class="prazoBadgeClasses(item._prazo)">
                 {{ prazoBadgeLabel(item._prazo) }}
@@ -955,11 +926,12 @@ const exportarDetalhamentoSetor = async () => {
                       <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                     </template>
                   </th>
+                  <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="itensFiltradosPaginados.length === 0">
-                  <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
+                  <td :colspan="colunasItens.length + 1" class="text-center py-10 text-slate-400">
                     <i class="fas fa-inbox text-3xl mb-2 block"></i>
                     <p class="text-sm">Nenhum item encontrado</p>
                   </td>
@@ -979,6 +951,15 @@ const exportarDetalhamentoSetor = async () => {
                       :class="prazoBadgeClasses(item._prazo)">
                       {{ prazoBadgeLabel(item._prazo) }}
                     </span>
+                  </td>
+                  <td class="px-3 py-2">
+                    <button type="button" class="ui-btn-secondary !px-2.5 !py-1.5 !text-xs whitespace-nowrap" @click="abrirAcao(item)">
+                      <i class="fas fa-clipboard-check"></i>
+                      {{ item._acao ? 'Atualizar' : 'Registrar' }}
+                    </button>
+                    <p v-if="item._responsavel" class="mt-1 max-w-28 truncate text-[10px] text-slate-500" :title="item._acao">
+                      {{ item._responsavel }} · {{ item._acao }}
+                    </p>
                   </td>
                 </tr>
               </tbody>
@@ -1236,7 +1217,7 @@ const exportarDetalhamentoSetor = async () => {
         <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
           @click.stop>
           <div
-            class="bg-gradient-to-r from-orange-600 to-orange-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+            class="bg-orange-700 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
             <div>
               <h2 class="text-xl font-bold">{{ setorModalNome }}</h2>
               <p class="text-orange-100 text-sm mt-1">{{ itensSetorModal.length }} itens neste setor</p>
@@ -1343,6 +1324,38 @@ const exportarDetalhamentoSetor = async () => {
         </div>
       </div>
 
+      <div v-if="modalAcaoAberto" class="ui-modal-backdrop" @click.self="modalAcaoAberto = false">
+        <form class="ui-modal p-6" @submit.prevent="salvarAcao">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Registrar ação operacional</h2>
+              <p class="mt-1 text-sm text-slate-500">{{ itemAcao?._codigo }} · {{ itemAcao?._produto }}</p>
+            </div>
+            <button type="button" class="text-slate-400 hover:text-slate-700" aria-label="Fechar" @click="modalAcaoAberto = false"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="mt-5 space-y-4">
+            <div>
+              <label class="ui-label">Ação</label>
+              <select v-model="formularioAcao.acao" class="ui-input">
+                <option>Verificar na gôndola</option>
+                <option>Aplicar desconto</option>
+                <option>Separar para quebra</option>
+                <option>Devolver ao fornecedor</option>
+                <option>Resolvido</option>
+              </select>
+            </div>
+            <div>
+              <label class="ui-label">Responsável</label>
+              <input v-model.trim="formularioAcao.responsavel" class="ui-input" required maxlength="80" placeholder="Nome ou matrícula" />
+            </div>
+          </div>
+          <div class="mt-6 flex justify-end gap-2">
+            <button type="button" class="ui-btn-secondary" @click="modalAcaoAberto = false">Cancelar</button>
+            <button type="submit" class="ui-btn-primary"><i class="fas fa-check"></i>Salvar ação</button>
+          </div>
+        </form>
+      </div>
+
       <!-- ===== MODAL FORNECEDOR ===== -->
       <div v-if="modalFornecedorAberto && fornecedorSelecionado"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
@@ -1350,7 +1363,7 @@ const exportarDetalhamentoSetor = async () => {
         <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
           @click.stop>
           <div
-            class="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
+            class="bg-blue-700 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
             <div>
               <h2 class="text-xl font-bold"><i class="fas fa-truck mr-2"></i>{{ fornecedorSelecionado }}</h2>
               <p class="text-blue-100 text-sm mt-1">{{ itensFornecedor.length }} itens deste fornecedor</p>

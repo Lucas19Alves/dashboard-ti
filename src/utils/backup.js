@@ -1,80 +1,247 @@
 import { db } from '../db/appDb'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
+const BACKUP_VERSION = 2
+const GZIP_MAGIC = [0x1f, 0x8b]
 
-const carregarStatusLocal = () => {
+const limparStatusLocalLegado = () => {
   try {
-    const raw = localStorage.getItem(STATUS_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    localStorage.removeItem(STATUS_STORAGE_KEY)
   } catch {
-    return {}
+    // A importação continua válida quando o navegador bloqueia o localStorage.
   }
 }
 
-const salvarStatusLocal = (map) => {
-  try {
-    localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(map || {}))
-  } catch {
+const baixarBlob = (blob, nome) => {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = nome
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+const criarNomeBackup = (compactado) => {
+  const agora = new Date()
+  const data = agora.toISOString().slice(0, 10)
+  const hora = agora.toTimeString().slice(0, 8).replaceAll(':', '-')
+  return `dashboard-ti-backup-${data}-${hora}.json${compactado ? '.gz' : ''}`
+}
+
+const compactarGzip = async (blob) => {
+  if (typeof CompressionStream === 'undefined') return null
+
+  const stream = blob.stream().pipeThrough(new CompressionStream('gzip'))
+  return new Response(stream, {
+    headers: { 'Content-Type': 'application/gzip' }
+  }).blob()
+}
+
+const arquivoEhGzip = async (file) => {
+  const bytes = new Uint8Array(await file.slice(0, 2).arrayBuffer())
+  return bytes[0] === GZIP_MAGIC[0] && bytes[1] === GZIP_MAGIC[1]
+}
+
+const lerTextoBackup = async (file) => {
+  if (!(await arquivoEhGzip(file))) return file.text()
+
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('Este navegador não oferece suporte à leitura de backups compactados.')
   }
+
+  try {
+    const stream = file.stream().pipeThrough(new DecompressionStream('gzip'))
+    return await new Response(stream).text()
+  } catch {
+    throw new Error('O arquivo compactado está corrompido ou incompleto.')
+  }
+}
+
+export const validarBackup = (dados) => {
+  if (!dados || typeof dados !== 'object' || Array.isArray(dados)) {
+    throw new Error('O arquivo não contém um backup válido.')
+  }
+
+  if (!Number.isInteger(dados.versao) || dados.versao < 1 || dados.versao > BACKUP_VERSION) {
+    throw new Error('A versão deste backup não é compatível com o sistema.')
+  }
+
+  if (!Array.isArray(dados.auditorias) || !Array.isArray(dados.vencimentos)) {
+    throw new Error('Backup inválido: auditorias ou vencimentos estão ausentes.')
+  }
+
+  const registroInvalido = [...dados.auditorias, ...dados.vencimentos]
+    .some(item => !item || typeof item !== 'object' || Array.isArray(item))
+
+  if (registroInvalido) {
+    throw new Error('Backup inválido: um ou mais registros estão corrompidos.')
+  }
+
+  return dados
+}
+
+const numero = valor => Number.isFinite(Number(valor)) ? Number(valor) : 0
+
+const converterSessaoRegional = (sessao, regiao, indice) => {
+  const lojas = Array.isArray(sessao.stores) ? sessao.stores : []
+  const resumo = sessao.summary && typeof sessao.summary === 'object' ? sessao.summary : {}
+  const data = sessao.isoDate || sessao.weekStart || ''
+  const hoje = new Date().toISOString().slice(0, 10)
+  const status = data && data < hoje ? 'fechada' : 'em_andamento'
+  const totalItens = numero(resumo.totalSku)
+  const itensPendentes = numero(resumo.pendingItems)
+  const totalLidos = numero(resumo.updatedItems) || Math.max(0, totalItens - itensPendentes)
+  const porLoja = Object.fromEntries(lojas.map((loja, lojaIndice) => {
+    const nome = loja.name || loja.code || `Loja ${lojaIndice + 1}`
+    return [nome, {
+      lidos: numero(loja.updatedItems),
+      pendentes: numero(loja.pendingItems),
+      comProblema: numero(loja.outdatedItems),
+      desatualizados: numero(loja.outdatedItems),
+      total: numero(loja.totalSku),
+      cancelada: Boolean(loja.cancelled || loja.isCancelled)
+    }]
+  }))
+  const dados = lojas.map(loja => ({
+    Código: loja.code || '',
+    Produto: loja.name || '',
+    Setor: loja.name || regiao || 'Regional',
+    Local: loja.name || '',
+    Situação: loja.cancelled || loja.isCancelled ? 'Auditoria cancelada' : loja.status || 'Ativa',
+    'Estoque atual': numero(loja.totalSku),
+    _regional: true,
+    _totalSku: numero(loja.totalSku),
+    _pendentes: numero(loja.pendingItems),
+    _atualizados: numero(loja.updatedItems),
+    _desatualizados: numero(loja.outdatedItems),
+    _percentualLido: numero(loja.readPct),
+    _percentualPendente: numero(loja.pendingPct),
+    _precisao: numero(loja.accuracyPct),
+    _cancelada: Boolean(loja.cancelled || loja.isCancelled)
+  }))
+  const analise = {
+    totalItens,
+    totalLidos,
+    itensLidos: totalLidos,
+    itensLidosCorretamente: totalLidos,
+    itensPendentes,
+    itensAtualizados: numero(resumo.updatedItems),
+    itensDesatualizados: numero(resumo.outdatedItems),
+    itensLidosComProblema: numero(resumo.outdatedItems),
+    itensComEstoqueZero: 0,
+    itensLidoNaoPertence: 0,
+    itensComEstoqueZeroDetalhes: [],
+    itensLidoNaoPertenceDetalhes: [],
+    parcialPercentual: numero(resumo.pendingPct),
+    percentualConclusao: numero(resumo.readPct),
+    usuarios: [],
+    porUsuario: {},
+    porSetor: porLoja,
+    porLocal: porLoja,
+    setoresParados: lojas.filter(loja => numero(loja.updatedItems) === 0).map(loja => loja.name || loja.code),
+    locaisSemLeitura: lojas.filter(loja => numero(loja.updatedItems) === 0).map(loja => loja.name || loja.code),
+    regional: {
+      regiao,
+      sessaoId: sessao.id || `sessao-${indice + 1}`,
+      dia: sessao.dayLabel || '',
+      arquivoOrigem: sessao.sourceFile || '',
+      enviadoEm: sessao.uploadedAt || '',
+      resumo,
+      previsao: sessao.forecast || null
+    }
+  }
+
+  return {
+    data,
+    tipo: sessao.auditType || 'Presença',
+    sku: totalItens,
+    status,
+    dados,
+    analise,
+    parcial: analise.parcialPercentual,
+    total: totalItens,
+    metaAlcancada: analise.parcialPercentual <= 3,
+    origem: 'backup-regional'
+  }
+}
+
+export const normalizarFormatoBackup = dados => {
+  if (dados && Array.isArray(dados.sessions)) {
+    const regiao = dados.regionId || 'regional'
+    return {
+      versao: BACKUP_VERSION,
+      geradoEm: dados.exportedAt || new Date().toISOString(),
+      auditorias: dados.sessions.map((sessao, indice) => converterSessaoRegional(sessao || {}, regiao, indice)),
+      vencimentos: [],
+      origem: 'backup-regional',
+      regiao
+    }
+  }
+
+  if (dados && Array.isArray(dados.auditorias) && Array.isArray(dados.vencimentos) && dados.versao == null) {
+    return { ...dados, versao: 1, origem: 'backup-json-legado' }
+  }
+
+  return dados
 }
 
 export const exportarBackupJson = async () => {
   const auditorias = await db.auditorias.toArray()
   const vencimentos = await db.vencimentos.toArray()
-  const statusMap = carregarStatusLocal()
-  const auditoriasComStatus = auditorias.map(a => {
-    const statusPersistido = statusMap && statusMap[a.id]
-    return {
-      ...a,
-      status: statusPersistido || a.status || 'em_andamento'
-    }
-  })
+  const auditoriasComStatus = auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' }))
   const payload = {
-    versao: 1,
+    versao: BACKUP_VERSION,
     geradoEm: new Date().toISOString(),
     auditorias: auditoriasComStatus,
     vencimentos
   }
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `dashboard-ti-backup-${new Date().toISOString().slice(0, 10)}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+
+  const jsonBlob = new Blob([JSON.stringify(payload)], {
+    type: 'application/json;charset=utf-8'
+  })
+  const gzipBlob = await compactarGzip(jsonBlob)
+  const blobFinal = gzipBlob || jsonBlob
+
+  baixarBlob(blobFinal, criarNomeBackup(Boolean(gzipBlob)))
+
+  return {
+    compactado: Boolean(gzipBlob),
+    tamanhoOriginal: jsonBlob.size,
+    tamanhoFinal: blobFinal.size
+  }
 }
 
 export const importarBackupJson = async (file) => {
-  const texto = await file.text()
-  const dados = JSON.parse(texto)
-  const auditorias = Array.isArray(dados.auditorias) ? dados.auditorias : []
-  const vencimentos = Array.isArray(dados.vencimentos) ? dados.vencimentos : []
+  if (!file || typeof file.slice !== 'function') {
+    throw new Error('Selecione um arquivo de backup válido.')
+  }
+
+  const texto = await lerTextoBackup(file)
+  let dados
+  try {
+    dados = validarBackup(normalizarFormatoBackup(JSON.parse(texto)))
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error('O arquivo não contém um JSON válido.')
+    }
+    throw error
+  }
+
+  const auditorias = dados.auditorias
+  const vencimentos = dados.vencimentos
+
+  // A validação acontece antes desta transação para nunca apagar a base atual
+  // por causa de um arquivo incompleto ou de formato incorreto.
   await db.transaction('rw', db.auditorias, db.vencimentos, async () => {
     await db.auditorias.clear()
     await db.vencimentos.clear()
-    if (auditorias.length) {
-      await db.auditorias.bulkAdd(
-        auditorias.map(a => {
-          const copia = { ...a }
-          if (!copia.id) delete copia.id
-          return copia
-        })
-      )
-    }
-    if (vencimentos.length) {
-      await db.vencimentos.bulkAdd(vencimentos)
-    }
+    if (auditorias.length) await db.auditorias.bulkAdd(auditorias)
+    if (vencimentos.length) await db.vencimentos.bulkAdd(vencimentos)
   })
-  const statusMap = {}
-  auditorias.forEach(a => {
-    if (a && a.id != null) {
-      statusMap[a.id] = a.status === 'fechada' ? 'fechada' : 'em_andamento'
-    }
-  })
-  salvarStatusLocal(statusMap)
-  return { auditorias, vencimentos }
+
+  limparStatusLocalLegado()
+
+  return { auditorias, vencimentos, versao: dados.versao, origem: dados.origem || 'dashboard-ti' }
 }

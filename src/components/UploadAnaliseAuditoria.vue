@@ -18,7 +18,7 @@
           <input 
             type="file"
             id="fileInput"
-            accept=".xlsx,.xls,.csv"
+            accept=".xlsx,.csv"
             @change="handleFileChange"
             class="hidden"
           />
@@ -37,7 +37,7 @@
                   Clique para selecionar ou arraste o arquivo aqui
                 </p>
                 <p class="text-sm text-gray-500 mt-1">
-                  Aceita .xlsx, .xls, .csv
+                  Aceita .xlsx e .csv
                 </p>
               </div>
             </div>
@@ -94,7 +94,7 @@
       <!-- Total de Itens -->
       <div 
         @click="abrirModal('total')"
-        class="bg-linear-to-br from-blue-50 to-blue-100 rounded-lg shadow-lg p-6 border-l-4 border-blue-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -108,7 +108,7 @@
       <!-- Itens Lidos Corretamente -->
       <div 
         @click="abrirModal('lidos')"
-        class="bg-linear-to-br from-green-50 to-green-100 rounded-lg shadow-lg p-6 border-l-4 border-green-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -122,7 +122,7 @@
       <!-- Itens Pendentes -->
       <div 
         @click="abrirModal('pendentes')"
-        class="bg-linear-to-br from-orange-50 to-orange-100 rounded-lg shadow-lg p-6 border-l-4 border-orange-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -136,7 +136,7 @@
       <!-- Itens Com Problema -->
       <div 
         @click="abrirModal('problema')"
-        class="bg-linear-to-br from-red-50 to-red-100 rounded-lg shadow-lg p-6 border-l-4 border-red-600 cursor-pointer hover:shadow-xl hover:scale-105 transition-all"
+        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -164,7 +164,7 @@
     <!-- Insights de Setores e Locais -->
     <div v-if="analise" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Setores Parados -->
-      <div v-if="analise.setoresParados.length > 0" class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-red-500">
+      <div v-if="analise.setoresParados.length > 0" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 class="font-bold text-gray-800 mb-3">
           <i class="fas fa-exclamation-circle text-red-600 mr-2"></i>
           Setores Parados
@@ -177,7 +177,7 @@
       </div>
 
       <!-- Locais sem Leitura -->
-      <div v-if="analise.locaisSemLeitura.length > 0" class="bg-white rounded-lg shadow-lg p-6 border-l-4 border-yellow-500">
+      <div v-if="analise.locaisSemLeitura.length > 0" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 class="font-bold text-gray-800 mb-3">
           <i class="fas fa-map-marker-alt text-yellow-600 mr-2"></i>
           Locais sem Leitura
@@ -275,11 +275,11 @@ const abrirSeletor = () => {
 
 const validarArquivo = (file) => {
   erroUpload.value = ''
-  const permitido = ['.xlsx', '.xls', '.csv']
+  const permitido = ['.xlsx', '.csv']
   const nome = file.name.toLowerCase()
   const okExt = permitido.some(ext => nome.endsWith(ext))
   if (!okExt) {
-    erroUpload.value = 'Tipo de arquivo inválido. Use .xlsx, .xls ou .csv.'
+    erroUpload.value = 'Tipo de arquivo inválido. Use .xlsx ou .csv.'
     return false
   }
   const max = 20 * 1024 * 1024

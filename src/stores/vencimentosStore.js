@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import * as XLSX from 'xlsx'
 import { db } from '../db/appDb'
+import { lerPlanilha } from '../utils/planilha'
 
 export const useVencimentosStore = defineStore('vencimentos', () => {
   const itens = ref([])
@@ -80,12 +80,17 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
   }
 
   const processarExcelVencimentos = async (file) => {
-    const buffer = await file.arrayBuffer()
-    const data = new Uint8Array(buffer)
-    const workbook = XLSX.read(data, { type: 'array' })
-    const primeiraAba = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[primeiraAba]
-    const linhas = XLSX.utils.sheet_to_json(worksheet)
+    const { linhas } = await lerPlanilha(file)
+    const anteriores = await db.vencimentos.toArray()
+    const acoesAnteriores = new Map(anteriores.map(item => [
+      `${item._codigo}|${item._validadeISO}`,
+      {
+        _acao: item._acao || '',
+        _responsavel: item._responsavel || '',
+        _acaoEm: item._acaoEm || '',
+        _historicoAcoes: item._historicoAcoes || []
+      }
+    ]))
 
     const resultado = linhas.map((row) => {
       const situacao = row['Situação'] || ''
@@ -103,6 +108,7 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
       const usuario = row['Usuário'] || row['Usuario'] || ''
       const statusPrazo = classificarPrazo(dias)
 
+      const acaoAnterior = acoesAnteriores.get(`${codigo}|${toISODate(validade)}`) || {}
       return {
         ...row,
         _situacao: String(situacao),
@@ -118,7 +124,8 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
         _local: String(local).trim(),
         _codigo: codigo,
         _produto: produto,
-        _usuario: usuario
+        _usuario: usuario,
+        ...acaoAnterior
       }
     })
 
@@ -126,7 +133,8 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     analise.value = analisar(resultado)
     try {
       await db.vencimentos.clear()
-      await db.vencimentos.bulkAdd(resultado)
+      const ids = await db.vencimentos.bulkAdd(resultado, { allKeys: true })
+      ids.forEach((id, indice) => { resultado[indice].id = id })
     } catch (e) {
       console.error('Erro ao salvar vencimentos no IndexedDB', e)
     }
@@ -187,12 +195,42 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     }
   }
 
+  const registrarAcao = async (item, acao, responsavel) => {
+    if (!item?.id) throw new Error('Item sem identificação no banco local.')
+    const registro = {
+      acao: String(acao || '').trim(),
+      responsavel: String(responsavel || '').trim(),
+      em: new Date().toISOString()
+    }
+    if (!registro.acao || !registro.responsavel) {
+      throw new Error('Informe a ação e o responsável.')
+    }
+    const historico = [...(item._historicoAcoes || []), registro]
+    await db.vencimentos.update(item.id, {
+      _acao: registro.acao,
+      _responsavel: registro.responsavel,
+      _acaoEm: registro.em,
+      _historicoAcoes: historico
+    })
+    const atualizacao = {
+      _acao: registro.acao,
+      _responsavel: registro.responsavel,
+      _acaoEm: registro.em,
+      _historicoAcoes: historico
+    }
+    Object.assign(item, atualizacao)
+    const itemOriginal = itens.value.find(registroAtual => registroAtual.id === item.id)
+    if (itemOriginal && itemOriginal !== item) Object.assign(itemOriginal, atualizacao)
+    return registro
+  }
+
   return {
     itens,
     analise,
     setores,
     processarExcelVencimentos,
     carregarVencimentosPersistidos,
+    registrarAcao,
     limparVencimentos
   }
 })

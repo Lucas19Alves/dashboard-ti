@@ -1,17 +1,14 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { exportarBackupJson, importarBackupJson } from '../utils/backup'
+import StatCard from '../components/ui/StatCard.vue'
+import UiButton from '../components/ui/UiButton.vue'
+import UiPageHeader from '../components/ui/UiPageHeader.vue'
 
 const auditoriasStore = useAuditoriasStore()
 const vencStore = useVencimentosStore()
-
-onMounted(() => {
-  auditoriasStore.carregarAuditoriasPersistidas()
-  vencStore.carregarVencimentosPersistidos()
-})
 
 const totalAuditorias = computed(() => Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.length : 0)
 const auditoriasAbertas = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(a => a && a.status !== 'fechada').length : 0))
@@ -88,14 +85,38 @@ const dispararImportarBackup = () => {
   importarInput.value?.click()
 }
 
+const formatarTamanho = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const handleExportarBackup = async () => {
+  try {
+    const resultado = await exportarBackupJson()
+    const reducao = resultado.tamanhoOriginal > 0
+      ? Math.round((1 - resultado.tamanhoFinal / resultado.tamanhoOriginal) * 100)
+      : 0
+    const detalhe = resultado.compactado
+      ? `${formatarTamanho(resultado.tamanhoFinal)} (${reducao}% menor)`
+      : formatarTamanho(resultado.tamanhoFinal)
+    auditoriasStore.addToast(`Backup exportado: ${detalhe}.`, 'success')
+  } catch (err) {
+    auditoriasStore.addToast('Erro ao exportar backup: ' + (err?.message || 'desconhecido'), 'error')
+  }
+}
+
 const handleArquivoBackup = async (e) => {
   const arquivo = e.target.files?.[0]
   if (!arquivo) return
   try {
-    await importarBackupJson(arquivo)
+    const resultado = await importarBackupJson(arquivo)
     await auditoriasStore.carregarAuditoriasPersistidas()
     await vencStore.carregarVencimentosPersistidos()
-    auditoriasStore.addToast('Backup importado com sucesso!', 'success')
+    const mensagem = resultado.origem === 'backup-regional'
+      ? `Backup regional convertido: ${resultado.auditorias.length} auditorias importadas.`
+      : 'Backup importado com sucesso!'
+    auditoriasStore.addToast(mensagem, 'success')
   } catch (err) {
     auditoriasStore.addToast('Erro ao importar backup: ' + (err?.message || 'desconhecido'), 'error')
   } finally {
@@ -132,118 +153,45 @@ const statusAuditorias = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8">
+  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8">
     <div class="max-w-7xl mx-auto space-y-6">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <div class="h-12 w-12 rounded-xl bg-blue-600/10 flex items-center justify-center">
-            <i class="fas fa-home text-2xl text-blue-600"></i>
-          </div>
-          <div>
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Painel Operacional</h1>
-            <p class="text-sm text-gray-500 mt-1">
-              Visão rápida das validades e auditorias da loja.
-            </p>
-          </div>
-        </div>
-        <div class="flex flex-wrap gap-2 justify-start md:justify-end">
-          <RouterLink
-            to="/vencimentos"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 shadow-sm"
-          >
+      <UiPageHeader
+        title="Painel Operacional"
+        subtitle="Visão rápida das validades e auditorias da loja."
+        icon="fas fa-home"
+      >
+        <template #actions>
+          <UiButton to="/vencimentos" variant="warning">
             <i class="fas fa-clock"></i>
             Ver detalhes de Validades
-          </RouterLink>
-          <RouterLink
-            to="/auditorias"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 shadow-sm"
-          >
+          </UiButton>
+          <UiButton to="/auditorias">
             <i class="fas fa-clipboard-check"></i>
             Ver Auditorias
-          </RouterLink>
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 shadow-sm"
-            @click="exportarBackupJson"
-          >
+          </UiButton>
+          <UiButton variant="success" @click="handleExportarBackup">
             <i class="fas fa-download"></i>
             Exportar backup
-          </button>
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 shadow-sm"
-            @click="dispararImportarBackup"
-          >
+          </UiButton>
+          <UiButton variant="dark" @click="dispararImportarBackup">
             <i class="fas fa-upload"></i>
             Importar backup
-          </button>
+          </UiButton>
           <input
             ref="importarInput"
             type="file"
-            accept="application/json"
+            accept=".json,.gz,.json.gz,application/json,application/gzip"
             class="hidden"
             @change="handleArquivoBackup"
           >
-        </div>
-      </div>
+        </template>
+      </UiPageHeader>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Itens críticos</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-red-50 text-red-600">
-              <i class="fas fa-bolt text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold" :class="totalCriticosPrazo > 0 ? 'text-red-700' : 'text-slate-700'">
-            {{ totalCriticosPrazo }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Vencidos, hoje ou até 3 dias.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Itens monitorados</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-green-50 text-green-600">
-              <i class="fas fa-box-open text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-green-700">
-            {{ resumoVenc.total }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Itens com validade acompanhada.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias abertas</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
-              <i class="fas fa-clipboard-list text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-blue-700">
-            {{ auditoriasAbertas }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Pendentes de conclusão.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias totais</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-indigo-50 text-indigo-600">
-              <i class="fas fa-history text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-indigo-700">
-            {{ totalAuditorias }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Histórico registrado no sistema.
-          </p>
-        </div>
+        <StatCard title="Itens críticos" :value="totalCriticosPrazo" description="Vencidos, hoje ou até 3 dias." icon="fas fa-bolt" tone="red" :critical="totalCriticosPrazo > 0" />
+        <StatCard title="Itens monitorados" :value="resumoVenc.total" description="Itens com validade acompanhada." icon="fas fa-box-open" tone="green" />
+        <StatCard title="Auditorias abertas" :value="auditoriasAbertas" description="Pendentes de conclusão." icon="fas fa-clipboard-list" tone="blue" />
+        <StatCard title="Auditorias totais" :value="totalAuditorias" description="Histórico registrado no sistema." icon="fas fa-history" tone="indigo" />
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">

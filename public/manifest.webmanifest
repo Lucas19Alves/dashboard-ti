@@ -1,0 +1,18 @@
+{
+  "name": "Dashboard TI",
+  "short_name": "Dashboard TI",
+  "description": "Auditorias de loja e controle de vencimentos.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
