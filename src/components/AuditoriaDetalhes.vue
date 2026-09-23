@@ -11,7 +11,7 @@
       @click.stop
     >
       <!-- Header -->
-      <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-6 flex items-center justify-between">
+      <div class="bg-blue-700 text-white p-6 flex items-center justify-between">
         <div>
           <h2 class="text-3xl font-bold">{{ auditoria.tipo }}</h2>
           <p class="text-blue-100 mt-1">Data: {{ auditoria.data }} | SKU: {{ auditoria.sku }}</p>
@@ -62,19 +62,19 @@
           <!-- Cards de Métricas (se houver dados) -->
           <template v-else>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="bg-linear-to-br from-blue-50 to-blue-100 rounded-lg p-6 border-l-4 border-blue-600">
+              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Total de Itens</p>
                 <p class="text-4xl font-bold text-blue-600 mt-2">{{ analise?.totalItens || 0 }}</p>
               </div>
-              <div class="bg-linear-to-br from-green-50 to-green-100 rounded-lg p-6 border-l-4 border-green-600">
+              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Itens Lidos</p>
                 <p class="text-4xl font-bold text-green-600 mt-2">{{ analise?.itensLidos || 0 }}</p>
               </div>
-              <div class="bg-linear-to-br from-orange-50 to-orange-100 rounded-lg p-6 border-l-4 border-orange-600">
+              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Itens NÃO Lidos</p>
                 <p class="text-4xl font-bold text-orange-600 mt-2">{{ analise?.itensPendentes || 0 }}</p>
               </div>
-              <div class="bg-linear-to-br from-purple-50 to-purple-100 rounded-lg p-6 border-l-4 border-purple-600">
+              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Parcial (%)</p>
                 <p class="text-4xl font-bold text-purple-600 mt-2">{{ analise?.parcialPercentual || 0 }}%</p>
               </div>
@@ -86,7 +86,7 @@
               <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
                 <div 
                   :style="{ width: (100 - (analise?.parcialPercentual || 0)) + '%' }"
-                  class="bg-gradient-to-r from-green-500 to-green-600 h-full transition-all"
+                  class="bg-green-600 h-full transition-all"
                 />
               </div>
               <p class="text-sm text-gray-600 mt-2">

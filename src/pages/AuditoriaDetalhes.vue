@@ -6,6 +6,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
+import UiTabs from '../components/ui/UiTabs.vue'
 import { printTableInNewWindow, printHtmlInNewWindow } from '../utils/print'
 
 const normalizar = (valor) => {
@@ -110,6 +111,8 @@ const store = useAuditoriasStore()
 const auditoria = computed(() => {
   return store.auditorias.find(a => a.id === parseInt(route.params.id))
 })
+
+const ehBackupRegional = computed(() => auditoria.value?.origem === 'backup-regional' || Boolean(auditoria.value?.analise?.regional))
 
 const colunasModal = computed(() => {
   if (auditoria.value?.tipo === 'Etiqueta') {
@@ -239,8 +242,12 @@ const collapsedSections = ref({
 // UI/UX Improvements - Filter states
 const filtroPerformanceUser = ref('all')   // Users tab performance filter
 
-const abas = ['dashboard', 'usuarios', 'dados', 'estatisticas']
-const abasDisplay = { dashboard: 'Dashboard', usuarios: 'Usuários', dados: 'Dados', estatisticas: 'Estatísticas' }
+const abasDetalhes = [
+  { value: 'dashboard', label: 'Dashboard', icon: 'fas fa-chart-line' },
+  { value: 'usuarios', label: 'Usuários', icon: 'fas fa-users-cog' },
+  { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
+  { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' }
+]
 
 const readOnly = computed(() => auditoria.value?.status === 'fechada')
 const statusBadge = computed(() => {
@@ -2150,16 +2157,6 @@ const voltar = () => {
   router.push('/auditorias')
 }
 
-const iconeAba = (tab) => {
-  const icones = {
-    'dashboard': 'fas fa-chart-line',
-    'usuarios': 'fas fa-users-cog',
-    'dados': 'fas fa-database',
-    'estatisticas': 'fas fa-chart-bar'
-  }
-  return icones[tab]
-}
-
 const abrirModalMetrica = (tipo) => {
   metricaSelecionada.value = tipo
   modalMetricaAberto.value = true
@@ -2441,9 +2438,9 @@ const fecharRelatorio = () => {
 </script>
 
 <template>
-  <div v-if="auditoria" class="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
+  <div v-if="auditoria" class="min-h-screen bg-slate-50">
     <!-- Header -->
-    <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-6 shadow-lg">
+    <div class="bg-blue-700 text-white p-6 shadow-lg">
       <div class="max-w-7xl mx-auto flex items-center justify-between">
         <div>
           <button 
@@ -2528,23 +2525,15 @@ const fecharRelatorio = () => {
       </div>
     </div>
 
-    <!-- Abas -->
-    <div class="sticky top-0 z-10 bg-white border-b shadow-sm">
-      <div class="max-w-7xl mx-auto flex gap-0">
-        <button
-          v-for="tab in abas"
-          :key="tab"
-          @click="abaAtiva = tab"
-          :class="[
-            'px-6 py-4 font-medium transition border-b-2',
-            abaAtiva === tab
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          ]"
-        >
-          <i :class="iconeAba(tab)" class="mr-2"></i>{{ abasDisplay[tab] }}
-        </button>
+    <div v-if="ehBackupRegional" class="mx-auto mt-4 max-w-7xl px-4 md:px-6">
+      <div class="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 ring-1 ring-blue-100">
+        <i class="fas fa-building mr-2 text-blue-600"></i>
+        Dados migrados do backup regional {{ auditoria.analise?.regional?.regiao || '' }}. Os registros desta auditoria representam lojas consolidadas.
       </div>
+    </div>
+
+    <div class="mx-auto mt-4 max-w-7xl px-4 md:px-6">
+      <UiTabs v-model="abaAtiva" :items="abasDetalhes" sticky />
     </div>
 
     <!-- Conteúdo -->
@@ -2663,7 +2652,7 @@ const fecharRelatorio = () => {
                   <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       :style="{ width: Math.min(metricasGerais?.percentualConclusao || 0, 100) + '%' }"
-                      class="h-full bg-linear-to-r from-green-500 to-green-600 transition-all duration-500"
+                      class="h-full bg-green-600 transition-all duration-500"
                     />
                   </div>
                   <p class="text-xs text-gray-600 mt-1">
@@ -2682,7 +2671,7 @@ const fecharRelatorio = () => {
                   <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       :style="{ width: Math.min(metricasGerais?.percentualPendente || 0, 100) + '%' }"
-                      class="h-full bg-linear-to-r from-orange-500 to-orange-600 transition-all duration-500"
+                      class="h-full bg-orange-600 transition-all duration-500"
                     />
                   </div>
                   <p class="text-xs mt-1" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
@@ -2952,7 +2941,7 @@ const fecharRelatorio = () => {
               </div>
               <p class="text-3xl font-bold text-emerald-700">{{ analiseUsuarios.mediaLidasPorUsuario }}</p>
             </div>
-            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 border-l-4 border-l-purple-500 p-5 flex flex-col gap-2">
+            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-2">
               <div class="flex items-center justify-between">
                 <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Melhor Desempenho</p>
                 <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-purple-50 text-purple-600">
@@ -3949,7 +3938,7 @@ const fecharRelatorio = () => {
         @click.stop
       >
         <!-- Header -->
-        <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
+        <div class="bg-blue-700 text-white p-4 flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold">{{ tituloModalItens }}</h2>
             <p class="text-blue-100 text-sm mt-1">{{ itensModal.length }} itens</p>
@@ -4078,7 +4067,7 @@ const fecharRelatorio = () => {
         style="max-height: 95vh;"
       >
         <!-- Header -->
-        <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between print:bg-blue-800">
+        <div class="bg-blue-700 text-white p-4 flex items-center justify-between print:bg-blue-800">
           <div>
             <h2 class="text-xl font-bold">Relatório de Auditoria</h2>
             <p class="text-blue-100 text-sm">{{ auditoria.tipo }} - {{ dataAuditoriaBR }}</p>
@@ -4094,7 +4083,7 @@ const fecharRelatorio = () => {
         <!-- Content - Compacto para Print -->
         <div class="overflow-y-auto p-6 space-y-6 text-sm bg-slate-50">
           <div ref="resultadoGeralSetorExportRef" class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-            <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white px-6 py-4 flex items-center justify-between gap-3">
+            <div class="bg-blue-700 text-white px-6 py-4 flex items-center justify-between gap-3">
               <h3 class="text-lg font-bold flex items-center gap-2">
                 <i class="fas fa-chart-bar"></i>
                 Relatório Geral
@@ -4206,7 +4195,7 @@ const fecharRelatorio = () => {
 
           <!-- CARD 3: Top 10 Locais com Mais Pendentes (Inferior Esquerda) -->
           <div ref="topLocaisPendentesExportRef" class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-            <div class="bg-linear-to-r from-orange-600 to-orange-800 text-white px-6 py-4 flex items-center justify-between gap-3">
+            <div class="bg-orange-700 text-white px-6 py-4 flex items-center justify-between gap-3">
               <div>
                 <h3 class="text-lg font-bold flex items-center gap-2">
                   <i class="fas fa-map-marker-alt"></i>
@@ -4248,7 +4237,7 @@ const fecharRelatorio = () => {
 
           <!-- CARD 4: Locais Sem Leitura (Abaixo de Tudo) -->
           <div v-if="dadosRelatorio?.locaisSemLeitura.length > 0" class="bg-white rounded-xl shadow-md border border-red-300 overflow-hidden">
-            <div class="bg-linear-to-r from-red-600 to-red-800 text-white px-6 py-4">
+            <div class="bg-red-700 text-white px-6 py-4">
               <h3 class="text-lg font-bold flex items-center gap-2">
                 <i class="fas fa-exclamation-triangle"></i>
                 Locais Sem Leitura ({{ dadosRelatorio?.locaisSemLeitura.length }} locais)
@@ -4296,7 +4285,7 @@ const fecharRelatorio = () => {
         class="bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
         @click.stop
       >
-        <div class="bg-linear-to-r from-blue-600 to-purple-700 text-white p-4 flex items-center justify-between">
+        <div class="bg-blue-700 text-white p-4 flex items-center justify-between">
           <div>
             <h2 class="text-xl font-bold">Detalhes do Usuário</h2>
             <p class="text-sm text-blue-100 mt-1">{{ usuarioDetalhes.nome }}</p>

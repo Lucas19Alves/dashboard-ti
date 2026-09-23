@@ -10,7 +10,7 @@
       @click.stop
     >
       <!-- Header -->
-      <div class="bg-linear-to-r from-blue-600 to-blue-800 text-white p-4 flex items-center justify-between">
+      <div class="bg-blue-700 text-white p-4 flex items-center justify-between">
         <div>
           <h2 class="text-xl font-bold">{{ titulo }}</h2>
           <p class="text-blue-100 text-sm mt-1">{{ subtitulo }}</p>

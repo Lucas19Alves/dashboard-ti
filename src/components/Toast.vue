@@ -1,16 +1,16 @@
 <template>
-  <div class="fixed top-4 right-4 z-50 space-y-2 max-w-md">
+  <div class="fixed right-4 top-20 z-50 w-[min(24rem,calc(100vw-2rem))] space-y-2" aria-live="polite" aria-atomic="true">
     <transition-group name="toast" tag="div">
       <div
         v-for="toast in store.toasts"
         :key="toast.id"
         :class="[
-          'rounded-lg shadow-lg p-4 text-white font-medium animate-slideIn',
+          'rounded-xl border p-4 font-medium shadow-xl backdrop-blur animate-slideIn',
           {
-            'bg-green-500': toast.tipo === 'success',
-            'bg-red-500': toast.tipo === 'error',
-            'bg-yellow-500': toast.tipo === 'warning',
-            'bg-blue-500': toast.tipo === 'info'
+            'border-emerald-200 bg-emerald-50/95 text-emerald-900': toast.tipo === 'success',
+            'border-red-200 bg-red-50/95 text-red-900': toast.tipo === 'error',
+            'border-amber-200 bg-amber-50/95 text-amber-900': toast.tipo === 'warning',
+            'border-blue-200 bg-blue-50/95 text-blue-900': toast.tipo === 'info'
           }
         ]"
       >
@@ -18,7 +18,8 @@
           <span>{{ toast.mensagem }}</span>
           <button 
             @click="store.removeToast(toast.id)"
-            class="ml-4 text-white hover:opacity-75"
+            class="ml-4 opacity-60 hover:opacity-100"
+            aria-label="Fechar notificação"
           >
             <i class="fas fa-times"></i>
           </button>

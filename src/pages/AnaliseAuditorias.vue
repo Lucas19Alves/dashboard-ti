@@ -3,6 +3,9 @@ import { computed, ref, reactive } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useRouter } from 'vue-router'
 import { printHtmlInNewWindow } from '../utils/print'
+import UiButton from '../components/ui/UiButton.vue'
+import UiCard from '../components/ui/UiCard.vue'
+import UiPageHeader from '../components/ui/UiPageHeader.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -682,34 +685,18 @@ const gerarRelatorioPDF = () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-linear-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="h-12 w-12 rounded-xl bg-indigo-600/10 flex items-center justify-center">
-          <i class="fas fa-chart-line text-2xl text-indigo-600"></i>
-        </div>
-        <div>
-          <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Análise Histórica de Auditorias</h1>
-          <p class="text-sm text-gray-500 mt-1">
-            Explore o desempenho das auditorias ao longo do tempo com filtros avançados.
-          </p>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          @click="gerarRelatorioPDF"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium shadow-sm hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          :disabled="!auditoriasParaTabela.length"
-        >
+  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+    <UiPageHeader title="Análise Histórica de Auditorias" subtitle="Explore o desempenho das auditorias ao longo do tempo com filtros avançados." icon="fas fa-chart-line" tone="indigo">
+      <template #actions>
+        <UiButton variant="dark" :disabled="!auditoriasParaTabela.length" @click="gerarRelatorioPDF">
           <i class="fas fa-file-pdf text-base"></i>
           Gerar Relatório PDF
-        </button>
-      </div>
-    </div>
+        </UiButton>
+      </template>
+    </UiPageHeader>
 
     <!-- Filtros -->
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 md:p-5 space-y-4">
+    <UiCard as="div" padding="sm" class="space-y-4 md:p-5">
       <div class="flex flex-wrap gap-3 items-end">
         <div class="flex flex-col gap-1">
           <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Período</label>
@@ -788,7 +775,7 @@ const gerarRelatorioPDF = () => {
           </span>
         </div>
       </div>
-    </div>
+    </UiCard>
 
     <!-- Cards de Resumo -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

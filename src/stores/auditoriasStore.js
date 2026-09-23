@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, toRaw } from 'vue'
-import * as XLSX from 'xlsx'
 import { db } from '../db/appDb'
+import { lerPlanilha } from '../utils/planilha'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 
@@ -16,9 +16,9 @@ const carregarStatusLocal = () => {
   }
 }
 
-const salvarStatusLocal = (map) => {
+const limparStatusLocal = () => {
   try {
-    localStorage.setItem(STATUS_STORAGE_KEY, JSON.stringify(map || {}))
+    localStorage.removeItem(STATUS_STORAGE_KEY)
   } catch {
   }
 }
@@ -100,7 +100,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
 
   // Corrige planilhas com cabeçalhos agrupados (ex: "Auditado em" repetido).
   // Retorna os dados com colunas padrão (Código, Situação, etc.) mapeadas.
-  const corrigirCabecalhoAgrupado = (dadosCompletos, worksheet) => {
+  const corrigirCabecalhoAgrupado = (dadosCompletos) => {
     if (!dadosCompletos || dadosCompletos.length === 0) return dadosCompletos
 
     const todasChaves = new Set()
@@ -111,31 +111,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
 
     if (temColunasEsperadas) return dadosCompletos
 
-    // Tentativa 1: procurar linha real de cabeçalho nas células brutas
-    if (worksheet) {
-      const range = XLSX.utils.decode_range(worksheet['!ref'])
-      let headerRow = -1
-      for (let r = 0; r <= Math.min(range.e.r, 10); r++) {
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const cell = worksheet[XLSX.utils.encode_cell({ r, c })]
-          if (cell && typeof cell.v === 'string' && /^c[oó]digo$/i.test(cell.v.trim())) {
-            headerRow = r
-            break
-          }
-        }
-        if (headerRow >= 0) break
-      }
-      if (headerRow >= 0) {
-        console.log(`⚠️ Cabeçalho real encontrado na linha ${headerRow + 1}. Re-lendo...`)
-        const corrigido = XLSX.utils.sheet_to_json(worksheet, { range: headerRow })
-        if (corrigido.length > 0) {
-          console.log('Colunas corrigidas:', Object.keys(corrigido[0]))
-          return corrigido
-        }
-      }
-    }
-
-    // Tentativa 2: auto-detectar colunas pelos padrões dos dados
+    // Auto-detectar colunas pelos padrões dos dados quando o ERP muda os títulos.
     console.log('⚠️ Colunas padrão não encontradas. Detectando mapeamento automático...')
     const amostra = dadosCompletos.slice(0, Math.min(100, dadosCompletos.length))
     const chaves = [...new Set(amostra.flatMap(r => Object.keys(r)))]
@@ -482,13 +458,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
   }
 
   const detectarTipoArquivo = async (file) => {
-    const buffer = await file.arrayBuffer()
-    const data = new Uint8Array(buffer)
-    const workbook = XLSX.read(data, { type: 'array' })
-    const primeiraAba = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[primeiraAba]
-    let linhas = XLSX.utils.sheet_to_json(worksheet)
-    linhas = corrigirCabecalhoAgrupado(linhas, worksheet)
+    const resultado = await lerPlanilha(file)
+    const linhas = corrigirCabecalhoAgrupado(resultado.linhas)
 
     let etiquetaScore = 0
     let presencaScore = 0
@@ -555,25 +526,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
   const processarExcelPresenca = async (file, opts = {}) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
-      // Ler arquivo como array buffer
-      const buffer = await file.arrayBuffer()
-      console.log('✅ Buffer carregado:', buffer.byteLength, 'bytes')
-      
-      // Processar com XLSX
-      console.log('🔍 Processando com XLSX...')
-      const data = new Uint8Array(buffer)
-      const workbook = XLSX.read(data, { type: 'array' })
-      
-      // Pegar primeira aba
-      const primeiraAba = workbook.SheetNames[0]
-      console.log('📄 Aba: ' + primeiraAba)
-      
-      // Converter para JSON
-      const worksheet = workbook.Sheets[primeiraAba]
-      let dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
-
-      // Corrigir cabeçalho agrupado se necessário
-      dadosCompletos = corrigirCabecalhoAgrupado(dadosCompletos, worksheet)
+      const resultado = await lerPlanilha(file)
+      let dadosCompletos = corrigirCabecalhoAgrupado(resultado.linhas)
 
       if (dadosCompletos.length > 0) {
         const s = (dadosCompletos[0]['Situação'] || dadosCompletos[0]['Situação atual da auditoria'] || '').toString().toLowerCase()
@@ -732,13 +686,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
   const processarExcelEtiqueta = async (file) => {
     console.log('🔍 Lendo arquivo:', file.name)
     try {
-      const buffer = await file.arrayBuffer()
-      const data = new Uint8Array(buffer)
-      const workbook = XLSX.read(data, { type: 'array' })
-      const primeiraAba = workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[primeiraAba]
-      let dadosCompletos = XLSX.utils.sheet_to_json(worksheet)
-      dadosCompletos = corrigirCabecalhoAgrupado(dadosCompletos, worksheet)
+      const resultado = await lerPlanilha(file)
+      let dadosCompletos = corrigirCabecalhoAgrupado(resultado.linhas)
 
       if (dadosCompletos.length > 0) {
         console.log('Colunas encontradas:', Object.keys(dadosCompletos[0]))
@@ -1230,12 +1179,17 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     try {
       const registros = await db.auditorias.toArray()
       const statusMap = carregarStatusLocal()
+      let migrouStatus = false
       auditorias.value = registros.map(r => {
         const id = r.id
         const statusPersistido = statusMap && statusMap[id]
         const status = statusPersistido === 'fechada'
           ? 'fechada'
           : (r.status === 'fechada' ? 'fechada' : 'em_andamento')
+        if (statusPersistido && status !== r.status) {
+          r.status = status
+          migrouStatus = true
+        }
         return {
           id,
           data: r.data,
@@ -1249,6 +1203,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           metaAlcancada: r.metaAlcancada || false
         }
       })
+      if (migrouStatus) await db.auditorias.bulkPut(registros)
+      if (Object.keys(statusMap).length) limparStatusLocal()
     } catch (e) {
       console.error('Erro ao carregar auditorias do IndexedDB', e)
     }
@@ -1277,9 +1233,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
     const completa = { ...novaAuditoria, id }
     auditorias.value.push(completa)
-    const statusMap = carregarStatusLocal()
-    statusMap[completa.id] = completa.status
-    salvarStatusLocal(statusMap)
     return completa
   }
 
@@ -1317,9 +1270,6 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     } catch (e) {
       console.error('Erro ao atualizar auditoria no IndexedDB', e)
     }
-    const statusMap = carregarStatusLocal()
-    statusMap[auditoria.id] = auditoria.status
-    salvarStatusLocal(statusMap)
   }
 
   const deleteAuditoria = async (id) => {

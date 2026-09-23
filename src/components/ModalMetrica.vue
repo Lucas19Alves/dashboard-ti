@@ -82,7 +82,7 @@
             <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 :style="{ width: Math.round((dados.totalLidos / (dados.totalItens || 1)) * 100) + '%' }"
-                class="h-full bg-linear-to-r from-green-500 to-green-600"
+                class="h-full bg-green-600"
               />
             </div>
           </div>
@@ -102,7 +102,7 @@
             <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 :style="{ width: Math.round((pendentesExibidos / (dados.totalItens || 1)) * 100) + '%' }"
-                class="h-full bg-linear-to-r from-orange-500 to-orange-600"
+                class="h-full bg-orange-600"
               />
             </div>
           </div>
@@ -128,7 +128,7 @@
             <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 :style="{ width: Math.round((dados.itensLidosComProblema / (dados.totalItens || 1)) * 100) + '%' }"
-                class="h-full bg-linear-to-r from-red-500 to-red-600"
+                class="h-full bg-red-600"
               />
             </div>
           </div>
@@ -323,13 +323,13 @@ const pendentesExibidos = computed(() => {
 
 const corFundo = computed(() => {
   const cores = {
-    'total': 'bg-gradient-to-r from-blue-600 to-blue-800',
-    'lidos': 'bg-gradient-to-r from-green-600 to-green-800',
-    'pendentes': 'bg-gradient-to-r from-orange-600 to-orange-800',
-    'problema': 'bg-gradient-to-r from-red-600 to-red-800',
-    'desatualizado': 'bg-gradient-to-r from-yellow-500 to-yellow-700'
+    'total': 'bg-blue-700',
+    'lidos': 'bg-green-700',
+    'pendentes': 'bg-orange-700',
+    'problema': 'bg-red-700',
+    'desatualizado': 'bg-yellow-600'
   }
-  return cores[props.tipo] || 'bg-gradient-to-r from-gray-600 to-gray-800'
+  return cores[props.tipo] || 'bg-gray-700'
 })
 
 const classeValor = computed(() => {

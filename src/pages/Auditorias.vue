@@ -1,11 +1,21 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
+import { criarPreviaPlanilha } from '../utils/planilha'
+import StatCard from '../components/ui/StatCard.vue'
+import UiPageHeader from '../components/ui/UiPageHeader.vue'
+import UiTabs from '../components/ui/UiTabs.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
 const abaAtiva = ref('calendario')
+const abasAuditoria = [
+  { value: 'calendario', label: 'Calendário', icon: 'fas fa-calendar' },
+  { value: 'Etiqueta', label: 'Etiqueta', icon: 'fas fa-tag' },
+  { value: 'Presença', label: 'Presença', icon: 'fas fa-check-square' },
+  { value: 'Ruptura', label: 'Ruptura', icon: 'fas fa-exclamation-triangle' }
+]
 const semanaOffset = ref(0) // 0 = atual, -1 = anterior, 1 = próxima
 
 const getPendentesExibidos = (auditoria) => {
@@ -111,10 +121,8 @@ const idParaFechar = ref(null)
 const processando = ref(false)
 const arrastandoUpload = ref(false)
 const erroUpload = ref('')
-
-onMounted(() => {
-  store.carregarAuditoriasPersistidas()
-})
+const previaArquivo = ref(null)
+const carregandoPrevia = ref(false)
 
 const submeterAuditoria = async () => {
   if (!formulario.value.arquivo) {
@@ -177,7 +185,7 @@ const submeterAuditoria = async () => {
         : store.analisarDadosPresenca(dados, skuValor)
     
     // Criar auditoria com dados já processados
-    const novaAuditoria = store.addAuditoria({
+    const novaAuditoria = await store.addAuditoria({
       sku: skuValor || analise.totalItens,
       tipo: tipoEfetivo,
       data: formulario.value.data,
@@ -210,11 +218,11 @@ const submeterAuditoria = async () => {
 const validarArquivoUpload = (file) => {
   erroUpload.value = ''
   if (!file) return false
-  const permitido = ['.xlsx', '.xls', '.csv']
+  const permitido = ['.xlsx', '.csv']
   const nome = file.name.toLowerCase()
   const okExt = permitido.some(ext => nome.endsWith(ext))
   if (!okExt) {
-    erroUpload.value = 'Tipo inválido. Use .xlsx, .xls ou .csv.'
+    erroUpload.value = 'Tipo inválido. Use .xlsx ou .csv.'
     return false
   }
   const max = 20 * 1024 * 1024
@@ -231,14 +239,25 @@ const handleFileChange = async (event) => {
     const file = files[0]
     if (!validarArquivoUpload(file)) return
     formulario.value.arquivo = file
+    carregandoPrevia.value = true
     if (typeof store.detectarTipoArquivo === 'function') {
       try {
-        const t = await store.detectarTipoArquivo(file)
+        const [t, previa] = await Promise.all([
+          store.detectarTipoArquivo(file),
+          criarPreviaPlanilha(file)
+        ])
+        previaArquivo.value = previa
         if (t && ['Etiqueta', 'Presença', 'Ruptura'].includes(t)) {
           formulario.value.tipo = t
           store.addToast(`Tipo detectado automaticamente: ${t}`, 'info')
         }
-      } catch {}
+      } catch (error) {
+        erroUpload.value = error?.message || 'Não foi possível analisar o arquivo.'
+        formulario.value.arquivo = null
+        previaArquivo.value = null
+      } finally {
+        carregandoPrevia.value = false
+      }
     }
   }
 }
@@ -256,6 +275,15 @@ const onDropUpload = (e) => {
   const file = dt.files[0]
   if (!validarArquivoUpload(file)) return
   formulario.value.arquivo = file
+  carregandoPrevia.value = true
+  criarPreviaPlanilha(file)
+    .then(previa => { previaArquivo.value = previa })
+    .catch(error => {
+      erroUpload.value = error?.message || 'Não foi possível analisar o arquivo.'
+      formulario.value.arquivo = null
+      previaArquivo.value = null
+    })
+    .finally(() => { carregandoPrevia.value = false })
 }
 const abrirSeletorUpload = () => {
   const input = document.getElementById('fileInputNovaAuditoria')
@@ -632,140 +660,24 @@ const classesCardDia = (d) => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-linear-to-b from-slate-50 to-slate-100 px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <div class="h-12 w-12 rounded-xl bg-blue-600/10 flex items-center justify-center">
-            <i class="fas fa-search text-2xl text-blue-600"></i>
+  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+      <UiPageHeader title="Auditorias" subtitle="Organize, acompanhe e finalize as auditorias da loja." icon="fas fa-search">
+        <template #actions>
+          <div class="inline-flex max-w-md flex-col gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 sm:flex-row sm:items-center sm:gap-2 md:text-sm">
+            <span class="font-semibold">{{ statusAuditorias.titulo }}</span>
+            <span class="text-[11px] opacity-80 md:text-xs">{{ statusAuditorias.descricao }}</span>
           </div>
-          <div>
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Auditorias</h1>
-            <p class="text-sm text-gray-500 mt-1">
-              Organize, acompanhe e finalize as auditorias da loja.
-            </p>
-          </div>
-        </div>
-        <div
-          class="inline-flex flex-col sm:flex-row sm:items-center sm:justify-end gap-1 sm:gap-2 px-3 py-2 rounded-lg text-xs md:text-sm font-medium bg-gray-100 text-gray-700 max-w-md"
-          :class="statusAuditorias.classe"
-        >
-          <span class="font-semibold">{{ statusAuditorias.titulo }}</span>
-          <span class="text-[11px] md:text-xs opacity-90">
-            {{ statusAuditorias.descricao }}
-          </span>
-        </div>
-      </div>
+        </template>
+      </UiPageHeader>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias ativas</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
-              <i class="fas fa-play text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-blue-700">
-            {{ auditoriasAbertas.length }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Em andamento no momento.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Auditorias fechadas</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-emerald-50 text-emerald-600">
-              <i class="fas fa-lock text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-emerald-700">
-            {{ auditoriasFechadas.length }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Já concluídas e disponíveis no histórico.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Total de auditorias</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-indigo-50 text-indigo-600">
-              <i class="fas fa-clipboard-list text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold text-indigo-700">
-            {{ totalAuditorias }}
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Registradas no sistema.
-          </p>
-        </div>
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-4 flex flex-col justify-between">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[11px] font-medium text-slate-600 uppercase tracking-wide">Parcial média</p>
-            <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-amber-50 text-amber-600">
-              <i class="fas fa-chart-line text-xs"></i>
-            </span>
-          </div>
-          <p class="mt-2 text-2xl md:text-3xl font-bold" :class="parcialMediaGeral > 0 ? 'text-amber-700' : 'text-slate-700'">
-            {{ parcialMediaGeral.toFixed(1) }}%
-          </p>
-          <p class="mt-1 text-[11px] text-slate-500">
-            Quanto falta em média para entregar as auditorias.
-          </p>
-        </div>
+        <StatCard title="Auditorias ativas" :value="auditoriasAbertas.length" description="Em andamento no momento." icon="fas fa-play" tone="blue" />
+        <StatCard title="Auditorias fechadas" :value="auditoriasFechadas.length" description="Concluídas e disponíveis no histórico." icon="fas fa-lock" tone="green" />
+        <StatCard title="Total de auditorias" :value="totalAuditorias" description="Registradas no sistema." icon="fas fa-clipboard-list" tone="indigo" />
+        <StatCard title="Parcial média" :value="`${parcialMediaGeral.toFixed(1)}%`" description="Quanto falta em média para entregar." icon="fas fa-chart-line" tone="amber" />
       </div>
 
-      <!-- Abas -->
-      <div class="flex gap-2 flex-wrap">
-        <button
-          @click="abaAtiva = 'calendario'"
-          :class="[
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-            abaAtiva === 'calendario'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          ]"
-        >
-          <i class="fas fa-calendar"></i>
-          Calendário
-        </button>
-        <button
-          @click="abaAtiva = 'Etiqueta'"
-          :class="[
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-            abaAtiva === 'Etiqueta'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          ]"
-        >
-          <i class="fas fa-tag"></i>
-          Etiqueta
-        </button>
-        <button
-          @click="abaAtiva = 'Presença'"
-          :class="[
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-            abaAtiva === 'Presença'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          ]"
-        >
-          <i class="fas fa-check-square"></i>
-          Presença
-        </button>
-        <button
-          @click="abaAtiva = 'Ruptura'"
-          :class="[
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition',
-            abaAtiva === 'Ruptura'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          ]"
-        >
-          <i class="fas fa-exclamation-triangle"></i>
-          Ruptura
-        </button>
-      </div>
+      <UiTabs v-model="abaAtiva" :items="abasAuditoria" />
 
     <!-- Modal de Confirmação de Exclusão -->
     <div
@@ -889,7 +801,6 @@ const classesCardDia = (d) => {
             @click="abrirDia(d)"
             :class="classesCardDia(d)"
           >
-            <div class="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-blue-500/40 via-indigo-500/40 to-emerald-500/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
             <div class="flex justify-between items-center mb-3">
               <div class="flex flex-col">
                 <span class="text-[11px] uppercase tracking-wide text-gray-400">
@@ -998,7 +909,7 @@ const classesCardDia = (d) => {
                 id="fileInputNovaAuditoria"
                 @change="handleFileChange"
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx,.csv"
                 class="hidden"
               />
               <label
@@ -1014,10 +925,25 @@ const classesCardDia = (d) => {
                     <p class="text-sm font-medium text-gray-700">
                       Clique para selecionar ou arraste o arquivo aqui
                     </p>
-                    <p class="text-xs text-gray-500 mt-1">Aceita .xlsx, .xls, .csv • até 20MB</p>
+                    <p class="text-xs text-gray-500 mt-1">Aceita .xlsx e .csv • até 20MB</p>
                   </div>
                 </div>
               </label>
+            </div>
+            <div v-if="carregandoPrevia" class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+              <i class="fas fa-spinner fa-spin mr-2"></i>Analisando estrutura da planilha…
+            </div>
+            <div v-else-if="previaArquivo" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-800">Pré-visualização validada</p>
+                <span class="text-xs font-medium text-slate-500">{{ previaArquivo.totalLinhas }} linhas · {{ previaArquivo.totalColunas }} colunas</span>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                <span v-for="coluna in previaArquivo.colunas.slice(0, 8)" :key="coluna" class="rounded-md bg-white px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                  {{ coluna }}
+                </span>
+                <span v-if="previaArquivo.colunas.length > 8" class="px-2 py-1 text-[11px] text-slate-500">+{{ previaArquivo.colunas.length - 8 }}</span>
+              </div>
             </div>
             <p class="text-xs text-gray-500 mt-1">Selecione o arquivo Excel com os dados da auditoria</p>
             <p v-if="erroUpload" class="text-xs text-red-600 mt-1">{{ erroUpload }}</p>
