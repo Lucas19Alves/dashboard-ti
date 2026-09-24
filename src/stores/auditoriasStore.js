@@ -324,9 +324,11 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
 
     if (valor instanceof Date && !isNaN(valor.getTime())) {
-      const yyyy = valor.getFullYear()
-      const mm = String(valor.getMonth() + 1).padStart(2, '0')
-      const dd = String(valor.getDate()).padStart(2, '0')
+      // Datas sem horário vindas do Excel são representadas como meia-noite UTC.
+      // Usar getters locais pode recuar um dia em fusos a oeste de UTC.
+      const yyyy = valor.getUTCFullYear()
+      const mm = String(valor.getUTCMonth() + 1).padStart(2, '0')
+      const dd = String(valor.getUTCDate()).padStart(2, '0')
       return `${yyyy}-${mm}-${dd}`
     }
 

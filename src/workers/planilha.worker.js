@@ -20,7 +20,18 @@ const lerMatriz = async (file) => {
     throw new Error('Formato não suportado. Converta arquivos .xls antigos para .xlsx ou .csv.')
   }
 
-  return readXlsxFile(file)
+  const abas = await readXlsxFile(file)
+  const abaComDados = Array.isArray(abas)
+    ? abas.find(aba => Array.isArray(aba?.data) && aba.data.some(linha =>
+      Array.isArray(linha) && linha.some(celula => celula !== null && celula !== undefined && celula !== '')
+    ))
+    : null
+
+  if (!abaComDados) {
+    throw new Error('A planilha .xlsx não contém dados para importar.')
+  }
+
+  return abaComDados.data
 }
 
 self.onmessage = async ({ data }) => {
