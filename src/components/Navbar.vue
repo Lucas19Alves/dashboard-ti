@@ -1,10 +1,11 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
+import UiButton from './ui/UiButton.vue'
+import UiModal from './ui/UiModal.vue'
 
 const isOpen = ref(false)
 const mostrarSobre = ref(false)
-const router = useRouter()
 const route = useRoute()
 
 const toggleMenu = () => {
@@ -17,6 +18,7 @@ const isActive = (path) => {
 }
 
 const abrirSobre = () => {
+  isOpen.value = false
   mostrarSobre.value = true
 }
 
@@ -24,15 +26,6 @@ const fecharSobre = () => {
   mostrarSobre.value = false
 }
 
-const abrirDocumentacao = () => {
-  // Abre o arquivo de documentação diretamente no navegador (se disponível no servidor)
-  // ou aponta para o link do repositório/arquivo markdown
-  window.open('https://github.com/Lucas19Alves/dashboard-ti/blob/main/DOCUMENTATION.md', '_blank', 'noopener,noreferrer')
-}
-
-const irPara = (url) => {
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
 </script>
 
 <template>
@@ -142,89 +135,42 @@ const irPara = (url) => {
       </div>
     </div>
 
-    <div
+    <UiModal
       v-if="mostrarSobre"
-      class="ui-modal-backdrop"
+      title="Sobre o projeto"
+      subtitle="Informações sobre o desenvolvedor"
+      @close="fecharSobre"
     >
-      <div class="ui-modal">
-        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="h-9 w-9 rounded-full bg-blue-600/10 flex items-center justify-center">
-              <i class="fas fa-circle-info text-blue-600"></i>
-            </div>
-            <div>
-              <h2 class="text-sm font-semibold text-gray-900">Sobre o projeto</h2>
-              <p class="text-xs text-gray-500">Informações sobre o desenvolvedor</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            @click="fecharSobre"
-            class="text-gray-400 hover:text-gray-600"
-          >
-            <i class="fas fa-times text-sm"></i>
-          </button>
+      <div class="space-y-5 text-sm text-slate-600">
+        <p>
+          Este painel foi desenvolvido para apoiar a operação de loja,
+          com foco em auditorias e acompanhamento de validades.
+        </p>
+
+        <div class="rounded-lg bg-slate-50 px-4 py-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Criado por</p>
+          <p class="mt-1 font-semibold text-slate-900">Lucas Alves</p>
         </div>
 
-        <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
-          <p>
-            Este painel foi desenvolvido para apoiar a operação de loja,
-            com foco em auditorias e acompanhamento de validades.
-          </p>
-          <div class="rounded-xl bg-gray-50 border border-gray-100 p-3 space-y-1">
-            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Criado por
-            </p>
-            <p class="font-semibold text-gray-900">
-              Lucas Alves
-            </p>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              type="button"
-              @click="irPara('https://github.com/Lucas19Alves')"
-              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
-            >
-              <i class="fab fa-github"></i>
-              GitHub
-            </button>
-            <button
-              type="button"
-              @click="irPara('https://www.linkedin.com/in/lucaas19alves/')"
-              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
-            >
-              <i class="fab fa-linkedin-in"></i>
-              LinkedIn
-            </button>
-            <button
-              type="button"
-              @click="irPara('https://portfolio-lucasalves.vercel.app/')"
-              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-100 transition"
-            >
-              <i class="fas fa-globe"></i>
-              Portfólio
-            </button>
-            <button
-              type="button"
-              @click="abrirDocumentacao"
-              class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-sm"
-            >
-              <i class="fas fa-book"></i>
-              Documentação
-            </button>
-          </div>
-        </div>
-
-        <div class="px-5 py-3 border-t border-gray-100 flex justify-end">
-          <button
-            type="button"
-            @click="fecharSobre"
-            class="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
-          >
-            Fechar
-          </button>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <a href="https://github.com/Lucas19Alves" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">
+            <i class="fab fa-github"></i>GitHub
+          </a>
+          <a href="https://www.linkedin.com/in/lucaas19alves/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">
+            <i class="fab fa-linkedin-in"></i>LinkedIn
+          </a>
+          <a href="https://portfolio-lucasalves.vercel.app/" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">
+            <i class="fas fa-globe"></i>Portfólio
+          </a>
+          <a href="https://github.com/Lucas19Alves/dashboard-ti/blob/main/DOCUMENTATION.md" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100">
+            <i class="fas fa-book"></i>Documentação
+          </a>
         </div>
       </div>
-    </div>
+
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="fecharSobre">Fechar</UiButton>
+      </template>
+    </UiModal>
   </nav>
 </template>
