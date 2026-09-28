@@ -540,7 +540,7 @@ const exportarDetalhamentoSetor = async () => {
 
     const dataUrl = await toPng(elemento, {
       cacheBust: true,
-      pixelRatio: 2,
+      pixelRatio: 4,
       backgroundColor: '#f8fafc',
       width: largura,
       height: altura,

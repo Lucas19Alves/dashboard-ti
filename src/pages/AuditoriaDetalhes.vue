@@ -1436,7 +1436,7 @@ const exportarElementoComoImagem = async (elemento, nomeArquivo, descricao = 'im
 
     const dataUrl = await toPng(elemento, {
       cacheBust: true,
-      pixelRatio: 2,
+      pixelRatio: 4,
       backgroundColor: '#ffffff',
       width: largura,
       height: altura,
