@@ -18,19 +18,18 @@ const abasAuditoria = [
 ]
 const semanaOffset = ref(0) // 0 = atual, -1 = anterior, 1 = próxima
 
-const getPendentesExibidos = (auditoria) => {
-  const a = auditoria?.analise
-  if (!a) return 0
-  return a.itensPendentes || 0
-}
+// Os cards devem refletir sempre o SKU e a análise mais recentes. Alguns backups
+// e atualizações mantêm os percentuais antigos dentro de `analise`, então os
+// valores exibidos são derivados novamente a partir da fonte atual da auditoria.
+const getMetricasCard = (auditoria) => {
+  const analise = auditoria?.analise || {}
+  const total = Number(auditoria?.sku || analise.totalItens || auditoria?.total || 0)
+  const pendentes = Math.max(0, Number(analise.itensPendentes || 0))
+  const lidos = Math.max(0, total - pendentes)
+  const percentualConclusao = total > 0 ? Math.min(100, (lidos / total) * 100) : 0
+  const percentualPendente = total > 0 ? Math.min(100, (pendentes / total) * 100) : 0
 
-const getPercentualPendenteExibido = (auditoria) => {
-  const a = auditoria?.analise
-  if (!a) return 0
-  if (typeof a.parcialPercentual === 'number') return a.parcialPercentual
-  const total = a.totalItens || auditoria?.sku || auditoria?.total || 0
-  if (total <= 0) return 0
-  return ((a.itensPendentes || 0) / total) * 100
+  return { total, pendentes, lidos, percentualConclusao, percentualPendente }
 }
 
 // Filtros e Paginação
@@ -358,8 +357,8 @@ const auditoriasFiltradas = computed(() => {
   auditorias.sort((a, b) => {
     const dataA = new Date(a.data)
     const dataB = new Date(b.data)
-    const progressoA = a.analise?.percentualConclusao || 0
-    const progressoB = b.analise?.percentualConclusao || 0
+    const progressoA = getMetricasCard(a).percentualConclusao
+    const progressoB = getMetricasCard(b).percentualConclusao
 
     switch (ordenacao.value) {
       case 'data_asc': return dataA - dataB
@@ -1215,18 +1214,18 @@ const classesCardDia = (d) => {
               </div>
 
               <!-- Progress Section -->
-              <div v-if="auditoria.total > 0" class="space-y-4 flex-1">
+              <div v-if="getMetricasCard(auditoria).total > 0" class="space-y-4 flex-1">
                 <div>
                   <div class="flex justify-between items-end mb-1.5">
                     <span class="text-xs font-semibold text-gray-500">Progresso</span>
-                    <span class="text-sm font-bold text-gray-900">{{ (auditoria.analise?.percentualConclusao || 0).toFixed(1) }}%</span>
+                    <span class="text-sm font-bold text-gray-900">{{ getMetricasCard(auditoria).percentualConclusao.toFixed(1) }}%</span>
                   </div>
                   <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div
-                      :style="{ width: Math.min(auditoria.analise?.percentualConclusao || 0, 100) + '%' }"
+                      :style="{ width: getMetricasCard(auditoria).percentualConclusao + '%' }"
                       :class="[
                         'h-full transition-all duration-500 ease-out relative rounded-full',
-                        (auditoria.analise?.percentualConclusao || 0) >= 100 ? 'bg-green-500' : 'bg-blue-600'
+                        getMetricasCard(auditoria).percentualConclusao >= 100 ? 'bg-green-500' : 'bg-blue-600'
                       ]"
                     ></div>
                   </div>
@@ -1237,13 +1236,13 @@ const classesCardDia = (d) => {
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
                     <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Lidos</p>
                     <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ auditoria.analise?.totalLidos || 0 }}
+                      {{ getMetricasCard(auditoria).lidos }}
                     </p>
                   </div>
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
                     <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Pendentes</p>
                     <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ getPendentesExibidos(auditoria) }}
+                      {{ getMetricasCard(auditoria).pendentes }}
                     </p>
                   </div>
                   <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
@@ -1252,8 +1251,8 @@ const classesCardDia = (d) => {
                       {{
                         (
                           auditoria.tipo === 'Ruptura' || auditoria.tipo === 'Presença' || auditoria.tipo === 'Etiqueta'
-                            ? getPercentualPendenteExibido(auditoria)
-                            : (100 - (auditoria.analise?.percentualConclusao || 0))
+                            ? getMetricasCard(auditoria).percentualPendente
+                            : (100 - getMetricasCard(auditoria).percentualConclusao)
                         ).toFixed(1)
                       }}%
                     </p>
