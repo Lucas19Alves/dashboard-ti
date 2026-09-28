@@ -9,6 +9,7 @@ import ModalSetorLocal from '../components/ModalSetorLocal.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 import { printTableInNewWindow, printHtmlInNewWindow } from '../utils/print'
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
+import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -129,7 +130,18 @@ const colunasDados = computed(() => {
   return colunasDadosBase
 })
 
-const abaAtiva = ref('dashboard')
+const abaPadrao = ref('dashboard')
+const abaAtiva = computed({
+  get: () => route.query.aba === 'atencao' ? 'atencao' : abaPadrao.value,
+  set: valor => {
+    abaPadrao.value = valor
+    if (route.query.aba === 'atencao') {
+      const query = { ...route.query }
+      delete query.aba
+      router.replace({ query })
+    }
+  }
+})
 const filtroUsuario = ref('')
 const filtroDados = ref('')
 const filtroFornecedor = ref('')
@@ -249,6 +261,8 @@ const abasDetalhes = [
   { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
   { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' }
 ]
+
+const sinaisAuditoria = computed(() => analisarSinaisAuditoria(auditoria.value?.dados, auditoria.value?.data))
 
 const readOnly = computed(() => auditoria.value?.status === 'fechada')
 const statusBadge = computed(() => {
@@ -2567,6 +2581,68 @@ const fecharRelatorio = () => {
 
     <!-- Conteúdo -->
     <div class="max-w-7xl mx-auto p-6">
+      <section v-if="abaAtiva === 'atencao'" class="space-y-6" aria-label="Pontos de atenção da auditoria">
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+          <h2 class="text-xl font-bold">Leituras para revisão</h2>
+          <p class="mt-2 text-sm leading-relaxed">
+            Estes sinais ajudam a conferir registros fora do padrão. Eles não comprovam irregularidade nem avaliam a conduta de pessoas. Valide horários, deslocamentos, estoque e contexto operacional antes de qualquer conclusão.
+          </p>
+          <p class="mt-2 text-xs text-amber-800">
+            {{ sinaisAuditoria.totalLeituras }} leituras analisadas · {{ sinaisAuditoria.leiturasComHorario }} com horário e usuário identificados
+          </p>
+        </div>
+
+        <div v-if="!sinaisAuditoria.sinais.length" class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+          <i class="fas fa-clipboard-check mb-3 text-2xl text-slate-400"></i>
+          <p class="font-semibold text-slate-800">Nenhum ponto de atenção pelos critérios atuais</p>
+          <p class="mt-1 text-sm">Os sinais dependem dos campos presentes no relatório. A ausência de aviso não dispensa a revisão habitual.</p>
+        </div>
+
+        <div v-else class="grid gap-5">
+          <article v-for="(sinal, indice) in sinaisAuditoria.sinais" :key="`${sinal.tipo}-${sinal.usuario || indice}`" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-100 px-5 py-4 sm:flex sm:items-start sm:justify-between sm:gap-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Conferência sugerida</p>
+                <h3 class="mt-1 text-lg font-bold text-slate-900">{{ sinal.titulo }}</h3>
+                <p v-if="sinal.usuario" class="mt-1 text-sm text-slate-600">Usuário registrado: {{ sinal.usuario }}</p>
+              </div>
+              <span class="mt-3 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 sm:mt-0">{{ sinal.quantidade }} leituras</span>
+            </div>
+            <div class="px-5 py-4">
+              <p class="text-sm text-slate-700">{{ sinal.resumo }}</p>
+              <details class="mt-4">
+                <summary class="cursor-pointer text-sm font-semibold text-blue-700">Ver exemplos do relatório ({{ sinal.exemplos.length }})</summary>
+                <div class="mt-3 overflow-x-auto">
+                  <table class="min-w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th class="px-3 py-2">Código</th>
+                        <th class="px-3 py-2">Produto</th>
+                        <th class="px-3 py-2">Local</th>
+                        <th class="px-3 py-2">Usuário</th>
+                        <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Estoque</th>
+                        <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Dias sem venda</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-700">
+                      <tr v-for="(item, itemIndice) in sinal.exemplos" :key="`${item.codigo}-${itemIndice}`">
+                        <td class="px-3 py-2">{{ item.codigo }}</td>
+                        <td class="px-3 py-2">{{ item.produto }}</td>
+                        <td class="px-3 py-2">{{ item.local }}</td>
+                        <td class="px-3 py-2">{{ item.usuario }}</td>
+                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.estoque }}</td>
+                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.diasSemVenda }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </div>
+          </article>
+        </div>
+        <p class="text-xs text-slate-500">Critérios: 8 leituras em 3 locais em até 10 minutos; concentração de pelo menos 80% nas 2 horas finais, com mudança em relação às 2 horas anteriores; ou estoque de até 2 unidades e 30 dias sem venda.</p>
+      </section>
+
       <!-- DASHBOARD -->
       <div v-if="abaAtiva === 'dashboard'" class="space-y-8">
         <div v-if="(!auditoria.dados || auditoria.dados.length === 0) && !readOnly" class="bg-blue-50 border-2 border-blue-300 rounded-lg p-12">
