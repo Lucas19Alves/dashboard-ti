@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dashboard-ti-v2'
+const CACHE_NAME = 'dashboard-ti-v3'
 const APP_SHELL = ['/', '/favicon.png', '/manifest.webmanifest']
 
 self.addEventListener('install', event => {
@@ -30,11 +30,15 @@ self.addEventListener('fetch', event => {
     return
   }
 
+  const caminho = new URL(event.request.url).pathname
+  if (!caminho.startsWith('/assets/')) return
+
   event.respondWith(
     caches.match(event.request).then(cache => cache || fetch(event.request).then(resposta => {
-      if (resposta.ok) {
+      // Uma rota inexistente pode responder com index.html; nunca guardar HTML como asset.
+      if (resposta.ok && !resposta.headers.get('Content-Type')?.includes('text/html')) {
         const copia = resposta.clone()
-        caches.open(CACHE_NAME).then(armazenamento => armazenamento.put(event.request, copia))
+        event.waitUntil(caches.open(CACHE_NAME).then(armazenamento => armazenamento.put(event.request, copia)))
       }
       return resposta
     }))

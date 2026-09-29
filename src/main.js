@@ -7,6 +7,17 @@ import '@fortawesome/fontawesome-free/css/all.css'
 import { useAuditoriasStore } from './stores/auditoriasStore'
 import { useVencimentosStore } from './stores/vencimentosStore'
 
+// Uma aba aberta antes do deploy pode pedir um chunk cujo nome ja nao existe.
+window.addEventListener('vite:preloadError', event => {
+  const chave = 'dashboard-ti-ultima-recarga-chunk'
+  const ultimaRecarga = Number(sessionStorage.getItem(chave) || 0)
+  if (Date.now() - ultimaRecarga < 30_000) return
+
+  event.preventDefault()
+  sessionStorage.setItem(chave, String(Date.now()))
+  window.location.reload()
+})
+
 const app = createApp(App)
 const pinia = createPinia()
 
