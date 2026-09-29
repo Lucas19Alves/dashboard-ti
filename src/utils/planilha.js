@@ -59,10 +59,12 @@ export const matrizParaObjetos = matriz => {
   const indiceCabecalho = encontrarCabecalho(matriz)
   const colunas = criarCabecalhosUnicos(matriz[indiceCabecalho] || [])
   const linhas = matriz.slice(indiceCabecalho + 1)
-    .filter(linha => Array.isArray(linha) && linha.some(valor => valor !== null && valor !== undefined && valor !== ''))
-    .map(linha => Object.fromEntries(
-      colunas.map((coluna, indice) => [coluna, linha[indice] ?? ''])
-    ))
+    .map((linha, deslocamento) => ({ linha, numeroLinha: indiceCabecalho + deslocamento + 2 }))
+    .filter(({ linha }) => Array.isArray(linha) && linha.some(valor => valor !== null && valor !== undefined && valor !== ''))
+    .map(({ linha, numeroLinha }) => ({
+      ...Object.fromEntries(colunas.map((coluna, indice) => [coluna, linha[indice] ?? ''])),
+      _linhaPlanilha: numeroLinha
+    }))
   return { linhas, colunas }
 }
 
