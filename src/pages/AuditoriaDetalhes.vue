@@ -262,7 +262,33 @@ const abasDetalhes = [
   { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' }
 ]
 
-const sinaisAuditoria = computed(() => analisarSinaisAuditoria(auditoria.value?.dados, auditoria.value?.data))
+const sinaisAuditoria = computed(() => analisarSinaisAuditoria(auditoria.value?.dados, auditoria.value?.data, {
+  tipoAuditoria: auditoria.value?.tipo,
+  historico: store.auditorias.filter(item => item.id !== auditoria.value?.id)
+}))
+
+const exportarRegistrosSinal = sinal => {
+  const colunas = [
+    ['linhaPlanilha', 'Linha da planilha'], ['dataHora', 'Data e hora'], ['codigo', 'Código'], ['produto', 'Produto'], ['classe', 'Classe de produto'],
+    ['local', 'Local'], ['ultimoLocal', 'Local no histórico'], ['dataUltimaAuditoria', 'Data da auditoria anterior'], ['idUltimaAuditoria', 'ID da auditoria anterior'],
+    ['usuario', 'Usuário'], ['situacao', 'Situação'], ['estoque', 'Estoque'],
+    ['diasSemVenda', 'Dias sem venda'], ['colunaData', 'Coluna de data'], ['colunaHora', 'Coluna de hora']
+  ]
+  const csv = [
+    colunas.map(([, titulo]) => titulo),
+    ...sinal.registros.map(registro => colunas.map(([chave]) => registro[chave] ?? ''))
+  ].map(linha => linha.map(valor => {
+    const conteudo = String(valor)
+    const seguro = /^[=+@\-\t\r]/.test(conteudo) ? `'${conteudo}` : conteudo
+    return `"${seguro.replaceAll('"', '""')}"`
+  }).join(';')).join('\r\n')
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `auditoria-${auditoria.value?.id || 'sem-id'}-${sinal.tipo}.csv`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 const readOnly = computed(() => auditoria.value?.status === 'fechada')
 const statusBadge = computed(() => {
@@ -2581,57 +2607,72 @@ const fecharRelatorio = () => {
 
     <!-- Conteúdo -->
     <div class="max-w-7xl mx-auto p-6">
-      <section v-if="abaAtiva === 'atencao'" class="space-y-6" aria-label="Pontos de atenção da auditoria">
+      <section v-if="abaAtiva === 'atencao'" class="space-y-5" aria-label="Pontos de atenção da auditoria">
         <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-          <h2 class="text-xl font-bold">Leituras para revisão</h2>
-          <p class="mt-2 text-sm leading-relaxed">
-            Estes sinais ajudam a conferir registros fora do padrão. Eles não comprovam irregularidade nem avaliam a conduta de pessoas. Valide horários, deslocamentos, estoque e contexto operacional antes de qualquer conclusão.
-          </p>
-          <p class="mt-2 text-xs text-amber-800">
-            {{ sinaisAuditoria.totalLeituras }} leituras analisadas · {{ sinaisAuditoria.leiturasComHorario }} com horário e usuário identificados
-          </p>
+          <h2 class="text-xl font-bold">Leituras para revisão <span class="ml-2 rounded-full bg-amber-100 px-2.5 py-1 align-middle text-xs font-semibold">{{ sinaisAuditoria.sinais.length }} alertas</span></h2>
+          <p class="mt-2 text-sm leading-relaxed">Os alertas indicam registros fora do padrão; não comprovam fraude. Confira a planilha original e o contexto operacional antes de concluir.</p>
+          <p class="mt-2 text-xs text-amber-800">{{ sinaisAuditoria.base }} Horários usam a data e a hora registradas na própria linha, sem presumir meia-noite para uma data sem hora.</p>
         </div>
+
+        <div class="grid gap-3 sm:grid-cols-4" aria-label="Cobertura da análise">
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Leituras</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ sinaisAuditoria.totalLeituras }}</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Com data, hora e usuário</p><p class="mt-1 text-2xl font-bold text-emerald-700">{{ sinaisAuditoria.leiturasComHorario }}</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Sem dados para análise temporal</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ sinaisAuditoria.leiturasSemHorario }}</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Auditorias anteriores comparáveis</p><p class="mt-1 text-2xl font-bold text-blue-700">{{ sinaisAuditoria.auditoriasHistoricas }}</p></div>
+        </div>
+        <p v-if="!sinaisAuditoria.auditoriasHistoricas" class="text-xs text-slate-500">Sem auditorias anteriores do mesmo tipo nesta base local. Os alertas desta auditoria continuam disponíveis, mas a comparação histórica não é calculada.</p>
 
         <div v-if="!sinaisAuditoria.sinais.length" class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">
-          <i class="fas fa-clipboard-check mb-3 text-2xl text-slate-400"></i>
           <p class="font-semibold text-slate-800">Nenhum ponto de atenção pelos critérios atuais</p>
-          <p class="mt-1 text-sm">Os sinais dependem dos campos presentes no relatório. A ausência de aviso não dispensa a revisão habitual.</p>
+          <p class="mt-1 text-sm">A ausência de alerta não substitui a conferência habitual.</p>
         </div>
 
-        <div v-else class="grid gap-5">
+        <div v-else class="grid gap-4">
           <article v-for="(sinal, indice) in sinaisAuditoria.sinais" :key="`${sinal.tipo}-${sinal.usuario || indice}`" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="border-b border-slate-100 px-5 py-4 sm:flex sm:items-start sm:justify-between sm:gap-4">
+            <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-amber-700">Conferência sugerida</p>
-                <h3 class="mt-1 text-lg font-bold text-slate-900">{{ sinal.titulo }}</h3>
-                <p v-if="sinal.usuario" class="mt-1 text-sm text-slate-600">Usuário registrado: {{ sinal.usuario }}</p>
+                <h3 class="text-lg font-bold text-slate-900">{{ sinal.titulo }}</h3>
+                <p v-if="sinal.usuario" class="text-sm text-slate-600">Usuário: {{ sinal.usuario }}</p>
+                <p v-if="sinal.periodo" class="mt-1 text-sm font-medium text-slate-700">Intervalo: {{ sinal.periodo }}</p>
               </div>
-              <span class="mt-3 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 sm:mt-0">{{ sinal.quantidade }} leituras</span>
+              <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">{{ sinal.quantidade }} leituras</span>
             </div>
             <div class="px-5 py-4">
               <p class="text-sm text-slate-700">{{ sinal.resumo }}</p>
+              <div v-if="sinal.comparacao" class="mt-3 grid gap-2 sm:grid-cols-2">
+                <div v-for="bloco in sinal.comparacao" :key="bloco.periodo" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-semibold text-slate-600">{{ bloco.periodo }}</p>
+                  <p class="mt-1 text-sm text-slate-800"><strong>{{ bloco.equipe }}</strong> leituras da equipe · <strong>{{ bloco.usuario }}</strong> deste usuário</p>
+                </div>
+              </div>
+              <p class="mt-2 text-xs text-slate-500">Critério: {{ sinal.criterio }}</p>
+              <div v-if="sinal.contextoHistorico?.length" class="mt-3 rounded-xl bg-blue-50 px-4 py-3 text-xs text-blue-900">
+                <p v-for="(linha, contextoIndice) in sinal.contextoHistorico" :key="contextoIndice" class="mt-1 first:mt-0">{{ linha }}</p>
+                <details v-if="sinal.referencias?.length" class="mt-2">
+                  <summary class="cursor-pointer font-semibold">Ver auditorias usadas na comparação</summary>
+                  <div class="mt-2 overflow-x-auto"><table class="min-w-full text-left"><thead><tr><th class="px-2 py-1">Data</th><th class="px-2 py-1">Auditoria</th><th class="px-2 py-1">Máximo em 30 min</th><th class="px-2 py-1">Classes em 30 min</th></tr></thead><tbody><tr v-for="ref in sinal.referencias" :key="`${ref.id}-${ref.data}`"><td class="px-2 py-1">{{ ref.data }}</td><td class="px-2 py-1">#{{ ref.id }}</td><td class="px-2 py-1">{{ ref.maximo30 }}</td><td class="px-2 py-1">{{ ref.classes30 }}</td></tr></tbody></table></div>
+                </details>
+              </div>
               <details class="mt-4">
-                <summary class="cursor-pointer text-sm font-semibold text-blue-700">Ver exemplos do relatório ({{ sinal.exemplos.length }})</summary>
-                <div class="mt-3 overflow-x-auto">
-                  <table class="min-w-full text-left text-sm">
-                    <thead class="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th class="px-3 py-2">Código</th>
-                        <th class="px-3 py-2">Produto</th>
-                        <th class="px-3 py-2">Local</th>
-                        <th class="px-3 py-2">Usuário</th>
-                        <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Estoque</th>
-                        <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Dias sem venda</th>
-                      </tr>
-                    </thead>
+                <summary class="cursor-pointer text-sm font-semibold text-blue-700">Conferir registros ({{ sinal.registros.length }})</summary>
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-500">{{ sinal.registros.length > 100 ? 'Mostrando os primeiros 100 registros. O CSV contém todos.' : 'Dados preservados da planilha importada.' }} A linha de origem aparece quando foi preservada na importação.</p>
+                  <button type="button" class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50" @click="exportarRegistrosSinal(sinal)">Baixar registros CSV</button>
+                </div>
+                <div class="mt-3 max-h-96 overflow-auto rounded-lg border border-slate-200">
+                  <table class="min-w-full text-left text-xs">
+                    <thead class="sticky top-0 bg-slate-50 text-slate-600"><tr>
+                      <th class="px-3 py-2">Linha</th><th class="px-3 py-2">Data e hora</th><th class="px-3 py-2">Código</th><th class="px-3 py-2">Produto</th><th class="px-3 py-2">Classe</th><th class="px-3 py-2">Local</th>
+                      <th v-if="sinal.tipo === 'retomada' || sinal.tipo === 'historico'" class="px-3 py-2">Local anterior</th><th class="px-3 py-2">Usuário</th>
+                      <th v-if="sinal.tipo === 'excecoes'" class="px-3 py-2">Situação</th>
+                      <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Estoque</th><th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Dias sem venda</th>
+                    </tr></thead>
                     <tbody class="divide-y divide-slate-100 text-slate-700">
-                      <tr v-for="(item, itemIndice) in sinal.exemplos" :key="`${item.codigo}-${itemIndice}`">
-                        <td class="px-3 py-2">{{ item.codigo }}</td>
-                        <td class="px-3 py-2">{{ item.produto }}</td>
-                        <td class="px-3 py-2">{{ item.local }}</td>
-                        <td class="px-3 py-2">{{ item.usuario }}</td>
-                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.estoque }}</td>
-                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.diasSemVenda }}</td>
+                      <tr v-for="(item, itemIndice) in sinal.registros.slice(0, 100)" :key="`${item.codigo}-${itemIndice}`">
+                        <td class="px-3 py-2">{{ item.linhaPlanilha ?? '—' }}</td><td class="whitespace-nowrap px-3 py-2">{{ item.dataHora }}</td><td class="px-3 py-2">{{ item.codigo }}</td><td class="px-3 py-2">{{ item.produto }}</td><td class="px-3 py-2">{{ item.classe }}</td><td class="px-3 py-2">{{ item.local }}</td>
+                        <td v-if="sinal.tipo === 'retomada' || sinal.tipo === 'historico'" class="px-3 py-2">{{ item.ultimoLocal || '—' }}</td><td class="px-3 py-2">{{ item.usuario }}</td>
+                        <td v-if="sinal.tipo === 'excecoes'" class="px-3 py-2">{{ item.situacao }}</td>
+                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.estoque }}</td><td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.diasSemVenda }}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -2640,7 +2681,6 @@ const fecharRelatorio = () => {
             </div>
           </article>
         </div>
-        <p class="text-xs text-slate-500">Critérios: 8 leituras em 3 locais em até 10 minutos; concentração de pelo menos 80% nas 2 horas finais, com mudança em relação às 2 horas anteriores; ou estoque de até 2 unidades e 30 dias sem venda.</p>
       </section>
 
       <!-- DASHBOARD -->

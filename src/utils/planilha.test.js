@@ -15,7 +15,8 @@ describe('matrizParaObjetos', () => {
       Código: 123,
       Produto: 'Arroz',
       'Auditado em': '01/01/2026',
-      'Auditado em_1': '08:30'
+      'Auditado em_1': '08:30',
+      _linhaPlanilha: 4
     }])
   })
 
@@ -26,5 +27,6 @@ describe('matrizParaObjetos', () => {
       [1, 'Produto']
     ])
     expect(resultado.linhas).toHaveLength(1)
+    expect(resultado.linhas[0]._linhaPlanilha).toBe(3)
   })
 })
