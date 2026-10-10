@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, computed, toRaw } from 'vue'
+import { ref, computed, toRaw, markRaw } from 'vue'
 import { db } from '../db/appDb'
 import { lerPlanilha } from '../utils/planilha'
+import { deduplicarPorCodigo } from '../utils/deduplicar'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 
@@ -15,6 +16,10 @@ const carregarStatusLocal = () => {
     return {}
   }
 }
+
+// `dados` e `analise` podem ter dezenas de milhares de linhas e sempre são
+// substituídos por inteiro. Marcá-los como raw evita proxies reativos profundos.
+const semReatividade = valor => (valor && typeof valor === 'object' ? markRaw(valor) : valor)
 
 const limparStatusLocal = () => {
   try {
@@ -579,7 +584,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const ehRuptura = normalizarTexto(opts?.tipoAuditoria || '') === 'ruptura'
 
       // Log pré-deduplicação para diagnóstico
-      if (ehRuptura) {
+      if (import.meta.env.DEV && ehRuptura) {
         const preSemPresComEst = filtrados.filter(d => {
           const estSit = d._temEstoqueSituacao
           const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
@@ -597,53 +602,25 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         }
       }
 
-      const dados = filtrados.reduce((acc, item) => {
-        const codigo = (item['Código'] || item.Codigo || '').toString().trim()
-        if (!codigo) {
-          acc.push(item)
-          return acc
-        }
+      const dados = deduplicarPorCodigo(filtrados, (existente, item) => {
         const locAtual = ((item['Local'] || '').toString().trim())
+        const locExistente = ((existente['Local'] || '').toString().trim())
         const lidoNaoPertenceAtual = item._lidoNaoPertence
-        const existenteIndex = acc.findIndex(i => {
-          const cod = (i['Código'] || i.Codigo || '').toString().trim()
-          return cod === codigo
-        })
-        if (existenteIndex === -1) {
-          acc.push(item)
-        } else {
-          const existente = acc[existenteIndex]
-          const locExistente = ((existente['Local'] || '').toString().trim())
-          const lidoNaoPertenceExistente = existente._lidoNaoPertence
+        const lidoNaoPertenceExistente = existente._lidoNaoPertence
 
-          // Regra específica de Ruptura: para código duplicado, prioriza item auditado no dia da auditoria.
-          if (ehRuptura && auditoriaDiaISO) {
-            const dataAtual = dataItemAuditadoEmISO(item)
-            const dataExistente = dataItemAuditadoEmISO(existente)
-            const atualNoDia = dataAtual === auditoriaDiaISO
-            const existenteNoDia = dataExistente === auditoriaDiaISO
-            if (atualNoDia && !existenteNoDia) {
-              acc[existenteIndex] = item
-              return acc
-            }
-            if (existenteNoDia && !atualNoDia) {
-              return acc
-            }
-          }
-
-          // Prioridade 1: Preferir item SEM "Lido não pertence"
-          if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) {
-            acc[existenteIndex] = item
-          }
-          // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
-          else if (lidoNaoPertenceExistente === lidoNaoPertenceAtual) {
-            if (!locAtual && locExistente) {
-              acc[existenteIndex] = item
-            }
-          }
+        // Regra específica de Ruptura: para código duplicado, prioriza item auditado no dia da auditoria.
+        if (ehRuptura && auditoriaDiaISO) {
+          const atualNoDia = dataItemAuditadoEmISO(item) === auditoriaDiaISO
+          const existenteNoDia = dataItemAuditadoEmISO(existente) === auditoriaDiaISO
+          if (atualNoDia && !existenteNoDia) return true
+          if (existenteNoDia && !atualNoDia) return false
         }
-        return acc
-      }, [])
+
+        // Prioridade 1: Preferir item SEM "Lido não pertence"
+        if (lidoNaoPertenceExistente && !lidoNaoPertenceAtual) return true
+        // Prioridade 2: Se ambos têm ou não têm "Lido não pertence", preferir SEM Local
+        return lidoNaoPertenceExistente === lidoNaoPertenceAtual && !locAtual && Boolean(locExistente)
+      })
 
       const duplicadosRemovidos = totalFiltrados - dados.length
       if (duplicadosRemovidos > 0) {
@@ -655,27 +632,30 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       console.log(`✅ Itens auditáveis: ${dados.length} linhas`)
       console.log(`↩️ Itens ignorados (sem leitura e sem estoque): ${ignorados}`)
       
-      // Estatísticas de debug
-      const comPresenca = dados.filter(d => d._temPresenca).length
-      const semPresenca = dados.filter(d => !d._temPresenca).length
-      const semPresencaComEstoque = dados.filter(d => {
-        const estSit = d._temEstoqueSituacao
-        const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
-        return !d._temPresenca && !d._lidoNaoPertence && temEst
-      }).length
-      const comPresencaSemEstoque = dados.filter(d => {
-        const estSit = d._temEstoqueSituacao
-        const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
-        return d._temPresenca && !temEst
-      }).length
-      const lidoNaoPertence = dados.filter(d => d._lidoNaoPertence).length
-      console.log(`📊 Estatísticas:`)
-      console.log(`   - Com presença: ${comPresenca}`)
-      console.log(`   - Sem presença: ${semPresenca}`)
-      console.log(`   - Sem Presença e Com Estoque (pendentes): ${semPresencaComEstoque}`)
-      console.log(`   - Com Presença e Sem Estoque (problema): ${comPresencaSemEstoque}`)
-      console.log(`   - Lido não pertence (problema): ${lidoNaoPertence}`)
-      console.log(`   - Total auditável: ${dados.length}`)
+      if (import.meta.env.DEV) {
+        // Estatísticas de debug
+        const comPresenca = dados.filter(d => d._temPresenca).length
+        const semPresenca = dados.filter(d => !d._temPresenca).length
+        const semPresencaComEstoque = dados.filter(d => {
+          const estSit = d._temEstoqueSituacao
+          const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
+          return !d._temPresenca && !d._lidoNaoPertence && temEst
+        }).length
+        const comPresencaSemEstoque = dados.filter(d => {
+          const estSit = d._temEstoqueSituacao
+          const temEst = estSit !== null && estSit !== undefined ? estSit : (d._estoque || 0) > 0
+          return d._temPresenca && !temEst
+        }).length
+        const lidoNaoPertence = dados.filter(d => d._lidoNaoPertence).length
+        console.log(`📊 Estatísticas:`)
+        console.log(`   - Com presença: ${comPresenca}`)
+        console.log(`   - Sem presença: ${semPresenca}`)
+        console.log(`   - Sem Presença e Com Estoque (pendentes): ${semPresencaComEstoque}`)
+        console.log(`   - Com Presença e Sem Estoque (problema): ${comPresencaSemEstoque}`)
+        console.log(`   - Lido não pertence (problema): ${lidoNaoPertence}`)
+        console.log(`   - Total auditável: ${dados.length}`)
+        
+      }
       
       return dados
     } catch (erro) {
@@ -724,44 +704,20 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
         })
 
       const totalFiltrados = filtrados.length
-      const dados = filtrados.reduce((acc, item) => {
-        const codigo = (item['Código'] || item.Codigo || '').toString().trim()
-        if (!codigo) {
-          acc.push(item)
-          return acc
-        }
+      const dados = deduplicarPorCodigo(filtrados, (existente, item) => {
         const locAtual = ((item['Local'] || '').toString().trim())
-        const existenteIndex = acc.findIndex(i => {
-          const cod = (i['Código'] || i.Codigo || '').toString().trim()
-          return cod === codigo
-        })
-        if (existenteIndex === -1) {
-          acc.push(item)
-        } else {
-          const existente = acc[existenteIndex]
-          const locExistente = ((existente['Local'] || '').toString().trim())
-          const statusAtual = statusEtiqueta(item)
-          const statusExistente = statusEtiqueta(existente)
+        const locExistente = ((existente['Local'] || '').toString().trim())
+        const statusAtual = statusEtiqueta(item)
+        const statusExistente = statusEtiqueta(existente)
 
-          // Prioridade 1: preservar registro que NÃO é "Lido não pertence"
-          if (statusExistente.lidoNaoPertence && !statusAtual.lidoNaoPertence) {
-            acc[existenteIndex] = item
-          }
-          // Prioridade 2: entre itens equivalentes, preservar "Não lido(s) com estoque"
-          else if (statusExistente.lidoNaoPertence === statusAtual.lidoNaoPertence) {
-            if (!statusExistente.naoLidoEstoque && statusAtual.naoLidoEstoque) {
-              acc[existenteIndex] = item
-            }
-            // Prioridade 3: preferir item sem Local
-            else if (statusExistente.naoLidoEstoque === statusAtual.naoLidoEstoque) {
-              if (!locAtual && locExistente) {
-                acc[existenteIndex] = item
-              }
-            }
-          }
-        }
-        return acc
-      }, [])
+        // Prioridade 1: preservar registro que NÃO é "Lido não pertence"
+        if (statusExistente.lidoNaoPertence && !statusAtual.lidoNaoPertence) return true
+        if (statusExistente.lidoNaoPertence !== statusAtual.lidoNaoPertence) return false
+        // Prioridade 2: entre itens equivalentes, preservar "Não lido(s) com estoque"
+        if (!statusExistente.naoLidoEstoque && statusAtual.naoLidoEstoque) return true
+        // Prioridade 3: preferir item sem Local
+        return statusExistente.naoLidoEstoque === statusAtual.naoLidoEstoque && !locAtual && Boolean(locExistente)
+      })
 
       const duplicadosRemovidos = totalFiltrados - dados.length
       if (duplicadosRemovidos > 0) {
@@ -1198,8 +1154,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
           tipo: r.tipo,
           sku: r.sku,
           status,
-          dados: r.dados || [],
-          analise: r.analise || null,
+          dados: semReatividade(r.dados || []),
+          analise: semReatividade(r.analise || null),
           parcial: r.parcial || 0,
           total: r.total || 0,
           metaAlcancada: r.metaAlcancada || false
@@ -1233,7 +1189,12 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       console.error('Erro ao salvar auditoria no IndexedDB', e)
       id = Date.now()
     }
-    const completa = { ...novaAuditoria, id }
+    const completa = {
+      ...novaAuditoria,
+      id,
+      dados: semReatividade(novaAuditoria.dados),
+      analise: semReatividade(novaAuditoria.analise)
+    }
     auditorias.value.push(completa)
     return completa
   }
@@ -1241,7 +1202,10 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
   const updateAuditoria = async (id, dados) => {
     const auditoria = auditorias.value.find(a => a.id === id)
     if (!auditoria) return
-    Object.assign(auditoria, dados)
+    const atualizacao = { ...dados }
+    if ('dados' in atualizacao) atualizacao.dados = semReatividade(atualizacao.dados)
+    if ('analise' in atualizacao) atualizacao.analise = semReatividade(atualizacao.analise)
+    Object.assign(auditoria, atualizacao)
     if (dados.analise) {
       auditoria.metaAlcancada = (dados.analise.parcialPercentual || 0) <= 3.0
     }
