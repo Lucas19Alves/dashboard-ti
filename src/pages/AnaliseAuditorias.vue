@@ -2,10 +2,10 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
-import { blocoBarras, blocoColunas, blocoDestaques, blocoTabela, grade, imprimirRelatorioVisual } from '../utils/print'
+import { blocoCapitulo, blocoColunas, blocoDestaques, blocoTabela, escapeHtml, grade, imprimirRelatorioVisual, selo, sparkline } from '../utils/print'
 import { baixarCsv } from '../utils/csv'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
-import { rotuloUsuario, separarUsuario } from '../utils/usuario'
+import { separarUsuario } from '../utils/usuario'
 import { META_PENDENTE_PERCENTUAL, dentroDaMeta, metricasAuditoria } from '../utils/metricasAuditoria'
 import {
   agruparPorMes,
@@ -266,35 +266,136 @@ const exportarCsv = () => {
 }
 
 // ---------- Relatório PDF ----------
+// Documento em folhas A4: 1 resumo executivo, 2 setores, 3 usuários, 4 auditorias e meses.
 const gerarRelatorioPDF = () => {
   if (!linhasAuditorias.value.length) return
-  const pct = (v, casas = 2) => (Number.isFinite(v) ? `${v.toFixed(casas)}%` : '—')
+  const pct = (v, casas = 2) => (Number.isFinite(v) ? `${v.toFixed(casas).replace('.', ',')}%` : '—')
+  const int = v => (Number(v) || 0).toLocaleString('pt-BR')
   const tomPend = v => (v > META ? 'ruim' : 'bom')
+  const seloTendencia = t => ({ melhorando: selo('▼ Melhorando', 'bom'), piorando: selo('▲ Piorando', 'ruim'), estavel: selo('— Estável', 'cinza') }[t] || selo('Poucos dados', 'cinza'))
+  const r = resumo.value
+  const ant = resumoAnterior.value
+  const filtrosTexto = [
+    filtros.tipo !== 'todos' && filtros.tipo,
+    filtros.status === 'abertas' && 'somente abertas',
+    filtros.status === 'fechadas' && 'somente fechadas',
+    filtros.meta === 'dentro' && 'dentro da meta',
+    filtros.meta === 'fora' && 'fora da meta'
+  ].filter(Boolean)
+  const comparativo = ant ? ` · comparado a ${formatarDataBR(intervaloComparacao.value.inicio)} a ${formatarDataBR(intervaloComparacao.value.fim)}` : ''
+
   const setoresOrd = ordenar(setores.value, { coluna: 'percPendente', direcao: 'desc' })
+  const reincidentes = setoresOrd.filter(s => s.auditorias >= 2 && s.reincidencia >= 50)
   const usuariosOrd = ordenar(usuarios.value, { coluna: 'leituras', direcao: 'desc' })
+  const maxLeituras = Math.max(1, ...usuariosOrd.map(u => u.leituras))
+  const maxPendSetor = Math.max(META * 2, ...setoresOrd.map(s => s.percPendente))
+  const auditoriasOrd = ordenar(linhasAuditorias.value, { coluna: 'data', direcao: 'desc' })
+  const maxPendAud = Math.max(META * 2, ...auditoriasOrd.map(l => l.pendente))
+  const secoes = [['1', 'Resumo'], ['2', `Setores (${setoresOrd.length})`], usuariosOrd.length && ['3', `Usuários (${usuariosOrd.length})`], [usuariosOrd.length ? '4' : '3', `Auditorias (${auditoriasOrd.length})`]].filter(Boolean)
+
+  const comparacaoAnterior = ant ? blocoTabela({
+    titulo: 'Período atual x anterior',
+    colunas: [
+      { chave: 'indicador', titulo: 'Indicador' }, { chave: 'atual', titulo: 'Atual', alinhamento: 'right' },
+      { chave: 'anterior', titulo: 'Anterior', alinhamento: 'right' }, { chave: 'variacao', titulo: 'Variação', alinhamento: 'right', html: (v, l) => selo(v, l.tom) }
+    ],
+    linhas: kpis.value.map((k, i) => {
+      const anterior = [ant.total, ant.taxaMeta, ant.mediaPendente, ant.itensAuditados][i]
+      const fmt = [int, v => pct(v, 0), v => pct(v), int][i]
+      const melhorou = k.melhorQuandoMenor === null || !k.delta ? null : (k.melhorQuandoMenor ? k.delta < 0 : k.delta > 0)
+      return { indicador: k.titulo, atual: k.valor, anterior: anterior === null ? '—' : fmt(anterior), variacao: k.delta === null ? '—' : k.delta === 0 ? 'igual' : k.formatoDelta(k.delta), tom: melhorou === null ? 'cinza' : melhorou ? 'bom' : 'ruim' }
+    })
+  }) : ''
+
   imprimirRelatorioVisual({
     titulo: 'Análise de Auditorias',
-    subtitulo: `${descricaoPeriodo.value} · ${resumo.value.total} auditoria(s)${filtros.tipo !== 'todos' ? ` · ${filtros.tipo}` : ''}`,
-    indicadores: kpis.value.map(k => ({ rotulo: k.titulo, valor: k.valor, detalhe: k.delta !== null && resumoAnterior.value ? `${k.formatoDelta(k.delta)} vs anterior` : k.detalhe, tom: k.alerta ? 'alerta' : 'neutro' })),
+    subtitulo: `${descricaoPeriodo.value} · ${r.total} auditoria(s)${filtrosTexto.length ? ` · ${filtrosTexto.join(', ')}` : ''}${comparativo}`,
+    rodape: `Análise de Auditorias · ${descricaoPeriodo.value}`,
+    antesDosIndicadores: `<div class="sumario">${secoes.map(([n, t]) => `<span><b>${n}</b>${escapeHtml(t)}</span>`).join('')}</div>`,
+    indicadores: kpis.value.map(k => ({ rotulo: k.titulo, valor: k.valor, detalhe: k.detalhe, tom: k.alerta ? 'alerta' : 'neutro' })),
     blocos: [
-      blocoDestaques({ itens: insights.value }),
-      blocoColunas({ titulo: '% pendente médio por mês', subtitulo: 'Menor é melhor', colunas: meses.value.map(m => ({ rotulo: m.rotulo, valor: m.mediaPendente ?? 0, tom: tomPend(m.mediaPendente ?? 0) })), meta: META, sufixo: '%' }),
+      // 1 · Resumo executivo
+      blocoCapitulo({ numero: '1', titulo: 'Resumo do período', descricao: `Meta: até ${META}% pendente por auditoria. Taxa na meta considera apenas auditorias fechadas.` }),
       grade(
-        blocoBarras({ titulo: 'Taxa na meta por tipo', barras: tipos.value.map(t => ({ rotulo: `${t.tipo} (${t.total})`, valor: t.taxaMeta ?? 0, texto: pct(t.taxaMeta, 0), tom: (t.taxaMeta ?? 0) >= 70 ? 'bom' : 'alerta' })), maximo: 100 }),
-        blocoBarras({ titulo: '% pendente médio por tipo', barras: tipos.value.map(t => ({ rotulo: t.tipo, valor: t.mediaPendente ?? 0, texto: pct(t.mediaPendente), tom: tomPend(t.mediaPendente ?? 0) })), meta: META })
+        insights.value.length ? blocoDestaques({ titulo: 'Principais conclusões', itens: insights.value }) : '',
+        blocoColunas({ titulo: '% pendente médio por mês', subtitulo: 'Menor é melhor · tracejado = meta', colunas: meses.value.map(m => ({ rotulo: m.rotulo, valor: m.mediaPendente ?? 0, tom: tomPend(m.mediaPendente ?? 0) })), meta: META, sufixo: '%' })
       ),
       grade(
-        blocoBarras({ titulo: 'Setores · % pendente no período', subtitulo: `Tracejado = meta ${META}%`, barras: setoresOrd.slice(0, 15).map(s => ({ rotulo: s.setor, valor: s.percPendente, texto: `${pct(s.percPendente, 1)} · ${s.acimaDaMeta}/${s.auditorias}`, tom: tomPend(s.percPendente) })), meta: META }),
-        blocoBarras({ titulo: 'Usuários · leituras no período', barras: usuariosOrd.slice(0, 15).map(u => ({ rotulo: rotuloUsuario(u.usuario), valor: u.leituras, texto: `${u.leituras.toLocaleString('pt-BR')} · ${pct(u.percProblema, 1)} erro` })) })
+        blocoTabela({
+          titulo: 'Por tipo de auditoria',
+          colunas: [
+            { chave: 'tipo', titulo: 'Tipo' }, { chave: 'total', titulo: 'Auditorias', alinhamento: 'right' },
+            { chave: 'mediaPendente', titulo: '% pend. médio', alinhamento: 'right', html: v => (v === null ? '—' : `<b style="color:${v > META ? '#dc2626' : '#059669'}">${pct(v)}</b>`) },
+            { chave: 'taxaMeta', titulo: 'Na meta', alinhamento: 'right', html: v => pct(v, 0) },
+            { chave: 'tendencia', titulo: 'Tendência', html: seloTendencia },
+            { chave: 'serie', titulo: 'Últimas 12', html: v => sparkline(v.map(p => p.valor), { meta: META }) }
+          ],
+          linhas: tipos.value
+        }),
+        comparacaoAnterior
       ),
+
+      // 2 · Setores
+      blocoCapitulo({ numero: '2', titulo: 'Setores', novaPagina: true, descricao: `Ordenados pelo % pendente no período. "Acima da meta" = em quantas auditorias o setor passou de ${META}%.` }),
+      reincidentes.length ? `<div class="secao painel"><h2>Setores reincidentes (acima da meta em metade ou mais das auditorias)</h2><div class="chips">${reincidentes.map(s => `<span>${escapeHtml(s.setor)} · ${s.acimaDaMeta}/${s.auditorias}</span>`).join('')}</div></div>` : '',
       blocoTabela({
-        titulo: 'Auditorias',
         colunas: [
-          { chave: 'dataFormatada', titulo: 'Data' }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'status', titulo: 'Status' }, { chave: 'meta', titulo: 'Meta' },
-          { chave: 'pendente', titulo: '% Pendente', alinhamento: 'right', format: v => pct(v), barra: { max: Math.max(META * 2, ...linhasAuditorias.value.map(l => l.pendente)), tom: tomPend } },
-          { chave: 'total', titulo: 'Itens', alinhamento: 'right' }, { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right' }
+          { chave: 'setor', titulo: 'Setor' }, { chave: 'auditorias', titulo: 'Aud.', alinhamento: 'right' },
+          { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right', format: int }, { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right', format: int },
+          { chave: 'percPendente', titulo: '% Pendente', alinhamento: 'right', format: v => pct(v), barra: { max: maxPendSetor, tom: tomPend } },
+          { chave: 'percProblema', titulo: '% Problema', alinhamento: 'right', format: v => pct(v) },
+          { chave: 'acimaDaMeta', titulo: 'Acima da meta', alinhamento: 'center', html: (v, s) => selo(`${v}/${s.auditorias}`, s.auditorias >= 2 && s.reincidencia >= 50 ? 'ruim' : v ? 'alerta' : 'bom') },
+          { chave: 'ultimo', titulo: 'Última', alinhamento: 'right', format: v => pct(v, 1) },
+          { chave: 'tendencia', titulo: 'Tendência', html: seloTendencia },
+          { chave: 'historico', titulo: 'Evolução', html: v => sparkline(v.slice(-12).map(h => h.valor), { meta: META }) }
         ],
-        linhas: auditoriasOrdenadas.value
+        linhas: setoresOrd
+      }),
+      totalSetores.value ? `<p class="nota">Geral do período: ${int(totalSetores.value.lidos)} lidos, ${int(totalSetores.value.pendentes)} pendentes (${pct(totalSetores.value.percPendente)}), ${pct(totalSetores.value.percProblema)} com problema.</p>` : '',
+
+      // 3 · Usuários
+      ...(usuariosOrd.length ? [
+        blocoCapitulo({ numero: '3', titulo: 'Usuários', novaPagina: true, descricao: 'Leituras = itens lidos + leituras com problema, somadas no período.' }),
+        blocoTabela({
+          colunas: [
+            { chave: 'posicao', titulo: '#', alinhamento: 'right' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'nome', titulo: 'Nome' },
+            { chave: 'auditorias', titulo: 'Aud.', alinhamento: 'right' },
+            { chave: 'leituras', titulo: 'Leituras', format: int, barra: { max: maxLeituras } },
+            { chave: 'mediaPorAuditoria', titulo: 'Média/aud.', alinhamento: 'right', format: v => int(Math.round(v)) },
+            { chave: 'comProblema', titulo: 'Com problema', alinhamento: 'right', format: int },
+            { chave: 'percProblema', titulo: '% Problema', alinhamento: 'right', html: v => selo(pct(v), v > 5 ? 'ruim' : v > 2 ? 'alerta' : 'cinza') },
+            { chave: 'ultima', titulo: 'Última', alinhamento: 'right' }
+          ],
+          linhas: usuariosOrd.map((u, i) => {
+            const { matricula, nome } = separarUsuario(u.usuario)
+            return { ...u, posicao: i + 1, matricula: matricula || '—', nome: nome || u.usuario, ultima: formatarDataBR(u.ultimaData) }
+          })
+        })
+      ] : []),
+
+      // 4 · Auditorias e meses
+      blocoCapitulo({ numero: usuariosOrd.length ? '4' : '3', titulo: 'Auditorias do período', novaPagina: true, descricao: 'Da mais recente para a mais antiga.' }),
+      blocoTabela({
+        colunas: [
+          { chave: 'dataFormatada', titulo: 'Data' }, { chave: 'tipo', titulo: 'Tipo' },
+          { chave: 'status', titulo: 'Status', html: (v, l) => selo(v, l.fechada ? 'cinza' : 'neutro') },
+          { chave: 'meta', titulo: 'Meta', html: (v, l) => selo(v, l.dentroMeta ? 'bom' : 'ruim') },
+          { chave: 'pendente', titulo: '% Pendente', alinhamento: 'right', format: v => pct(v), barra: { max: maxPendAud, tom: tomPend } },
+          { chave: 'conclusao', titulo: '% Conclusão', alinhamento: 'right', format: v => pct(v) },
+          { chave: 'total', titulo: 'Itens (SKU)', alinhamento: 'right', format: int }, { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right', format: int },
+          { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right', format: int }
+        ],
+        linhas: auditoriasOrd
+      }),
+      blocoTabela({
+        titulo: 'Resumo por mês',
+        colunas: [
+          { chave: 'rotulo', titulo: 'Mês' }, { chave: 'total', titulo: 'Auditorias', alinhamento: 'right' },
+          { chave: 'mediaPendente', titulo: '% Pendente médio', alinhamento: 'right', format: v => pct(v), barra: { max: Math.max(META * 2, ...meses.value.map(m => m.mediaPendente ?? 0)), tom: tomPend } },
+          { chave: 'mediaConclusao', titulo: '% Conclusão média', alinhamento: 'right', format: v => pct(v) },
+          { chave: 'naMeta', titulo: 'Na meta', alinhamento: 'right' }
+        ],
+        linhas: meses.value.map(m => ({ ...m, naMeta: m.taxaMeta === null ? '—' : `${m.dentroMeta}/${m.fechadas} (${pct(m.taxaMeta, 0)})` }))
       })
     ]
   })
