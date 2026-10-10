@@ -5,6 +5,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { blocoBarras, blocoColunas, blocoDestaques, blocoTabela, grade, imprimirRelatorioVisual } from '../utils/print'
 import { baixarCsv } from '../utils/csv'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
+import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 import { META_PENDENTE_PERCENTUAL, dentroDaMeta, metricasAuditoria } from '../utils/metricasAuditoria'
 import {
   agruparPorMes,
@@ -284,7 +285,7 @@ const gerarRelatorioPDF = () => {
       ),
       grade(
         blocoBarras({ titulo: 'Setores · % pendente no período', subtitulo: `Tracejado = meta ${META}%`, barras: setoresOrd.slice(0, 15).map(s => ({ rotulo: s.setor, valor: s.percPendente, texto: `${pct(s.percPendente, 1)} · ${s.acimaDaMeta}/${s.auditorias}`, tom: tomPend(s.percPendente) })), meta: META }),
-        blocoBarras({ titulo: 'Usuários · leituras no período', barras: usuariosOrd.slice(0, 15).map(u => ({ rotulo: u.usuario, valor: u.leituras, texto: `${u.leituras.toLocaleString('pt-BR')} · ${pct(u.percProblema, 1)} erro` })) })
+        blocoBarras({ titulo: 'Usuários · leituras no período', barras: usuariosOrd.slice(0, 15).map(u => ({ rotulo: rotuloUsuario(u.usuario), valor: u.leituras, texto: `${u.leituras.toLocaleString('pt-BR')} · ${pct(u.percProblema, 1)} erro` })) })
       ),
       blocoTabela({
         titulo: 'Auditorias',
@@ -575,7 +576,10 @@ const gerarRelatorioPDF = () => {
               <td class="px-3 py-2.5">
                 <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
               </td>
-              <td class="px-3 py-2.5 font-medium text-slate-800">{{ u.usuario }}</td>
+              <td class="px-3 py-2.5">
+                <p class="font-medium text-slate-800">{{ separarUsuario(u.usuario).nome || u.usuario }}</p>
+                <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
+              </td>
               <td class="px-3 py-2.5 text-right text-slate-600">{{ u.auditorias }}</td>
               <td class="px-3 py-2.5">
                 <div class="flex items-center gap-2">

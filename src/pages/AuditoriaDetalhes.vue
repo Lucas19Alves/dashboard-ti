@@ -15,6 +15,7 @@ import { printTableInNewWindow, blocoBarras, blocoTabela, imprimirRelatorioVisua
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
 import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
 import { baixarCsv } from '../utils/csv'
+import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -2086,17 +2087,17 @@ const handlePrintUsuarios = () => {
       { rotulo: 'Com problema', valor: lista.reduce((s, u) => s + u.comProblema, 0), tom: 'alerta' }
     ],
     blocos: [
-      blocoBarras({ titulo: 'Leituras por usuário', barras: lista.slice(0, 20).map(u => ({ rotulo: u.nome, valor: u.totalLidos, texto: `${u.totalLidos} · ${u.percentualAuditoria.toFixed(1)}%` })) }),
+      blocoBarras({ titulo: 'Leituras por usuário', barras: lista.slice(0, 20).map(u => ({ rotulo: rotuloUsuario(u.nome), valor: u.totalLidos, texto: `${u.totalLidos} · ${u.percentualAuditoria.toFixed(1)}%` })) }),
       blocoTabela({
         titulo: 'Detalhamento',
         colunas: [
-          { chave: 'nome', titulo: 'Usuário' }, { chave: 'lidos', titulo: 'Lidos corretamente', alinhamento: 'right' },
+          { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'nomeExibicao', titulo: 'Nome' }, { chave: 'lidos', titulo: 'Lidos corretamente', alinhamento: 'right' },
           { chave: 'comProblema', titulo: 'Com problema', alinhamento: 'right' },
           { chave: 'percentualProblema', titulo: '% Problemas', alinhamento: 'right', format: v => `${v.toFixed(1)}%`, barra: { max: Math.max(5, ...lista.map(u => u.percentualProblema)), tom: v => (v > 5 ? 'ruim' : v > 2 ? 'alerta' : 'bom') } },
           { chave: 'totalLidos', titulo: 'Total lidos', alinhamento: 'right' },
           { chave: 'percentualAuditoria', titulo: '% da auditoria', alinhamento: 'right', format: v => `${v.toFixed(1)}%` }
         ],
-        linhas: lista
+        linhas: lista.map(u => ({ ...u, matricula: separarUsuario(u.nome).matricula || '—', nomeExibicao: separarUsuario(u.nome).nome || u.nome }))
       })
     ]
   })
@@ -3520,15 +3521,12 @@ const fecharRelatorio = () => {
     <RelatorioAuditoria
       v-if="modalRelatorioAberto"
       :auditoria="auditoria"
-      :historico="store.auditorias"
       :setores="setoresComAnalise"
       :locais="locaisComAnalise"
-      :is-item-lido="isItemLido"
-      :get-item-hour="getItemHour"
       @close="fecharRelatorio"
     />
 
-    <UiModal v-if="modalUsuarioAberto && usuarioDetalhes" :title="usuarioDetalhes.nome" subtitle="Desempenho do usuário nesta auditoria" width="max-w-4xl" @close="fecharModalUsuario">
+    <UiModal v-if="modalUsuarioAberto && usuarioDetalhes" :title="separarUsuario(usuarioDetalhes.nome).nome || usuarioDetalhes.nome" :subtitle="separarUsuario(usuarioDetalhes.nome).matricula ? `Matrícula: ${separarUsuario(usuarioDetalhes.nome).matricula} · desempenho nesta auditoria` : 'Desempenho do usuário nesta auditoria'" width="max-w-4xl" @close="fecharModalUsuario">
       <div class="space-y-5">
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="rounded-2xl bg-slate-50 p-3">
@@ -3579,7 +3577,7 @@ const fecharRelatorio = () => {
             :itens="usuarioDetalhes.problemas"
             :colunas="[{ chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'local', titulo: 'Local' }, { chave: 'motivo', titulo: 'Motivo', alinhamento: 'center', badge: v => (v === 'Estoque Zero' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700') }]"
             :facetas="[{ chave: 'motivo', titulo: 'Motivo' }, { chave: 'local', titulo: 'Local' }]"
-            :titulo="`Problemas de ${usuarioDetalhes.nome}`"
+            :titulo="`Problemas de ${rotuloUsuario(usuarioDetalhes.nome)}`"
             :passo="30"
           />
         </section>
