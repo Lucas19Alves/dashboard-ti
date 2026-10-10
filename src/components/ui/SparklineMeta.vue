@@ -6,7 +6,8 @@ import { formatarDataBR } from '../../utils/busca'
 const props = defineProps({
   pontos: { type: Array, default: () => [] }, // [{ id, data, valor }]
   meta: { type: Number, default: 3 },
-  rotulo: { type: String, default: 'Pendente' }
+  rotulo: { type: String, default: 'Pendente' },
+  alturaClasse: { type: String, default: 'h-16' }
 })
 const emit = defineEmits(['selecionar'])
 
@@ -42,7 +43,8 @@ const aoMover = (evento) => {
   <div class="relative">
     <svg
       :viewBox="`0 0 ${L} ${A}`"
-      class="h-16 w-full cursor-crosshair overflow-visible"
+      class="w-full cursor-crosshair overflow-visible"
+      :class="alturaClasse"
       preserveAspectRatio="none"
       role="img"
       :aria-label="`${rotulo}: ${pontos.map(p => `${formatarDataBR(p.data)} ${p.valor.toFixed(1)}%`).join(', ')}`"
