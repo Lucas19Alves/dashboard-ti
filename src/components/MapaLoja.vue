@@ -101,9 +101,12 @@ const usuarioFoco = ref('')
 const usuarios = computed(() => {
   const total = new Map()
   for (const a of areas.value.values()) for (const [u, n] of a.usuarios) total.set(u, (total.get(u) || 0) + n)
-  return [...total].sort((a, b) => b[1] - a[1]).map(([nome, leituras]) => ({ nome, leituras, ...separarUsuario(nome) }))
+  // `nome` é a chave original da planilha (usada nos mapas de leitura); `exibicao`/`matricula` são para a tela.
+  return [...total].sort((a, b) => b[1] - a[1]).map(([nome, leituras]) => ({ nome, leituras, exibicao: separarUsuario(nome).nome || nome, matricula: separarUsuario(nome).matricula }))
 })
-const maiorLeitura = computed(() => Math.max(1, ...[...areas.value.values()].map(a => (modo.value === 'usuario' ? a.usuarios.get(usuarioFoco.value) || 0 : a.lidos + a.comProblema))))
+const leiturasDe = d => (modo.value === 'usuario' ? d?.usuarios?.get(usuarioFoco.value) || 0 : (d?.lidos || 0) + (d?.comProblema || 0))
+// Escala das cores: corredores contam por face, demais áreas pelo total.
+const maiorLeitura = computed(() => Math.max(1, ...[...areas.value.values()].flatMap(a => (a.tipo === 'gondola' ? Object.values(a.faces).map(leiturasDe) : [leiturasDe(a)]))))
 const TONS_AZUL = ['bg-blue-100 text-blue-900', 'bg-blue-200 text-blue-900', 'bg-blue-400 text-white', 'bg-blue-600 text-white', 'bg-blue-800 text-white']
 
 const classeDados = (d) => {
@@ -115,17 +118,15 @@ const classeDados = (d) => {
     if (p <= META * 2) return 'bg-amber-400 text-amber-950'
     return 'bg-red-500 text-white'
   }
-  const valor = modo.value === 'usuario' ? (d.usuarios?.get(usuarioFoco.value) || 0) : d.lidos + d.comProblema
+  const valor = leiturasDe(d)
   if (!valor) return 'bg-slate-100 text-slate-400'
   return TONS_AZUL[Math.min(4, Math.floor((valor / maiorLeitura.value) * 4.999))]
 }
-// Faces herdam a contagem de usuários da área (a planilha não separa usuário por face).
-const classeFace = (area, face) => classeDados(modo.value === 'pendente' ? area?.faces?.[face] : area)
+const classeFace = (area, face) => classeDados(area?.faces?.[face])
 const valorTexto = (d) => {
   if (!d?.total) return ''
   if (modo.value === 'pendente') return `${percentualPendente(d).toFixed(1)}%`
-  if (modo.value === 'usuario') return String(d.usuarios?.get(usuarioFoco.value) || '')
-  return String(d.lidos + d.comProblema)
+  return String(leiturasDe(d) || '')
 }
 watch(modo, v => { if (v === 'usuario' && !usuarioFoco.value) usuarioFoco.value = usuarios.value[0]?.nome || '' })
 
@@ -134,7 +135,7 @@ const selecionado = ref(null)
 const hover = ref(null)
 const posicaoSelecionada = computed(() => layout.value.posicoes.find(p => p.id === selecionado.value) || null)
 const areaSelecionada = computed(() => (selecionado.value ? areas.value.get(selecionado.value) || { bloco: selecionado.value, tipo: interpretarLocal(selecionado.value).tipo, numero: interpretarLocal(selecionado.value).numero, lidos: 0, pendentes: 0, comProblema: 0, total: 0, faces: {}, usuarios: new Map(), locais: new Set() } : null))
-const usuariosDaArea = computed(() => [...(areaSelecionada.value?.usuarios || new Map())].sort((a, b) => b[1] - a[1]).map(([nome, n]) => ({ nome, n, ...separarUsuario(nome) })))
+const usuariosDaArea = computed(() => [...(areaSelecionada.value?.usuarios || new Map())].sort((a, b) => b[1] - a[1]).map(([nome, n]) => ({ nome, n, exibicao: separarUsuario(nome).nome || nome, matricula: separarUsuario(nome).matricula })))
 const maiorUsuarioArea = computed(() => Math.max(1, ...usuariosDaArea.value.map(u => u.n)))
 const rotuloPersonalizado = id => layout.value.posicoes.find(p => p.id === id)?.rotulo
 const titulo = (area) => rotuloPersonalizado(area?.bloco) || nomeArea(area)
@@ -193,7 +194,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       <section class="overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</span>
-          <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores numerados da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
+          <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores (número no meio, faces C/D no fundo e A/B na frente) da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
         </div>
         <div class="overflow-x-auto">
           <div
@@ -219,21 +220,20 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               @mouseenter="hover = p.id"
               @mouseleave="hover = null"
             >
-              <!-- Corredor: C/D em cima e A/B embaixo (A de frente para B, C de frente para D) -->
-              <div v-if="(areas.get(p.id)?.tipo || interpretarLocal(p.id).tipo) === 'gondola'" class="relative flex h-full overflow-hidden rounded-lg ring-1 ring-slate-300 transition" :class="[selecionado === p.id ? 'ring-4 ring-blue-500' : 'group-hover:ring-2 group-hover:ring-blue-400', p.w < p.h ? 'flex-col' : 'flex-row']">
-                <div v-for="(par, k) in [['C', 'D'], ['A', 'B']]" :key="k" class="flex min-h-0 min-w-0 flex-1" :class="p.w < p.h ? 'flex-row' : 'flex-col'">
-                  <div class="flex min-h-0 min-w-0 flex-1 items-center justify-center font-bold leading-none" :class="classeFace(areas.get(p.id), par[0])" :title="`${p.id}${par[0]}`">
-                    <span class="truncate">{{ par[0] }}</span>
-                  </div>
-                  <div class="flex shrink-0 items-center justify-center bg-white text-[0.75em] font-black text-slate-400" :style="p.w < p.h ? { width: '28%' } : { height: '28%' }"></div>
-                  <div class="flex min-h-0 min-w-0 flex-1 items-center justify-center font-bold leading-none" :class="classeFace(areas.get(p.id), par[1])" :title="`${p.id}${par[1]}`">
-                    <span class="truncate">{{ par[1] }}</span>
+              <!-- Corredor: o número é o corredor (onde se anda); em volta, 4 faces de gôndola.
+                   C/D no fundo e A/B na frente; A de frente para B, C de frente para D. -->
+              <div v-if="(areas.get(p.id)?.tipo || interpretarLocal(p.id).tipo) === 'gondola'" class="flex h-full overflow-hidden rounded-md ring-1 ring-slate-300 transition" :class="[selecionado === p.id ? 'ring-4 ring-blue-500' : 'group-hover:ring-2 group-hover:ring-blue-400', p.w < p.h ? 'flex-row' : 'flex-col']">
+                <div v-for="lado in [['C', 'A'], null, ['D', 'B']]" :key="lado ? lado.join('') : 'corredor'" class="flex min-h-0 min-w-0" :class="[p.w < p.h ? 'flex-col' : 'flex-row', lado ? 'basis-[30%]' : 'basis-[40%]']">
+                  <template v-if="lado">
+                    <div v-for="f in lado" :key="f" class="flex min-h-0 min-w-0 flex-1 items-center justify-center text-[0.8em] font-bold leading-none" :class="[classeFace(areas.get(p.id), f), f === 'C' || f === 'D' ? (p.w < p.h ? 'border-b border-white/70' : 'border-r border-white/70') : '']" :title="`${p.id}${f}`">
+                      {{ f }}
+                    </div>
+                  </template>
+                  <div v-else class="flex flex-1 flex-col items-center justify-center gap-0.5 bg-[repeating-linear-gradient(0deg,#f8fafc_0,#f8fafc_6px,#eef2f7_6px,#eef2f7_12px)] leading-none">
+                    <span class="font-black text-slate-800">{{ rotuloPersonalizado(p.id) || p.id.slice(1) }}</span>
+                    <span v-if="valorTexto(areas.get(p.id))" class="text-[0.7em] font-bold text-slate-500" :style="p.w < p.h ? { writingMode: 'vertical-rl' } : {}">{{ valorTexto(areas.get(p.id)) }}</span>
                   </div>
                 </div>
-                <span class="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded bg-white/95 px-1 py-0.5 leading-none shadow-sm">
-                  <span class="text-[0.95em] font-black text-slate-800">{{ rotuloPersonalizado(p.id) || p.id.slice(1) }}</span>
-                  <span v-if="valorTexto(areas.get(p.id))" class="mt-0.5 text-[0.7em] font-bold text-slate-500">{{ valorTexto(areas.get(p.id)) }}</span>
-                </span>
               </div>
 
               <!-- Demais áreas -->
@@ -315,7 +315,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             <p v-if="!usuariosDaArea.length" class="mt-1 text-xs text-slate-500">Nenhuma leitura registrada.</p>
             <ul v-else class="mt-2 space-y-2">
               <li v-for="u in usuariosDaArea" :key="u.nome" class="text-xs">
-                <div class="flex justify-between gap-2"><span class="truncate font-semibold text-slate-800">{{ u.nome && u.matricula ? `${separarUsuario(u.nome).nome}` : u.nome }}<span v-if="u.matricula" class="ml-1 font-normal text-slate-400">{{ u.matricula }}</span></span><span class="shrink-0 font-bold">{{ u.n }}</span></div>
+                <div class="flex justify-between gap-2"><span class="truncate font-semibold text-slate-800">{{ u.exibicao }}<span v-if="u.matricula" class="ml-1 font-normal text-slate-400">{{ u.matricula }}</span></span><span class="shrink-0 font-bold">{{ u.n }}</span></div>
                 <div class="mt-1 h-1.5 rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" :style="{ width: `${(u.n / maiorUsuarioArea) * 100}%` }"></div></div>
               </li>
             </ul>
@@ -362,7 +362,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <ul class="mt-3 space-y-1">
             <li v-for="u in usuarios" :key="u.nome">
               <button type="button" class="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50" :class="modo === 'usuario' && usuarioFoco === u.nome ? 'bg-blue-50 text-blue-800' : ''" @click="modo = 'usuario'; usuarioFoco = u.nome">
-                <span class="min-w-0"><span class="block truncate font-semibold">{{ u.nome && u.matricula ? separarUsuario(u.nome).nome : u.nome }}</span><span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span></span>
+                <span class="min-w-0"><span class="block truncate font-semibold">{{ u.exibicao }}</span><span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span></span>
                 <span class="shrink-0 font-bold">{{ u.leituras }}</span>
               </button>
             </li>
