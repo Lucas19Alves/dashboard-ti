@@ -97,6 +97,14 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Auditorias**: busca, paginação, CSV e **comparação de duas auditorias** (variação geral e por setor).
 - **Detalhe da auditoria**: card "Caminho até a meta" (quantos itens faltam ler ou a folga) e comparação com a auditoria anterior do mesmo tipo (setores que melhoraram/pioraram).
 
+### 4.7 Interface, listas e relatórios
+- **Layout**: largura máxima única (`.ui-container` / `.ui-page`, até 1760px) para aproveitar telas grandes; navbar em cor sólida.
+- **Auditorias**: cards de auditorias em andamento sem bordas, com anel de conclusão e "faltam X itens para a meta"; histórico por tipo agrupado por mês, com resumo do tipo, filtro por situação e "mostrar mais".
+- **Aba Usuários** (`components/AbaUsuariosAuditoria.vue`): pódio, leituras do time por hora, cartões/tabela/mapa de horas por usuário (ritmo, pico, período ativo, problemas) e "quem leu cada setor" com alerta de dependência de uma só pessoa. Exporta CSV.
+- **Modais de lista** (`components/ui/UiListaItens.vue`): busca, filtros com contagem, agrupamento, ordenação, carregamento incremental, CSV, impressão e cópia do código. Usado em métricas, itens do local, usuário e vencimentos.
+- **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): indicadores, composição, destaques, setores vs meta, top locais, leituras por hora, usuários; imprime/salva PDF, salva imagem e copia um resumo em texto para compartilhar.
+- **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
+
 ---
 
 ## � 5. Guia de Uso
