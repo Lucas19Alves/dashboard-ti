@@ -106,9 +106,9 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
 
 ### 4.8 Detalhe da auditoria: navegação e mapa da loja
-- **Navegação**: barra de abas fixa (Visão geral, Mapa da loja, Usuários, Dados, Estatísticas e Atenção quando houver alertas), com contadores, setas do teclado e resumo compacto (% pendente) ao rolar. A aba fica na URL (`?aba=mapa`).
+- **Navegação**: barra de abas fixa (Visão geral, Mapa da loja, Usuários, Dados e Estatísticas; a aba Atenção só aparece pelo endereço `?aba=atencao`), com contadores, setas do teclado e resumo compacto (% pendente) ao rolar. A aba fica na URL (`?aba=mapa`).
 - **Mapa da loja** (`components/MapaLoja.vue`, `utils/mapaLoja.js`): monta a planta a partir dos locais da auditoria.
-  - `G05A` = gôndola do corredor 05, face A (A de frente para B, C de frente para D; C/D em cima e A/B embaixo); corredores numerados da direita para a esquerda.
+  - `G05A` = corredor 05, face A. O número é o corredor; cada corredor tem 4 faces de gôndola (A de frente para B, C de frente para D; C/D no fundo e A/B na frente). Corredores numerados da direita para a esquerda e encostados (vizinhos dividem a mesma gôndola).
   - `PL01` paredão de líquida (extrema direita), `F01..` freezers (esquerda), `PF01` paredão de frios, `EMP01` empório de frios, `ACG` açougue, `FLV`.
   - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
   - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; o layout fica salvo neste navegador, vale para todas as auditorias e vai junto no backup (`configuracoes.mapaLoja`).

@@ -30,6 +30,8 @@ describe('agregarPorArea', () => {
     expect(g5.faces.A).toMatchObject({ lidos: 9, pendentes: 1 })
     expect(g5.usuarios.get('Ana')).toBe(2)
     expect(g5.usuarios.has('Bia')).toBe(false)
+    expect(g5.faces.A.usuarios.get('Ana')).toBe(1)
+    expect(g5.faces.B.usuarios.get('Ana')).toBe(1)
     expect(percentualPendente(g5)).toBeCloseTo(5)
     expect(areas.get('F01')).toMatchObject({ pendentes: 4, lidos: 0 })
   })
@@ -46,6 +48,7 @@ describe('layout', () => {
     const pos = id => posicoes.find(p => p.id === id)
     expect(pos('PL01').x + pos('PL01').w).toBe(colunas)
     expect(pos('G01').x).toBeGreaterThan(pos('G02').x)
+    expect(pos('G02').x + pos('G02').w).toBe(pos('G01').x) // vizinhos encostados
     expect(pos('F01').x).toBeLessThan(pos('G02').x)
   })
 

@@ -246,7 +246,8 @@ const abasDetalhes = computed(() => {
     { value: 'usuarios', label: 'Usuários', icon: 'fas fa-users', badge: usuarios || null },
     { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
     { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' },
-    ...(alertas ? [{ value: 'atencao', label: 'Atenção', icon: 'fas fa-triangle-exclamation', badge: alertas, tom: 'alerta' }] : [])
+    // Aba de uso restrito: só aparece quando aberta pelo endereço (?aba=atencao).
+    ...(abaAtiva.value === 'atencao' ? [{ value: 'atencao', label: 'Atenção', icon: 'fas fa-triangle-exclamation', badge: alertas || null, tom: 'alerta' }] : [])
   ]
 })
 const resumoNavegacao = computed(() => {
