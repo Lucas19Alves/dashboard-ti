@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { correspondeBusca } from '../utils/busca'
 import { baixarCsv } from '../utils/csv'
+import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 
 // Aba "Usuários" do detalhe da auditoria: produtividade, ritmo por hora e cobertura por setor.
 const props = defineProps({
@@ -37,7 +38,6 @@ const atividade = computed(() => {
   return { porUsuario, porSetor }
 })
 
-const iniciais = nome => nome.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?'
 const formatarHora = h => `${String(h).padStart(2, '0')}h`
 
 const usuarios = computed(() => {
@@ -58,7 +58,9 @@ const usuarios = computed(() => {
     const setoresOrdenados = [...(a?.setores || new Map())].sort((x, y) => y[1] - x[1])
     return {
       nome,
-      iniciais: iniciais(nome),
+      // `nome` é a chave original da planilha; `exibicao` e `matricula` são para a tela.
+      exibicao: separarUsuario(nome).nome || nome,
+      matricula: separarUsuario(nome).matricula,
       lidos,
       comProblema,
       leituras,
@@ -112,8 +114,8 @@ const ordens = [
   { valor: 'nome', rotulo: 'Nome' }
 ]
 const listaVisivel = computed(() => usuarios.value
-  .filter(u => correspondeBusca(busca.value, [u.nome, u.setorPrincipal]))
-  .sort((a, b) => (ordem.value === 'nome' ? a.nome.localeCompare(b.nome, 'pt-BR') : b[ordem.value] - a[ordem.value])))
+  .filter(u => correspondeBusca(busca.value, [u.nome, u.exibicao, u.matricula, u.setorPrincipal]))
+  .sort((a, b) => (ordem.value === 'nome' ? a.exibicao.localeCompare(b.exibicao, 'pt-BR') : b[ordem.value] - a[ordem.value])))
 
 const maiorHora = computed(() => Math.max(1, ...usuarios.value.flatMap(u => u.horas)))
 // Intensidade sequencial (um só tom de azul): mais escuro = mais leituras.
@@ -135,7 +137,7 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
 
 const exportarCsv = () => {
   const colunas = [
-    { chave: 'posicao', titulo: 'Posição' }, { chave: 'nome', titulo: 'Usuário' }, { chave: 'leituras', titulo: 'Leituras' },
+    { chave: 'posicao', titulo: 'Posição' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'exibicao', titulo: 'Nome' }, { chave: 'leituras', titulo: 'Leituras' },
     { chave: 'lidos', titulo: 'Lidos corretamente' }, { chave: 'comProblema', titulo: 'Com problema' }, { chave: 'percProblemaFmt', titulo: '% Problema' },
     { chave: 'participacaoFmt', titulo: '% do total' }, { chave: 'periodo', titulo: 'Período ativo' }, { chave: 'ritmoFmt', titulo: 'Leituras/hora' },
     { chave: 'setorPrincipal', titulo: 'Setor principal' }
@@ -204,8 +206,8 @@ const exportarCsv = () => {
               class="flex w-1/3 max-w-40 flex-col items-center text-center"
               @click="emit('detalhes', u.nome)"
             >
-              <span class="inline-flex items-center justify-center rounded-full font-bold text-white shadow-md" :class="u.posicao === 1 ? 'size-16 bg-amber-500 text-lg' : u.posicao === 2 ? 'size-14 bg-slate-400' : 'size-14 bg-orange-400'">{{ u.iniciais }}</span>
-              <span class="mt-2 w-full truncate text-sm font-bold text-slate-900" :title="u.nome">{{ u.nome }}</span>
+              <span class="line-clamp-2 w-full text-sm font-bold leading-tight text-slate-900" :title="u.exibicao">{{ u.exibicao }}</span>
+              <span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span>
               <span class="text-xs text-slate-500">{{ u.leituras.toLocaleString('pt-BR') }} leituras</span>
               <span
                 class="mt-2 flex w-full items-start justify-center rounded-t-xl pt-2 text-lg font-black text-white"
@@ -269,9 +271,9 @@ const exportarCsv = () => {
           @click="emit('detalhes', u.nome)"
         >
           <div class="flex items-center gap-3">
-            <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-700">{{ u.iniciais }}</span>
             <div class="min-w-0 flex-1">
-              <p class="truncate font-bold text-slate-900" :title="u.nome">{{ u.nome }}</p>
+              <p class="truncate font-bold text-slate-900" :title="u.exibicao">{{ u.exibicao }}</p>
+              <p v-if="u.matricula" class="text-xs font-medium text-slate-600">Matrícula: {{ u.matricula }}</p>
               <p class="truncate text-xs text-slate-500">
                 <template v-if="u.inicio !== null">{{ formatarHora(u.inicio) }}–{{ formatarHora(u.fim + 1) }} · </template>{{ u.setorPrincipal || 'sem setor' }}
               </p>
@@ -303,7 +305,7 @@ const exportarCsv = () => {
           </div>
 
           <!-- Faixa de horas -->
-          <div class="mt-4 flex gap-0.5" :aria-label="`Leituras por hora de ${u.nome}`">
+          <div class="mt-4 flex gap-0.5" :aria-label="`Leituras por hora de ${u.exibicao}`">
             <span v-for="(v, i) in u.horas" :key="i" class="h-3 flex-1 rounded-sm" :class="corCalor(v)" :title="`${formatarHora(HORAS[i])}: ${v}`"></span>
           </div>
           <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>08h</span><span>14h</span><span>20h</span></div>
@@ -320,7 +322,8 @@ const exportarCsv = () => {
           <thead class="bg-slate-50 text-xs text-slate-500">
             <tr>
               <th class="px-4 py-3 text-left font-semibold">#</th>
-              <th class="px-4 py-3 text-left font-semibold">Usuário</th>
+              <th class="px-4 py-3 text-left font-semibold">Matrícula</th>
+              <th class="px-4 py-3 text-left font-semibold">Nome</th>
               <th class="px-4 py-3 text-right font-semibold">Leituras</th>
               <th class="px-4 py-3 text-left font-semibold">Participação</th>
               <th class="px-4 py-3 text-right font-semibold">Ritmo</th>
@@ -332,7 +335,8 @@ const exportarCsv = () => {
           <tbody class="divide-y divide-slate-100">
             <tr v-for="u in listaVisivel" :key="u.nome" class="cursor-pointer hover:bg-blue-50/40" @click="emit('detalhes', u.nome)">
               <td class="px-4 py-2.5 text-slate-500">{{ u.posicao }}</td>
-              <td class="px-4 py-2.5 font-semibold text-slate-900">{{ u.nome }}</td>
+              <td class="px-4 py-2.5 font-mono text-slate-600">{{ u.matricula || '—' }}</td>
+              <td class="px-4 py-2.5 font-semibold text-slate-900">{{ u.exibicao }}</td>
               <td class="px-4 py-2.5 text-right font-semibold">{{ u.leituras.toLocaleString('pt-BR') }}</td>
               <td class="px-4 py-2.5">
                 <div class="flex items-center gap-2">
@@ -354,15 +358,18 @@ const exportarCsv = () => {
         <table class="w-full border-separate" style="border-spacing: 3px">
           <thead>
             <tr>
-              <th class="w-40 text-left text-xs font-semibold text-slate-500">Usuário</th>
+              <th class="w-52 text-left text-xs font-semibold text-slate-500">Usuário</th>
               <th v-for="h in HORAS" :key="h" class="text-center text-[10px] font-semibold text-slate-400">{{ formatarHora(h) }}</th>
               <th class="text-right text-xs font-semibold text-slate-500">Total</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="u in listaVisivel" :key="u.nome" class="cursor-pointer" @click="emit('detalhes', u.nome)">
-              <td class="max-w-40 truncate pr-2 text-sm font-medium text-slate-800">{{ u.nome }}</td>
-              <td v-for="(v, i) in u.horas" :key="i" class="h-8 min-w-8 rounded-md text-center text-[10px] font-semibold" :class="[corCalor(v), v / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.nome} · ${formatarHora(HORAS[i])}: ${v} leituras`">{{ v || '' }}</td>
+              <td class="max-w-52 pr-2">
+                <p class="truncate text-sm font-medium text-slate-800" :title="u.exibicao">{{ u.exibicao }}</p>
+                <p v-if="u.matricula" class="text-[10px] text-slate-500">Matrícula: {{ u.matricula }}</p>
+              </td>
+              <td v-for="(v, i) in u.horas" :key="i" class="h-8 min-w-8 rounded-md text-center text-[10px] font-semibold" :class="[corCalor(v), v / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.exibicao} · ${formatarHora(HORAS[i])}: ${v} leituras`">{{ v || '' }}</td>
               <td class="pl-2 text-right text-sm font-bold text-slate-900">{{ u.leituras.toLocaleString('pt-BR') }}</td>
             </tr>
           </tbody>
@@ -393,8 +400,8 @@ const exportarCsv = () => {
               <span class="h-full rounded-full" :class="s.dependencia >= 80 ? 'bg-amber-500' : 'bg-blue-600'" :style="{ width: `${s.dependencia}%` }"></span>
             </div>
             <p class="mt-1 truncate text-xs text-slate-500">
-              <b class="text-slate-700">{{ s.principal?.nome }}</b> {{ s.principal?.perc.toFixed(0) }}%
-              <template v-for="p in s.pessoas.slice(1, 3)" :key="p.nome"> · {{ p.nome }} {{ p.perc.toFixed(0) }}%</template>
+              <b class="text-slate-700">{{ rotuloUsuario(s.principal?.nome) }}</b> {{ s.principal?.perc.toFixed(0) }}%
+              <template v-for="p in s.pessoas.slice(1, 3)" :key="p.nome"> · {{ rotuloUsuario(p.nome) }} {{ p.perc.toFixed(0) }}%</template>
               <template v-if="s.pessoas.length > 3"> · +{{ s.pessoas.length - 3 }}</template>
             </p>
           </li>
