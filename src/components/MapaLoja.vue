@@ -219,9 +219,9 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               @mouseenter="hover = p.id"
               @mouseleave="hover = null"
             >
-              <!-- Corredor com faces A/B (frente a frente) e C/D -->
+              <!-- Corredor: C/D em cima e A/B embaixo (A de frente para B, C de frente para D) -->
               <div v-if="(areas.get(p.id)?.tipo || interpretarLocal(p.id).tipo) === 'gondola'" class="relative flex h-full overflow-hidden rounded-lg ring-1 ring-slate-300 transition" :class="[selecionado === p.id ? 'ring-4 ring-blue-500' : 'group-hover:ring-2 group-hover:ring-blue-400', p.w < p.h ? 'flex-col' : 'flex-row']">
-                <div v-for="(par, k) in [['A', 'B'], ['C', 'D']]" :key="k" class="flex min-h-0 min-w-0 flex-1" :class="p.w < p.h ? 'flex-row' : 'flex-col'">
+                <div v-for="(par, k) in [['C', 'D'], ['A', 'B']]" :key="k" class="flex min-h-0 min-w-0 flex-1" :class="p.w < p.h ? 'flex-row' : 'flex-col'">
                   <div class="flex min-h-0 min-w-0 flex-1 items-center justify-center font-bold leading-none" :class="classeFace(areas.get(p.id), par[0])" :title="`${p.id}${par[0]}`">
                     <span class="truncate">{{ par[0] }}</span>
                   </div>
