@@ -24,6 +24,13 @@ describe('validarBackup', () => {
       .toThrow('registros estão corrompidos')
   })
 
+  it('aceita layout do mapa válido e rejeita corrompido', () => {
+    const base = { versao: 2, auditorias: [], vencimentos: [] }
+    expect(() => validarBackup({ ...base, configuracoes: { mapaLoja: { posicoes: [{ id: 'FLV01', x: 1, y: 2, w: 8, h: 4 }] } } })).not.toThrow()
+    expect(() => validarBackup({ ...base, configuracoes: { mapaLoja: null } })).not.toThrow()
+    expect(() => validarBackup({ ...base, configuracoes: { mapaLoja: { posicoes: [{ id: 'X', x: 'a' }] } } })).toThrow('mapa da loja')
+  })
+
   it('converte backup regional antigo para auditorias compatíveis', () => {
     const convertido = normalizarFormatoBackup({
       exportedAt: '2026-09-23T10:00:00.000Z',

@@ -130,11 +130,15 @@ export const mesclarLayout = (padrao, salvo) => {
   return { colunas, linhas, posicoes }
 }
 
+// Layout válido: lista de áreas com id e posição/tamanho numéricos.
+export const layoutValido = (layout) => Boolean(layout && typeof layout === 'object' && Array.isArray(layout.posicoes) &&
+  layout.posicoes.every(p => p && typeof p.id === 'string' && ['x', 'y', 'w', 'h'].every(k => Number.isFinite(p[k]))))
+
 const CHAVE = 'dashboard_ti_mapa_loja_v1'
 export const carregarLayoutSalvo = () => {
   try {
     const dados = JSON.parse(localStorage.getItem(CHAVE) || 'null')
-    return dados && Array.isArray(dados.posicoes) ? dados : null
+    return layoutValido(dados) ? dados : null
   } catch {
     return null
   }
