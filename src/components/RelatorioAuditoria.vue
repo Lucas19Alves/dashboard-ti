@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { toPng } from 'html-to-image'
+import { computed, nextTick, ref } from 'vue'
+import { toBlob, toPng } from 'html-to-image'
 import UiModal from './ui/UiModal.vue'
 import { itensParaMeta } from '../utils/analiseHistorica'
 import { META_PENDENTE_PERCENTUAL, metricasAuditoria } from '../utils/metricasAuditoria'
 import { formatarDataBR } from '../utils/busca'
+import { paginarEquilibrado } from '../utils/paginas'
 import { blocoBarras, blocoTabela, escapeHtml, grade, imprimirRelatorioVisual } from '../utils/print'
 
 // Relatório da auditoria: % pendente, indicadores e os três focos de ação
@@ -115,6 +116,67 @@ const imprimir = () => {
   })
 }
 
+// ---------- Cartões para WhatsApp ----------
+// O WhatsApp reduz imagens para ~1600 px no lado maior; uma imagem larga com tabela fica ilegível.
+// Geramos cartões verticais 4:5 (1080×1350, renderizados em 2x) com letras grandes e poucas colunas.
+const CARTAO = { largura: 1080, altura: 1350 }
+const SETORES_POR_CARTAO = 11
+const LOCAIS_SEM_LEITURA_POR_CARTAO = 40
+const cartoes = computed(() => {
+  const lista = [{ tipo: 'resumo' }]
+  const paginasSetores = paginarEquilibrado(setoresOrdenados.value, SETORES_POR_CARTAO)
+  if (setoresOrdenados.value.length) {
+    paginasSetores.forEach((itens, i) => lista.push({ tipo: 'setores', itens, parte: paginasSetores.length > 1 ? `${i + 1}/${paginasSetores.length}` : '' }))
+  }
+  if (topLocais.value.length) lista.push({ tipo: 'locais' })
+  const paginasSemLeitura = paginarEquilibrado(locaisSemLeitura.value, LOCAIS_SEM_LEITURA_POR_CARTAO)
+  if (locaisSemLeitura.value.length) {
+    paginasSemLeitura.forEach((itens, i) => lista.push({ tipo: 'semLeitura', itens, parte: paginasSemLeitura.length > 1 ? `${i + 1}/${paginasSemLeitura.length}` : '' }))
+  }
+  return lista
+})
+const gerandoCartoes = ref(false)
+const elementosCartao = []
+
+const baixarArquivo = (arquivo) => {
+  const url = URL.createObjectURL(arquivo)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = arquivo.name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+const enviarWhatsapp = async () => {
+  gerandoCartoes.value = true
+  elementosCartao.length = 0
+  const arquivos = []
+  try {
+    await nextTick()
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    for (const [i, el] of elementosCartao.entries()) {
+      const blob = await toBlob(el, { cacheBust: true, pixelRatio: 2, width: CARTAO.largura, height: CARTAO.altura, backgroundColor: '#ffffff' })
+      if (blob) arquivos.push(new File([blob], `${nomeBase.value}-${String(i + 1).padStart(2, '0')}.png`, { type: 'image/png' }))
+    }
+  } finally {
+    gerandoCartoes.value = false
+  }
+  if (!arquivos.length) return
+  // No celular abre a folha de compartilhamento (WhatsApp incluso); no computador baixa os arquivos.
+  if (navigator.canShare?.({ files: arquivos })) {
+    try {
+      await navigator.share({ files: arquivos, title: `Auditoria de ${props.auditoria.tipo} · ${dataBR.value}` })
+      return
+    } catch (erro) {
+      if (erro?.name === 'AbortError') return
+    }
+  }
+  for (const arquivo of arquivos) {
+    baixarArquivo(arquivo)
+    await new Promise(r => setTimeout(r, 350))
+  }
+}
+
 const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bom: 'bg-lime-50 text-lime-700', Regular: 'bg-amber-50 text-amber-700' })[c] || 'bg-red-50 text-red-700'
 </script>
 
@@ -122,7 +184,11 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
   <UiModal :title="`Relatório · ${auditoria.tipo}`" :subtitle="`${dataBR} · imprimir, salvar em PDF ou imagem`" width="max-w-7xl" @close="emit('close')">
     <div class="mb-4 flex flex-wrap items-center gap-2">
       <button type="button" class="ui-btn-primary py-2" @click="imprimir"><i class="fas fa-file-pdf"></i>Imprimir / PDF</button>
+      <button type="button" class="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50" :disabled="gerandoCartoes" @click="enviarWhatsapp">
+        <i :class="gerandoCartoes ? 'fas fa-spinner fa-spin' : 'fab fa-whatsapp'"></i>Imagens para WhatsApp
+      </button>
       <button type="button" class="ui-btn-secondary py-2" :disabled="gerandoImagem" @click="salvarImagem"><i :class="gerandoImagem ? 'fas fa-spinner fa-spin' : 'fas fa-image'"></i>Salvar imagem</button>
+      <span class="text-xs text-slate-500">{{ cartoes.length }} cartões verticais, legíveis no celular</span>
     </div>
 
     <div ref="area" class="relatorio space-y-5 bg-white">
@@ -216,6 +282,96 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
             <span v-for="l in locaisSemLeitura" :key="l" class="rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-red-700 shadow-sm">{{ l }}</span>
           </div>
         </section>
+      </div>
+    </div>
+    <!-- Cartões para WhatsApp (renderizados fora da tela só durante a geração) -->
+    <div v-if="gerandoCartoes" class="pointer-events-none fixed top-0" style="left: -99999px" aria-hidden="true">
+      <div
+        v-for="(c, i) in cartoes"
+        :key="i"
+        :ref="el => { if (el) elementosCartao[i] = el }"
+        class="flex flex-col bg-white p-16 text-slate-900"
+        :style="{ width: `${CARTAO.largura}px`, height: `${CARTAO.altura}px` }"
+      >
+        <div class="flex items-center justify-between text-[28px] font-semibold text-slate-500">
+          <span>Auditoria de {{ auditoria.tipo }} · {{ dataBR }}</span>
+          <span>{{ i + 1 }}/{{ cartoes.length }}</span>
+        </div>
+
+        <!-- Resumo -->
+        <template v-if="c.tipo === 'resumo'">
+          <div class="mt-7 rounded-[40px] bg-blue-700 px-12 py-9 text-white">
+            <p class="text-[30px] font-semibold text-blue-100">% pendente</p>
+            <p class="text-[132px] font-black leading-none tracking-tight">{{ m.percentualPendente.toFixed(2) }}%</p>
+            <p class="mt-5 inline-flex items-center gap-3 rounded-full px-6 py-2 text-[30px] font-bold" :class="naMeta ? 'bg-emerald-400/25 text-emerald-50' : 'bg-red-400/30 text-red-50'">
+              <i :class="naMeta ? 'fas fa-check' : 'fas fa-xmark'"></i>{{ naMeta ? 'Dentro da meta' : 'Fora da meta' }} ({{ META }}%)
+            </p>
+          </div>
+          <div class="mt-7 grid grid-cols-2 gap-5">
+            <div v-for="k in cards" :key="k.rotulo" class="rounded-[32px] px-8 py-5" :class="[k.classe, cards.length % 2 && k.rotulo === 'SKU' ? 'col-span-2' : '']">
+              <p class="text-[26px] font-bold uppercase tracking-wide text-slate-500">{{ k.rotulo }}</p>
+              <p class="text-[60px] font-black leading-tight" :class="k.texto">{{ k.valor.toLocaleString('pt-BR') }}</p>
+              <p class="text-[24px] text-slate-500">{{ k.detalhe }}</p>
+            </div>
+          </div>
+          <div class="mt-auto space-y-1 pt-5 text-[30px] font-semibold">
+            <p :class="setoresAcima ? 'text-red-700' : 'text-emerald-700'">{{ setoresAcima }} de {{ setoresOrdenados.length }} setores acima da meta</p>
+            <p v-if="locaisSemLeitura.length" class="text-red-700">{{ locaisSemLeitura.length }} local(is) sem leitura</p>
+          </div>
+        </template>
+
+        <!-- Setores -->
+        <template v-else-if="c.tipo === 'setores'">
+          <p class="mt-6 text-[52px] font-black">% pendente por setor <span v-if="c.parte" class="text-[32px] font-bold text-slate-400">({{ c.parte }})</span></p>
+          <p class="text-[26px] text-slate-500">{{ setoresAcima }} de {{ setoresOrdenados.length }} acima da meta de {{ META }}%</p>
+          <table class="mt-6 w-full">
+            <thead>
+              <tr class="text-[22px] font-bold uppercase tracking-wide text-slate-500">
+                <th class="pb-3 text-left">Setor</th>
+                <th class="pb-3 text-right">Pend.</th>
+                <th class="pb-3 text-right">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in c.itens" :key="s.nome" class="border-t-2 border-slate-100">
+                <td class="py-3.5 pr-4 text-[29px] font-semibold leading-tight">{{ s.nome }}</td>
+                <td class="py-3.5 text-right text-[30px] font-bold text-amber-700">{{ s.pendentes }}</td>
+                <td class="w-48 py-3.5 text-right text-[36px] font-black" :class="s.percentualPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ s.percentualPendente.toFixed(2) }}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <!-- Top 10 locais -->
+        <template v-else-if="c.tipo === 'locais'">
+          <p class="mt-6 text-[52px] font-black">Top 10 locais com mais pendentes</p>
+          <ol class="mt-8 space-y-5">
+            <li v-for="(l, j) in topLocais" :key="l.nome" class="flex items-center gap-5">
+              <span class="inline-flex size-[60px] shrink-0 items-center justify-center rounded-2xl text-[28px] font-black" :class="j < 3 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'">{{ j + 1 }}</span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-4">
+                  <span class="truncate text-[32px] font-bold">{{ l.nome }}</span>
+                  <span class="shrink-0 text-[32px] font-black">{{ l.pendentes }} <span class="text-[24px] font-semibold text-slate-500">pend. · {{ l.percentualPendente.toFixed(1) }}%</span></span>
+                </div>
+                <div class="mt-2 h-4 rounded-full bg-slate-100"><div class="h-full rounded-full bg-amber-500" :style="{ width: `${(l.pendentes / maiorLocal) * 100}%` }"></div></div>
+              </div>
+            </li>
+          </ol>
+        </template>
+
+        <!-- Locais sem leitura -->
+        <template v-else-if="c.tipo === 'semLeitura'">
+          <div class="mt-6 flex items-baseline justify-between">
+            <p class="text-[52px] font-black text-red-800">Locais sem leitura <span v-if="c.parte" class="text-[32px] font-bold text-red-400">({{ c.parte }})</span></p>
+            <p class="text-[80px] font-black text-red-700">{{ locaisSemLeitura.length }}</p>
+          </div>
+          <p class="text-[26px] text-red-700">Nenhum item lido nesses locais.</p>
+          <div class="mt-8 grid grid-cols-4 gap-4">
+            <span v-for="l in c.itens" :key="l" class="truncate rounded-2xl bg-red-50 px-4 py-4 text-center text-[28px] font-bold text-red-700">{{ l }}</span>
+          </div>
+        </template>
+
+        <p class="mt-auto pt-6 text-right text-[22px] text-slate-400">Dashboard TI · #{{ auditoria.id }}</p>
       </div>
     </div>
   </UiModal>
