@@ -1,14 +1,16 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { criarPreviaPlanilha } from '../utils/planilha'
+import { metricasAuditoria } from '../utils/metricasAuditoria'
 import StatCard from '../components/ui/StatCard.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
+const route = useRoute()
 const abaAtiva = ref('calendario')
 const abasAuditoria = [
   { value: 'calendario', label: 'Calendário', icon: 'fas fa-calendar' },
@@ -18,19 +20,8 @@ const abasAuditoria = [
 ]
 const semanaOffset = ref(0) // 0 = atual, -1 = anterior, 1 = próxima
 
-// Os cards devem refletir sempre o SKU e a análise mais recentes. Alguns backups
-// e atualizações mantêm os percentuais antigos dentro de `analise`, então os
-// valores exibidos são derivados novamente a partir da fonte atual da auditoria.
-const getMetricasCard = (auditoria) => {
-  const analise = auditoria?.analise || {}
-  const total = Number(auditoria?.sku || analise.totalItens || auditoria?.total || 0)
-  const pendentes = Math.max(0, Number(analise.itensPendentes || 0))
-  const lidos = Math.max(0, total - pendentes)
-  const percentualConclusao = total > 0 ? Math.min(100, (lidos / total) * 100) : 0
-  const percentualPendente = total > 0 ? Math.min(100, (pendentes / total) * 100) : 0
-
-  return { total, pendentes, lidos, percentualConclusao, percentualPendente }
-}
+// Os cards refletem sempre o SKU e a análise mais recentes.
+const getMetricasCard = metricasAuditoria
 
 // Filtros e Paginação
 const filtroTexto = ref('')
@@ -622,6 +613,18 @@ const abrirDia = (dia) => {
     criarAPartirCalendario(data, formulario.value.tipo, label)
   }
 }
+
+// Atalhos do painel inicial abrem o formulário já preenchido: /auditorias?data=AAAA-MM-DD&tipo=Etiqueta
+const abrirCriacaoPelaRota = () => {
+  const { data, tipo } = route.query
+  if (typeof data !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return
+  const [ano, mes, dia] = data.split('-').map(Number)
+  const label = new Date(ano, mes - 1, dia).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+  const tipoValido = ['Etiqueta', 'Presença', 'Ruptura'].includes(tipo) ? tipo : formulario.value.tipo
+  abaAtiva.value = 'calendario'
+  criarAPartirCalendario(data, tipoValido, label)
+}
+abrirCriacaoPelaRota()
 
 const parcialRestante = (a) => {
   if (!a) return 0
