@@ -105,6 +105,14 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): indicadores, composição, destaques, setores vs meta, top locais, leituras por hora, usuários; imprime/salva PDF, salva imagem e copia um resumo em texto para compartilhar.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
 
+### 4.8 Detalhe da auditoria: navegação e mapa da loja
+- **Navegação**: barra de abas fixa (Visão geral, Mapa da loja, Usuários, Dados, Estatísticas e Atenção quando houver alertas), com contadores, setas do teclado e resumo compacto (% pendente) ao rolar. A aba fica na URL (`?aba=mapa`).
+- **Mapa da loja** (`components/MapaLoja.vue`, `utils/mapaLoja.js`): monta a planta a partir dos locais da auditoria.
+  - `G05A` = gôndola do corredor 05, face A (A de frente para B, C de frente para D); corredores numerados da direita para a esquerda.
+  - `PL01` paredão de líquida (extrema direita), `F01..` freezers (esquerda), `PF01` paredão de frios, `EMP01` empório de frios, `ACG` açougue, `FLV`.
+  - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
+  - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; o layout fica salvo neste navegador e vale para todas as auditorias.
+
 ---
 
 ## � 5. Guia de Uso
