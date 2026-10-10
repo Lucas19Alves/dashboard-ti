@@ -1,1467 +1,725 @@
 <script setup>
-import { computed, ref, reactive } from 'vue'
-import { useAuditoriasStore } from '../stores/auditoriasStore'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { printHtmlInNewWindow } from '../utils/print'
+import { baixarCsv } from '../utils/csv'
+import { correspondeBusca, formatarDataBR } from '../utils/busca'
+import { META_PENDENTE_PERCENTUAL, dentroDaMeta, metricasAuditoria } from '../utils/metricasAuditoria'
+import {
+  agruparPorMes,
+  agruparPorTipo,
+  compararAuditorias,
+  consolidarSetores,
+  consolidarUsuarios,
+  dentroDoIntervalo,
+  gerarInsights,
+  intervaloAnterior,
+  intervaloDoPeriodo,
+  resumirAuditorias,
+  tendencia,
+  variacao
+} from '../utils/analiseHistorica'
 import UiButton from '../components/ui/UiButton.vue'
-import UiCard from '../components/ui/UiCard.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
+import UiTabs from '../components/ui/UiTabs.vue'
+import GraficoColunasMeta from '../components/ui/GraficoColunasMeta.vue'
+import SparklineMeta from '../components/ui/SparklineMeta.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
+const META = META_PENDENTE_PERCENTUAL
 
-const filtroTipo = ref('todos')
-const filtroStatus = ref('todos')
-const filtroMeta = ref('todos')
-const filtroPeriodoTipo = ref('rapido')
-const filtroPeriodo = ref('12m')
-const filtroDataInicio = ref('')
-const filtroDataFim = ref('')
-
-const auditoriasBase = computed(() => {
-  return Array.isArray(store.auditorias) ? store.auditorias.filter(a => a) : []
-})
-
-const auditoriasFiltradas = computed(() => {
-  const agora = new Date()
-  const base = auditoriasBase.value
-  let limiteRapido = null
-  if (filtroPeriodoTipo.value === 'rapido') {
-    if (filtroPeriodo.value === '3m') {
-      const d = new Date(agora)
-      d.setMonth(d.getMonth() - 3)
-      limiteRapido = d
-    } else if (filtroPeriodo.value === '6m') {
-      const d = new Date(agora)
-      d.setMonth(d.getMonth() - 6)
-      limiteRapido = d
-    } else if (filtroPeriodo.value === '12m') {
-      const d = new Date(agora)
-      d.setFullYear(d.getFullYear() - 1)
-      limiteRapido = d
-    }
+// ---------- Filtros (lembrados neste navegador) ----------
+const CHAVE_FILTROS = 'dashboard_ti_filtros_analise'
+const filtrosPadrao = { periodoTipo: 'rapido', periodo: '12m', inicio: '', fim: '', tipo: 'todos', status: 'todos', meta: 'todos' }
+const lerFiltros = () => {
+  try {
+    return { ...filtrosPadrao, ...JSON.parse(localStorage.getItem(CHAVE_FILTROS) || '{}') }
+  } catch {
+    return { ...filtrosPadrao }
   }
-
-  return base.filter(a => {
-    if (!a.data) return false
-    const dataAud = new Date(a.data)
-    if (Number.isNaN(dataAud.getTime())) return false
-    if (filtroPeriodoTipo.value === 'rapido') {
-      if (limiteRapido && dataAud < limiteRapido) return false
-    } else {
-      if (filtroDataInicio.value) {
-        const ini = new Date(filtroDataInicio.value)
-        if (!Number.isNaN(ini.getTime()) && dataAud < ini) return false
-      }
-      if (filtroDataFim.value) {
-        const fim = new Date(filtroDataFim.value)
-        if (!Number.isNaN(fim.getTime())) {
-          const fimDia = new Date(fim)
-          fimDia.setHours(23, 59, 59, 999)
-          if (dataAud > fimDia) return false
-        }
-      }
-    }
-    if (filtroTipo.value !== 'todos' && a.tipo !== filtroTipo.value) return false
-    if (filtroStatus.value === 'abertas' && a.status === 'fechada') return false
-    if (filtroStatus.value === 'fechadas' && a.status !== 'fechada') return false
-    if (filtroMeta.value === 'dentro' && !a.metaAlcancada) return false
-    if (filtroMeta.value === 'fora' && a.metaAlcancada) return false
-    return true
-  })
-})
-
-const resumoGeral = computed(() => {
-  const lista = auditoriasFiltradas.value
-  const total = lista.length
-  if (!total) {
-    return {
-      total,
-      abertas: 0,
-      fechadas: 0,
-      dentroMeta: 0,
-      foraMeta: 0,
-      percDentroMeta: 0,
-      percParcialMedia: 0,
-      percConclusaoMedia: 0
-    }
-  }
-  let abertas = 0
-  let fechadas = 0
-  let dentroMeta = 0
-  let somaParcial = 0
-  let somaConclusao = 0
-
-  lista.forEach(a => {
-    if (a.status === 'fechada') {
-      fechadas++
-    } else {
-      abertas++
-    }
-    if (a.status === 'fechada' && a.metaAlcancada) dentroMeta++
-    const analise = a.analise || {}
-    const parcial = getParcialExibido(a)
-    const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
-    somaParcial += Number.isFinite(parcial) ? parcial : 0
-    somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
-  })
-
-  const percDentroMeta = fechadas > 0 ? (dentroMeta / fechadas) * 100 : 0
-  const percParcialMedia = somaParcial / total
-  const percConclusaoMedia = somaConclusao / total
-
-  return {
-    total,
-    abertas,
-    fechadas,
-    dentroMeta,
-    foraMeta: fechadas - dentroMeta,
-    percDentroMeta,
-    percParcialMedia,
-    percConclusaoMedia
-  }
-})
-
-const nomesMeses = {
-  '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
-  '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
-  '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
 }
+const filtros = reactive(lerFiltros())
+watch(filtros, valor => {
+  try { localStorage.setItem(CHAVE_FILTROS, JSON.stringify(valor)) } catch {}
+}, { deep: true })
+const filtrosAlterados = computed(() => Object.keys(filtrosPadrao).some(k => filtros[k] !== filtrosPadrao[k]))
+const limparFiltros = () => Object.assign(filtros, filtrosPadrao)
 
-const formatarMes = (chave) => {
-  const [ano, mes] = chave.split('-')
-  return `${nomesMeses[mes] || mes} ${ano}`
-}
-
-const agrupadoPorMesBase = computed(() => {
-  const mapa = {}
-  auditoriasFiltradas.value.forEach(a => {
-    if (!a.data) return
-    const partes = String(a.data).split('T')[0].split('-')
-    if (partes.length !== 3) return
-    const ano = partes[0]
-    const mes = partes[1]
-    const chave = `${ano}-${mes}`
-    if (!mapa[chave]) {
-      mapa[chave] = {
-        mes: chave,
-        mesFormatado: formatarMes(chave),
-        total: 0,
-        fechadas: 0,
-        dentroMeta: 0,
-        somaParcial: 0,
-        somaConclusao: 0
-      }
-    }
-    const grupo = mapa[chave]
-    grupo.total++
-    if (a.status === 'fechada') {
-      grupo.fechadas++
-      if (a.metaAlcancada) grupo.dentroMeta++
-    }
-    const analise = a.analise || {}
-    const parcial = getParcialExibido(a)
-    const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
-    grupo.somaParcial += Number.isFinite(parcial) ? parcial : 0
-    grupo.somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
-  })
-
-  return Object.values(mapa).map(g => {
-    const mediaParcial = g.total > 0 ? g.somaParcial / g.total : 0
-    const mediaConclusao = g.total > 0 ? g.somaConclusao / g.total : 0
-    const taxaMeta = g.fechadas > 0 ? (g.dentroMeta / g.fechadas) * 100 : 0
-    return {
-      mes: g.mes,
-      mesFormatado: g.mesFormatado,
-      total: g.total,
-      fechadas: g.fechadas,
-      dentroMeta: g.dentroMeta,
-      foraMeta: g.fechadas - g.dentroMeta,
-      mediaParcial,
-      mediaConclusao,
-      taxaMeta
-    }
-  })
-})
-
-const desempenhoTiposBase = computed(() => {
-  const mapa = {}
-  auditoriasFiltradas.value.forEach(a => {
-    const tipo = a.tipo || 'Desconhecido'
-    if (!mapa[tipo]) {
-      mapa[tipo] = {
-        tipo,
-        total: 0,
-        fechadas: 0,
-        dentroMeta: 0,
-        somaParcial: 0,
-        somaConclusao: 0
-      }
-    }
-    const grupo = mapa[tipo]
-    grupo.total++
-    if (a.status === 'fechada') {
-      grupo.fechadas++
-      if (a.metaAlcancada) grupo.dentroMeta++
-    }
-    const analise = a.analise || {}
-    const parcial = getParcialExibido(a)
-    const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
-    grupo.somaParcial += Number.isFinite(parcial) ? parcial : 0
-    grupo.somaConclusao += Number.isFinite(conclusao) ? conclusao : 0
-  })
-
-  return Object.values(mapa).map(g => {
-    const mediaParcial = g.total > 0 ? g.somaParcial / g.total : 0
-    const mediaConclusao = g.total > 0 ? g.somaConclusao / g.total : 0
-    const taxaMeta = g.fechadas > 0 ? (g.dentroMeta / g.fechadas) * 100 : 0
-    return {
-      tipo: g.tipo,
-      total: g.total,
-      fechadas: g.fechadas,
-      dentroMeta: g.dentroMeta,
-      foraMeta: g.fechadas - g.dentroMeta,
-      mediaParcial,
-      mediaConclusao,
-      taxaMeta
-    }
-  })
-})
-
-const desempenhoUsuariosBase = computed(() => {
-  const mapa = {}
-  auditoriasFiltradas.value.forEach(a => {
-    const analise = a.analise
-    if (!analise || !analise.porUsuario) return
-    Object.entries(analise.porUsuario).forEach(([nome, dados]) => {
-      if (!mapa[nome]) {
-        mapa[nome] = {
-          usuario: nome,
-          lidos: 0,
-          pendentes: 0,
-          comProblema: 0,
-          auditorias: 0
-        }
-      }
-      const destino = mapa[nome]
-      destino.lidos += dados.lidos || 0
-      destino.pendentes += dados.pendentes || 0
-      destino.comProblema += dados.comProblema || 0
-      destino.auditorias++
-    })
-  })
-
-  return Object.values(mapa).map(u => {
-    const total = u.lidos + u.pendentes + u.comProblema
-    const percPendente = total > 0 ? (u.pendentes / total) * 100 : 0
-    const percProblema = total > 0 ? (u.comProblema / total) * 100 : 0
-    return {
-      ...u,
-      total,
-      percPendente,
-      percProblema
-    }
-  })
-})
-
-const desempenhoSetoresBase = computed(() => {
-  const mapa = {}
-  auditoriasFiltradas.value.forEach(a => {
-    const analise = a.analise
-    if (!analise || !analise.porSetor) return
-    Object.entries(analise.porSetor).forEach(([setor, dados]) => {
-      if (!mapa[setor]) {
-        mapa[setor] = {
-          setor,
-          lidos: 0,
-          pendentes: 0,
-          comProblema: 0,
-          auditorias: 0
-        }
-      }
-      const destino = mapa[setor]
-      destino.lidos += dados.lidos || 0
-      destino.pendentes += dados.pendentes || 0
-      destino.comProblema += dados.comProblema || 0
-      destino.auditorias++
-    })
-  })
-
-  return Object.values(mapa).map(s => {
-    const total = s.lidos + s.pendentes + s.comProblema
-    const percPendente = total > 0 ? (s.pendentes / total) * 100 : 0
-    const percProblema = total > 0 ? (s.comProblema / total) * 100 : 0
-    return {
-      ...s,
-      total,
-      percPendente,
-      percProblema
-    }
-  })
-})
-
-const getPendentesExibidos = (auditoria) => {
-  const analise = auditoria?.analise || {}
-  return analise.itensPendentes || 0
-}
-
-const getParcialExibido = (auditoria) => {
-  const analise = auditoria?.analise || {}
-  if (typeof analise.parcialPercentual === 'number') return analise.parcialPercentual
-  const total = analise.totalItens ?? auditoria?.sku ?? auditoria?.total ?? 0
-  if (!total || total <= 0) return 0
-  return ((analise.itensPendentes || 0) / total) * 100
-}
-
-const formatarDataISO = (dataStr) => {
-  if (!dataStr) return ''
-  const partes = String(dataStr).split('T')[0].split('-')
-  if (partes.length !== 3) return dataStr
-  return `${partes[2]}/${partes[1]}/${partes[0]}`
-}
-
-const auditoriasParaTabelaBase = computed(() => {
-  return auditoriasFiltradas.value.map(a => {
-    const analise = a.analise || {}
-    const parcial = getParcialExibido(a)
-    const conclusao = typeof analise.percentualConclusao === 'number' ? analise.percentualConclusao : 0
-    const parcialValor = Number.isFinite(parcial) ? parcial : null
-    const conclusaoValor = Number.isFinite(conclusao) ? conclusao : null
-    return {
-      id: a.id,
-      data: a.data,
-      dataFormatada: formatarDataISO(a.data),
-      tipo: a.tipo,
-      status: a.status === 'fechada' ? 'Fechada' : 'Em andamento',
-      statusRaw: a.status,
-      meta: a.status === 'fechada' ? (a.metaAlcancada ? 'Dentro da meta' : 'Fora da meta') : '-',
-      metaAlcancada: a.metaAlcancada,
-      parcial: parcialValor,
-      conclusao: conclusaoValor,
-      totalItens: analise.totalItens ?? a.total ?? '',
-      pendentes: a.analise ? getPendentesExibidos(a) : '',
-      lidos: analise.totalLidos ?? ''
-    }
-  })
-})
-
-const colunasTabelaAuditorias = [
-  { chave: 'data', titulo: 'Data', alinhamento: 'left' },
-  { chave: 'tipo', titulo: 'Tipo', alinhamento: 'left' },
-  { chave: 'status', titulo: 'Status', alinhamento: 'left' },
-  { chave: 'meta', titulo: 'Meta', alinhamento: 'left' },
-  { chave: 'parcial', titulo: 'Parcial (%)', alinhamento: 'right' },
-  { chave: 'conclusao', titulo: 'Conclusão (%)', alinhamento: 'right' },
-  { chave: 'totalItens', titulo: 'Itens', alinhamento: 'right' },
-  { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right' },
-  { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right' }
+const periodosRapidos = [
+  { valor: '1m', rotulo: '30 dias' },
+  { valor: '3m', rotulo: '3 meses' },
+  { valor: '6m', rotulo: '6 meses' },
+  { valor: '12m', rotulo: '12 meses' },
+  { valor: 'todos', rotulo: 'Tudo' }
 ]
 
-const ordenacaoMes = reactive({ coluna: 'mes', direcao: 'asc' })
-const ordenacaoTipos = reactive({ coluna: 'tipo', direcao: 'asc' })
-const ordenacaoUsuarios = reactive({ coluna: 'total', direcao: 'desc' })
-const ordenacaoSetores = reactive({ coluna: 'percPendente', direcao: 'desc' })
-const ordenacaoAuditorias = reactive({ coluna: 'data', direcao: 'desc' })
+const intervalo = computed(() => intervaloDoPeriodo({ tipo: filtros.periodoTipo, periodo: filtros.periodo, inicio: filtros.inicio, fim: filtros.fim }))
+const intervaloComparacao = computed(() => intervaloAnterior(intervalo.value))
 
-const paginaUsuarios = ref(1)
-const itensPorPaginaUsuarios = 10
-
-const ordenarLista = (lista, ordenacao) => {
-  const arr = [...lista]
-  const coluna = ordenacao.coluna
-  const direcao = ordenacao.direcao
-  arr.sort((a, b) => {
-    const va = a[coluna]
-    const vb = b[coluna]
-    if (typeof va === 'number' && typeof vb === 'number') {
-      return direcao === 'asc' ? va - vb : vb - va
-    }
-    const sa = String(va ?? '')
-    const sb = String(vb ?? '')
-    return direcao === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
-  })
-  return arr
+const passaFiltrosNaoTemporais = (a) => {
+  if (filtros.tipo !== 'todos' && a.tipo !== filtros.tipo) return false
+  if (filtros.status === 'abertas' && a.status === 'fechada') return false
+  if (filtros.status === 'fechadas' && a.status !== 'fechada') return false
+  if (filtros.meta === 'dentro' && !dentroDaMeta(a)) return false
+  if (filtros.meta === 'fora' && dentroDaMeta(a)) return false
+  return true
 }
 
-const agrupadoPorMes = computed(() => ordenarLista(agrupadoPorMesBase.value, ordenacaoMes))
-const desempenhoTipos = computed(() => ordenarLista(desempenhoTiposBase.value, ordenacaoTipos))
-const desempenhoUsuarios = computed(() => ordenarLista(desempenhoUsuariosBase.value, ordenacaoUsuarios))
-const totalPaginasUsuarios = computed(() => Math.ceil(desempenhoUsuarios.value.length / itensPorPaginaUsuarios))
-const desempenhoUsuariosPaginado = computed(() => {
-  const inicio = (paginaUsuarios.value - 1) * itensPorPaginaUsuarios
-  return desempenhoUsuarios.value.slice(inicio, inicio + itensPorPaginaUsuarios)
-})
-const desempenhoSetores = computed(() => ordenarLista(desempenhoSetoresBase.value, ordenacaoSetores))
-const auditoriasParaTabela = computed(() => ordenarLista(auditoriasParaTabelaBase.value, ordenacaoAuditorias))
+const auditoriasBase = computed(() => (Array.isArray(store.auditorias) ? store.auditorias.filter(Boolean) : []))
+const auditoriasFiltradas = computed(() => auditoriasBase.value.filter(a => dentroDoIntervalo(a, intervalo.value) && passaFiltrosNaoTemporais(a)))
+const auditoriasPeriodoAnterior = computed(() => (intervaloComparacao.value
+  ? auditoriasBase.value.filter(a => dentroDoIntervalo(a, intervaloComparacao.value) && passaFiltrosNaoTemporais(a))
+  : null))
 
-const totalSetores = computed(() => {
-  const setores = desempenhoSetoresBase.value
-  if (!setores.length) return null
-
-  const lidos = setores.reduce((sum, s) => sum + (s.lidos || 0), 0)
-  const pendentes = setores.reduce((sum, s) => sum + (s.pendentes || 0), 0)
-  const comProblema = setores.reduce((sum, s) => sum + (s.comProblema || 0), 0)
-  const total = lidos + pendentes + comProblema
-
-  return {
-    setor: 'GERAL',
-    lidos,
-    comProblema,
-    pendentes,
-    total,
-    percPendente: total > 0 ? (pendentes / total) * 100 : 0,
-    percProblema: total > 0 ? (comProblema / total) * 100 : 0
-  }
+const descricaoPeriodo = computed(() => {
+  const { inicio, fim } = intervalo.value
+  if (!inicio && !fim) return 'Todo o histórico'
+  if (inicio && fim) return `${formatarDataBR(inicio)} a ${formatarDataBR(fim)}`
+  return inicio ? `A partir de ${formatarDataBR(inicio)}` : `Até ${formatarDataBR(fim)}`
 })
 
-const atualizarOrdenacao = (estado, coluna) => {
-  if (estado.coluna === coluna) {
-    estado.direcao = estado.direcao === 'asc' ? 'desc' : 'asc'
-  } else {
-    estado.coluna = coluna
-    estado.direcao = 'asc'
-  }
+// ---------- Resumos ----------
+const resumo = computed(() => resumirAuditorias(auditoriasFiltradas.value))
+// Sem auditorias no período anterior não há base honesta de comparação.
+const resumoAnterior = computed(() => (auditoriasPeriodoAnterior.value?.length ? resumirAuditorias(auditoriasPeriodoAnterior.value) : null))
+const meses = computed(() => agruparPorMes(auditoriasFiltradas.value))
+const tipos = computed(() => agruparPorTipo(auditoriasFiltradas.value).map(t => {
+  const serie = auditoriasFiltradas.value
+    .filter(a => a.tipo === t.tipo && metricasAuditoria(a).total > 0)
+    .sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.id - b.id)
+    .slice(-12)
+    .map(a => ({ id: a.id, data: String(a.data).slice(0, 10), valor: metricasAuditoria(a).percentualPendente }))
+  return { ...t, serie, tendencia: tendencia(serie.map(p => p.valor)).direcao }
+}))
+const setores = computed(() => consolidarSetores(auditoriasFiltradas.value))
+const usuarios = computed(() => consolidarUsuarios(auditoriasFiltradas.value))
+const insights = computed(() => gerarInsights({ resumo: resumo.value, resumoAnterior: resumoAnterior.value, meses: meses.value, tipos: tipos.value, setores: setores.value }))
+
+const pontosGrafico = computed(() => meses.value.map(m => ({
+  chave: m.mes,
+  rotulo: m.rotulo,
+  valor: m.mediaPendente ?? NaN,
+  detalhe: `${m.total} auditoria(s) · ${m.taxaMeta === null ? 'sem fechadas' : `${m.taxaMeta.toFixed(0)}% na meta`}`
+})))
+
+const kpis = computed(() => {
+  const r = resumo.value
+  const ant = resumoAnterior.value
+  return [
+    { titulo: 'Auditorias', valor: String(r.total), detalhe: `${r.fechadas} fechadas · ${r.abertas} abertas`, icone: 'fas fa-clipboard-list', delta: variacao(r.total, ant?.total), formatoDelta: v => `${v > 0 ? '+' : ''}${v}`, melhorQuandoMenor: null },
+    { titulo: 'Taxa na meta', valor: r.taxaMeta === null ? '—' : `${r.taxaMeta.toFixed(0)}%`, detalhe: `${r.dentroMeta} dentro · ${r.foraMeta} fora`, icone: 'fas fa-bullseye', delta: variacao(r.taxaMeta, ant?.taxaMeta), formatoDelta: v => `${v > 0 ? '+' : ''}${v.toFixed(0)} p.p.`, melhorQuandoMenor: false, alerta: r.taxaMeta !== null && r.taxaMeta < 70 },
+    { titulo: '% pendente médio', valor: r.mediaPendente === null ? '—' : `${r.mediaPendente.toFixed(2)}%`, detalhe: `Meta: até ${META}%`, icone: 'fas fa-hourglass-half', delta: variacao(r.mediaPendente, ant?.mediaPendente), formatoDelta: v => `${v > 0 ? '+' : ''}${v.toFixed(2)} p.p.`, melhorQuandoMenor: true, alerta: r.mediaPendente !== null && r.mediaPendente > META },
+    { titulo: 'Itens auditados', valor: r.itensAuditados.toLocaleString('pt-BR'), detalhe: `${r.itensPendentes.toLocaleString('pt-BR')} ficaram pendentes`, icone: 'fas fa-boxes-stacked', delta: variacao(r.itensAuditados, ant?.itensAuditados), formatoDelta: v => `${v > 0 ? '+' : ''}${v.toLocaleString('pt-BR')}`, melhorQuandoMenor: null }
+  ]
+})
+const classeDelta = (kpi) => {
+  if (!kpi.delta) return 'bg-slate-100 text-slate-500'
+  if (kpi.melhorQuandoMenor === null) return 'bg-slate-100 text-slate-600'
+  const melhorou = kpi.melhorQuandoMenor ? kpi.delta < 0 : kpi.delta > 0
+  return melhorou ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
 }
 
-const abrirAuditoria = (id) => {
-  if (id) router.push(`/auditorias/${id}`)
+const tomInsight = {
+  bom: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  ruim: 'border-red-200 bg-red-50 text-red-900',
+  neutro: 'border-slate-200 bg-slate-50 text-slate-800'
 }
-
+const iconeTendencia = {
+  melhorando: { icone: 'fas fa-arrow-trend-down', classe: 'text-emerald-600', rotulo: 'Melhorando' },
+  piorando: { icone: 'fas fa-arrow-trend-up', classe: 'text-red-600', rotulo: 'Piorando' },
+  estavel: { icone: 'fas fa-minus', classe: 'text-slate-500', rotulo: 'Estável' },
+  indefinida: { icone: 'fas fa-ellipsis', classe: 'text-slate-400', rotulo: 'Poucos dados' }
+}
 const tipoConfig = {
   'Etiqueta': { cor: 'bg-violet-100 text-violet-700', icone: 'fa-tag' },
   'Presença': { cor: 'bg-sky-100 text-sky-700', icone: 'fa-clipboard-check' },
-  'Ruptura': { cor: 'bg-orange-100 text-orange-700', icone: 'fa-exclamation-triangle' },
-  'Desconhecido': { cor: 'bg-slate-100 text-slate-600', icone: 'fa-question' }
+  'Ruptura': { cor: 'bg-orange-100 text-orange-700', icone: 'fa-exclamation-triangle' }
 }
-const getTipoConfig = (tipo) => tipoConfig[tipo] || tipoConfig['Desconhecido']
+const getTipoConfig = tipo => tipoConfig[tipo] || { cor: 'bg-slate-100 text-slate-600', icone: 'fa-question' }
 
+// ---------- Abas ----------
+const aba = ref('visao')
+const abas = computed(() => [
+  { value: 'visao', label: 'Visão geral', icon: 'fas fa-chart-pie' },
+  { value: 'setores', label: `Setores (${setores.value.length})`, icon: 'fas fa-store-alt' },
+  { value: 'usuarios', label: `Usuários (${usuarios.value.length})`, icon: 'fas fa-users' },
+  { value: 'auditorias', label: `Auditorias (${auditoriasFiltradas.value.length})`, icon: 'fas fa-table' }
+])
+const mostrarTabelaMeses = ref(false)
+
+// Clique em uma coluna: filtra o mês e abre a lista de auditorias.
+const filtrarMes = ({ chave }) => {
+  const [ano, mes] = chave.split('-').map(Number)
+  const ultimoDia = new Date(ano, mes, 0).getDate()
+  Object.assign(filtros, { periodoTipo: 'personalizado', inicio: `${chave}-01`, fim: `${chave}-${String(ultimoDia).padStart(2, '0')}` })
+  aba.value = 'auditorias'
+}
+
+// ---------- Ordenação genérica ----------
+const ordenar = (lista, { coluna, direcao }) => [...lista].sort((a, b) => {
+  const va = a[coluna]
+  const vb = b[coluna]
+  const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR')
+  return direcao === 'asc' ? r : -r
+})
+const alternarOrdem = (estado, coluna, padraoDesc = true) => {
+  if (estado.coluna === coluna) estado.direcao = estado.direcao === 'asc' ? 'desc' : 'asc'
+  else Object.assign(estado, { coluna, direcao: padraoDesc ? 'desc' : 'asc' })
+}
+const iconeOrdem = (estado, coluna) => (estado.coluna !== coluna ? 'fa-sort text-slate-300' : estado.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600')
+
+// ---------- Setores ----------
+const buscaSetor = ref('')
+const ordemSetores = reactive({ coluna: 'reincidencia', direcao: 'desc' })
+const setoresVisiveis = computed(() => ordenar(setores.value.filter(s => correspondeBusca(buscaSetor.value, [s.setor])), ordemSetores))
+const totalSetores = computed(() => {
+  const lista = setores.value
+  if (!lista.length) return null
+  const lidos = lista.reduce((s, x) => s + x.lidos, 0)
+  const pendentes = lista.reduce((s, x) => s + x.pendentes, 0)
+  const comProblema = lista.reduce((s, x) => s + x.comProblema, 0)
+  const total = lidos + pendentes + comProblema
+  return { lidos, pendentes, comProblema, total, percPendente: total ? (pendentes / total) * 100 : 0, percProblema: total ? (comProblema / total) * 100 : 0 }
+})
+const setoresReincidentes = computed(() => setores.value.filter(s => s.auditorias >= 2 && s.reincidencia >= 50).length)
+
+// ---------- Usuários ----------
+const buscaUsuario = ref('')
+const ordemUsuarios = reactive({ coluna: 'leituras', direcao: 'desc' })
+const paginaUsuarios = ref(1)
+const POR_PAGINA_USUARIOS = 15
+const usuariosOrdenados = computed(() => ordenar(usuarios.value.filter(u => correspondeBusca(buscaUsuario.value, [u.usuario])), ordemUsuarios))
+const totalPaginasUsuarios = computed(() => Math.max(1, Math.ceil(usuariosOrdenados.value.length / POR_PAGINA_USUARIOS)))
+const usuariosPagina = computed(() => usuariosOrdenados.value.slice((paginaUsuarios.value - 1) * POR_PAGINA_USUARIOS, paginaUsuarios.value * POR_PAGINA_USUARIOS))
+const rankingLeituras = computed(() => new Map([...usuarios.value].sort((a, b) => b.leituras - a.leituras).map((u, i) => [u.usuario, i + 1])))
+const maiorLeitura = computed(() => Math.max(1, ...usuarios.value.map(u => u.leituras)))
+watch([buscaUsuario, () => ordemUsuarios.coluna, () => ordemUsuarios.direcao, auditoriasFiltradas], () => { paginaUsuarios.value = 1 })
+
+// ---------- Auditorias ----------
+const buscaAuditoria = ref('')
+const ordemAuditorias = reactive({ coluna: 'data', direcao: 'desc' })
+const paginaAuditorias = ref(1)
+const POR_PAGINA_AUDITORIAS = 20
+const linhasAuditorias = computed(() => auditoriasFiltradas.value.map(a => {
+  const m = metricasAuditoria(a)
+  const fechada = a.status === 'fechada'
+  return {
+    id: a.id,
+    data: String(a.data).slice(0, 10),
+    dataFormatada: formatarDataBR(a.data),
+    tipo: a.tipo,
+    fechada,
+    status: fechada ? 'Fechada' : 'Em andamento',
+    meta: dentroDaMeta(a) ? 'Dentro' : 'Fora',
+    dentroMeta: dentroDaMeta(a),
+    pendente: m.percentualPendente,
+    conclusao: m.percentualConclusao,
+    total: m.total,
+    pendentes: m.pendentes,
+    lidos: m.lidos
+  }
+}))
+const auditoriasOrdenadas = computed(() => ordenar(
+  linhasAuditorias.value.filter(l => correspondeBusca(buscaAuditoria.value, [l.tipo, l.dataFormatada, `#${l.id}`, l.status, l.meta])),
+  ordemAuditorias
+))
+const totalPaginasAuditorias = computed(() => Math.max(1, Math.ceil(auditoriasOrdenadas.value.length / POR_PAGINA_AUDITORIAS)))
+const auditoriasPagina = computed(() => auditoriasOrdenadas.value.slice((paginaAuditorias.value - 1) * POR_PAGINA_AUDITORIAS, paginaAuditorias.value * POR_PAGINA_AUDITORIAS))
+watch([buscaAuditoria, () => ordemAuditorias.coluna, () => ordemAuditorias.direcao, auditoriasFiltradas], () => { paginaAuditorias.value = 1 })
+
+const abrirAuditoria = (id) => {
+  if (id) router.push(`/auditoria/${id}`)
+}
+
+// Comparar duas auditorias (a mais antiga é a base).
+const selecionadas = ref([])
+const alternarSelecao = (id) => {
+  const atual = selecionadas.value
+  if (atual.includes(id)) selecionadas.value = atual.filter(x => x !== id)
+  else selecionadas.value = [...atual, id].slice(-2)
+}
+watch(auditoriasFiltradas, lista => {
+  const ids = new Set(lista.map(a => a.id))
+  selecionadas.value = selecionadas.value.filter(id => ids.has(id))
+})
+const comparacao = computed(() => {
+  if (selecionadas.value.length !== 2) return null
+  const [x, y] = selecionadas.value.map(id => auditoriasBase.value.find(a => a.id === id)).filter(Boolean)
+  if (!x || !y) return null
+  const [anterior, atual] = [x, y].sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.id - b.id)
+  return { anterior, atual, resultado: compararAuditorias(atual, anterior) }
+})
+const setoresComparacao = computed(() => (comparacao.value?.resultado.setores || []).slice(0, 12))
+
+const exportarCsv = () => {
+  const colunas = [
+    { chave: 'dataFormatada', titulo: 'Data' }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'status', titulo: 'Status' },
+    { chave: 'meta', titulo: 'Meta' }, { chave: 'pendenteFmt', titulo: '% Pendente' }, { chave: 'conclusaoFmt', titulo: '% Conclusão' },
+    { chave: 'total', titulo: 'Itens (SKU)' }, { chave: 'pendentes', titulo: 'Pendentes' }, { chave: 'lidos', titulo: 'Lidos' }
+  ]
+  const linhas = auditoriasOrdenadas.value.map(l => ({ ...l, pendenteFmt: l.pendente.toFixed(2).replace('.', ','), conclusaoFmt: l.conclusao.toFixed(2).replace('.', ',') }))
+  baixarCsv(linhas, colunas, `analise-auditorias-${new Date().toISOString().slice(0, 10)}`)
+  store.addToast(`${linhas.length} auditorias exportadas em CSV.`, 'success')
+}
+
+// ---------- Relatório PDF ----------
 const gerarRelatorioPDF = () => {
-  if (!auditoriasParaTabela.value.length) return
-  const escapeHtml = (v) => {
-    return String(v ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-  }
-  const formatPercent = (v, casas = 2) => {
-    const n = typeof v === 'number' && Number.isFinite(v) ? v : 0
-    return `${n.toFixed(casas)}%`
-  }
-  const formatPeriodo = () => {
-    if (filtroPeriodoTipo.value === 'rapido') {
-      if (filtroPeriodo.value === '3m') return 'Últimos 3 meses'
-      if (filtroPeriodo.value === '6m') return 'Últimos 6 meses'
-      if (filtroPeriodo.value === '12m') return 'Últimos 12 meses'
-      return 'Todo o histórico'
-    }
-    const ini = filtroDataInicio.value ? filtroDataInicio.value.split('-').reverse().join('/') : ''
-    const fim = filtroDataFim.value ? filtroDataFim.value.split('-').reverse().join('/') : ''
-    if (ini && fim) return `De ${ini} até ${fim}`
-    if (ini) return `A partir de ${ini}`
-    if (fim) return `Até ${fim}`
-    return 'Período personalizado'
-  }
-  const resumo = resumoGeral.value
-  const cardsHtml = `
-    <div class="cards">
-      <div class="card">
-        <div class="card-label">Total no período</div>
-        <div class="card-value">${escapeHtml(resumo.total)}</div>
-        <div class="card-sub">Auditorias encontradas com os filtros atuais.</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Taxa de meta</div>
-        <div class="card-value">${formatPercent(resumo.percDentroMeta, 1)}</div>
-        <div class="card-sub">Das auditorias fechadas ficaram dentro da meta.</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Parcial média</div>
-        <div class="card-value">${formatPercent(resumo.percParcialMedia, 2)}</div>
-        <div class="card-sub">Percentual médio pendente das auditorias no período.</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Conclusão média</div>
-        <div class="card-value">${formatPercent(resumo.percConclusaoMedia, 2)}</div>
-        <div class="card-sub">Percentual médio concluído das auditorias no período.</div>
-      </div>
-    </div>
-  `
-  const tabelaEvolucao = (() => {
-    if (!agrupadoPorMes.value.length) return ''
-    const linhas = agrupadoPorMes.value.map(m => {
-      return `
-        <tr>
-          <td>${escapeHtml(m.mesFormatado)}</td>
-          <td style="text-align:right;">${escapeHtml(m.total)}</td>
-          <td style="text-align:right;">${formatPercent(m.mediaParcial)}</td>
-          <td style="text-align:right;">${formatPercent(m.mediaConclusao)}</td>
-          <td style="text-align:right;">${formatPercent(m.taxaMeta, 1)}</td>
-        </tr>
-      `
-    }).join('')
-    return `
-      <div class="section">
-        <h2>Evolução mensal</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Mês</th>
-              <th>Qtd</th>
-              <th>% Parcial</th>
-              <th>% Conclusão</th>
-              <th>% Meta</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      </div>
-    `
-  })()
-  const tabelaTipos = (() => {
-    if (!desempenhoTipos.value.length) return ''
-    const linhas = desempenhoTipos.value.map(t => {
-      return `
-        <tr>
-          <td>${escapeHtml(t.tipo)}</td>
-          <td style="text-align:right;">${escapeHtml(t.total)}</td>
-          <td style="text-align:right;">${formatPercent(t.mediaParcial)}</td>
-          <td style="text-align:right;">${formatPercent(t.mediaConclusao)}</td>
-          <td style="text-align:right;">${formatPercent(t.taxaMeta, 1)}</td>
-        </tr>
-      `
-    }).join('')
-    return `
-      <div class="section">
-        <h2>Desempenho por tipo de auditoria</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>Qtd</th>
-              <th>% Parcial</th>
-              <th>% Conclusão</th>
-              <th>% Meta</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      </div>
-    `
-  })()
-  const tabelaUsuarios = (() => {
-    if (!desempenhoUsuarios.value.length) return ''
-    const linhas = desempenhoUsuarios.value.map(u => {
-      return `
-        <tr>
-          <td>${escapeHtml(u.usuario)}</td>
-          <td style="text-align:right;">${escapeHtml(u.lidos)}</td>
-          <td style="text-align:right;">${escapeHtml(u.comProblema)}</td>
-          <td style="text-align:right;">${formatPercent(u.percProblema)}</td>
-        </tr>
-      `
-    }).join('')
-    return `
-      <div class="section">
-        <h2>Desempenho por usuário</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Usuário</th>
-              <th>Itens lidos</th>
-              <th>Leituras com erro</th>
-              <th>% Problemas</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      </div>
-    `
-  })()
-  const tabelaSetores = (() => {
-    if (!desempenhoSetores.value.length) return ''
-    const linhaGeral = totalSetores.value ? `
-      <tr style="background-color: #f1f5f9; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
-        <td>${escapeHtml(totalSetores.value.setor)}</td>
-        <td style="text-align:right;">${escapeHtml(totalSetores.value.lidos)}</td>
-        <td style="text-align:right;">${escapeHtml(totalSetores.value.comProblema)}</td>
-        <td style="text-align:right;">${formatPercent(totalSetores.value.percPendente)}</td>
-        <td style="text-align:right;">${formatPercent(totalSetores.value.percProblema)}</td>
-      </tr>
-    ` : ''
-    const linhas = desempenhoSetores.value.map(s => {
-      return `
-        <tr>
-          <td>${escapeHtml(s.setor)}</td>
-          <td style="text-align:right;">${escapeHtml(s.lidos)}</td>
-          <td style="text-align:right;">${escapeHtml(s.comProblema)}</td>
-          <td style="text-align:right;">${formatPercent(s.percPendente)}</td>
-          <td style="text-align:right;">${formatPercent(s.percProblema)}</td>
-        </tr>
-      `
-    }).join('')
-    return `
-      <div class="section">
-        <h2>Desempenho por setor</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Setor</th>
-              <th>Itens lidos</th>
-              <th>Leituras com erro</th>
-              <th>% Pendentes</th>
-              <th>% Problemas</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhaGeral}${linhas}
-          </tbody>
-        </table>
-      </div>
-    `
-  })()
-  const tabelaAuditorias = (() => {
-    const linhas = auditoriasParaTabela.value.map(a => {
-      const parcial = a.parcial != null ? formatPercent(a.parcial) : ''
-      const conclusao = a.conclusao != null ? formatPercent(a.conclusao) : ''
-      return `
-        <tr>
-          <td>${escapeHtml(a.dataFormatada)}</td>
-          <td>${escapeHtml(a.tipo)}</td>
-          <td>${escapeHtml(a.status)}</td>
-          <td>${escapeHtml(a.meta)}</td>
-          <td style="text-align:right;">${parcial}</td>
-          <td style="text-align:right;">${conclusao}</td>
-          <td style="text-align:right;">${escapeHtml(a.totalItens)}</td>
-          <td style="text-align:right;">${escapeHtml(a.pendentes)}</td>
-          <td style="text-align:right;">${escapeHtml(a.lidos)}</td>
-        </tr>
-      `
-    }).join('')
-    return `
-      <div class="section">
-        <h2>Lista detalhada das auditorias filtradas</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Tipo</th>
-              <th>Status</th>
-              <th>Meta</th>
-              <th>% Parcial</th>
-              <th>% Conclusão</th>
-              <th>Itens</th>
-              <th>Pendentes</th>
-              <th>Lidos</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${linhas}
-          </tbody>
-        </table>
-      </div>
-    `
-  })()
-  const bodyHtml = `
+  if (!linhasAuditorias.value.length) return
+  const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  const pct = (v, casas = 2) => (Number.isFinite(v) ? `${v.toFixed(casas)}%` : '—')
+  const tabela = (titulo, cabecalho, linhas) => (linhas.length ? `
+    <div class="section"><h2>${esc(titulo)}</h2><table>
+      <thead><tr>${cabecalho.map(([t, d]) => `<th${d ? ' style="text-align:right"' : ''}>${esc(t)}</th>`).join('')}</tr></thead>
+      <tbody>${linhas.map(l => `<tr>${l.map((c, i) => `<td${cabecalho[i][1] ? ' style="text-align:right"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>` : '')
+  const r = resumo.value
+  const cards = kpis.value.map(k => `<div class="card"><div class="card-label">${esc(k.titulo)}</div><div class="card-value">${esc(k.valor)}</div><div class="card-sub">${esc(k.detalhe)}</div></div>`).join('')
+  const html = `
     <h1>Análise Histórica de Auditorias</h1>
-    <p><strong>Período:</strong> ${escapeHtml(formatPeriodo())}</p>
-    <p><strong>Total de auditorias no período:</strong> ${escapeHtml(resumo.total)}</p>
-    ${cardsHtml}
-    ${tabelaEvolucao}
-    ${tabelaTipos}
-    ${tabelaUsuarios}
-    ${tabelaSetores}
-    ${tabelaAuditorias}
+    <p><strong>Período:</strong> ${esc(descricaoPeriodo.value)} · <strong>Auditorias:</strong> ${r.total}</p>
+    <div class="cards">${cards}</div>
+    ${insights.value.length ? `<div class="section"><h2>Destaques</h2><ul>${insights.value.map(i => `<li>${esc(i.texto)}</li>`).join('')}</ul></div>` : ''}
+    ${tabela('Evolução mensal', [['Mês'], ['Qtd', 1], ['% Pendente médio', 1], ['% Na meta', 1]], meses.value.map(m => [esc(m.rotulo), m.total, pct(m.mediaPendente), pct(m.taxaMeta, 0)]))}
+    ${tabela('Desempenho por tipo', [['Tipo'], ['Qtd', 1], ['% Pendente médio', 1], ['% Na meta', 1]], tipos.value.map(t => [esc(t.tipo), t.total, pct(t.mediaPendente), pct(t.taxaMeta, 0)]))}
+    ${tabela('Setores', [['Setor'], ['Auditorias', 1], ['Lidos', 1], ['Pendentes', 1], ['% Pendente', 1], ['Acima da meta', 1]], ordenar(setores.value, { coluna: 'reincidencia', direcao: 'desc' }).map(s => [esc(s.setor), s.auditorias, s.lidos.toLocaleString('pt-BR'), s.pendentes.toLocaleString('pt-BR'), pct(s.percPendente), `${s.acimaDaMeta}/${s.auditorias}`]))}
+    ${tabela('Usuários', [['Usuário'], ['Auditorias', 1], ['Leituras', 1], ['Com erro', 1], ['% Erro', 1]], ordenar(usuarios.value, { coluna: 'leituras', direcao: 'desc' }).map(u => [esc(u.usuario), u.auditorias, u.leituras.toLocaleString('pt-BR'), u.comProblema.toLocaleString('pt-BR'), pct(u.percProblema)]))}
+    ${tabela('Auditorias', [['Data'], ['Tipo'], ['Status'], ['Meta'], ['% Pendente', 1], ['Itens', 1], ['Pendentes', 1]], auditoriasOrdenadas.value.map(l => [l.dataFormatada, esc(l.tipo), l.status, l.meta, pct(l.pendente), l.total, l.pendentes]))}
   `
-  printHtmlInNewWindow('Analise_Historica_Auditorias', bodyHtml)
+  printHtmlInNewWindow('Analise_Historica_Auditorias', html)
 }
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
-    <UiPageHeader title="Análise Histórica de Auditorias" subtitle="Explore o desempenho das auditorias ao longo do tempo com filtros avançados." icon="fas fa-chart-line" tone="indigo">
+  <div class="ui-page">
+    <UiPageHeader title="Análise de Auditorias" :subtitle="`Desempenho histórico · ${descricaoPeriodo}`" icon="fas fa-chart-line" tone="indigo">
       <template #actions>
-        <UiButton variant="dark" :disabled="!auditoriasParaTabela.length" @click="gerarRelatorioPDF">
-          <i class="fas fa-file-pdf text-base"></i>
-          Gerar Relatório PDF
+        <UiButton variant="secondary" :disabled="!linhasAuditorias.length" @click="exportarCsv">
+          <i class="fas fa-file-csv"></i>CSV
+        </UiButton>
+        <UiButton variant="dark" :disabled="!linhasAuditorias.length" @click="gerarRelatorioPDF">
+          <i class="fas fa-file-pdf"></i>Relatório PDF
         </UiButton>
       </template>
     </UiPageHeader>
 
     <!-- Filtros -->
-    <UiCard as="div" padding="sm" class="space-y-4 md:p-5">
-      <div class="flex flex-wrap gap-3 items-end">
-        <div class="flex flex-col gap-1">
-          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Período</label>
-          <div class="flex flex-wrap gap-2 items-center">
-            <select
-              v-model="filtroPeriodoTipo"
-              class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="rapido">Rápido</option>
-              <option value="personalizado">Personalizado</option>
-            </select>
-            <template v-if="filtroPeriodoTipo === 'rapido'">
-              <select
-                v-model="filtroPeriodo"
-                class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="3m">Últimos 3 meses</option>
-                <option value="6m">Últimos 6 meses</option>
-                <option value="12m">Últimos 12 meses</option>
-                <option value="todos">Todo o histórico</option>
-              </select>
-            </template>
-            <template v-else>
-              <input
-                v-model="filtroDataInicio"
-                type="date"
-                class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-              <span class="text-[11px] text-slate-400">até</span>
-              <input
-                v-model="filtroDataFim"
-                type="date"
-                class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-            </template>
+    <section class="ui-card p-4 md:p-5">
+      <div class="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div>
+          <p class="ui-label">Período</p>
+          <div class="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              v-for="p in periodosRapidos"
+              :key="p.valor"
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+              :class="filtros.periodoTipo === 'rapido' && filtros.periodo === p.valor ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              @click="filtros.periodoTipo = 'rapido'; filtros.periodo = p.valor"
+            >{{ p.rotulo }}</button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
+              :class="filtros.periodoTipo === 'personalizado' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              @click="filtros.periodoTipo = 'personalizado'"
+            ><i class="fas fa-calendar-days mr-1"></i>Datas</button>
           </div>
         </div>
-        <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Tipo</label>
-          <select
-            v-model="filtroTipo"
-            class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
+        <div v-if="filtros.periodoTipo === 'personalizado'" class="flex items-end gap-2">
+          <label class="block">
+            <span class="ui-label">De</span>
+            <input v-model="filtros.inicio" type="date" class="ui-input py-1.5 text-xs">
+          </label>
+          <label class="block">
+            <span class="ui-label">Até</span>
+            <input v-model="filtros.fim" type="date" class="ui-input py-1.5 text-xs">
+          </label>
+        </div>
+        <label class="block">
+          <span class="ui-label">Tipo</span>
+          <select v-model="filtros.tipo" class="ui-input py-1.5 text-xs">
             <option value="todos">Todos</option>
             <option value="Etiqueta">Etiqueta</option>
             <option value="Presença">Presença</option>
             <option value="Ruptura">Ruptura</option>
           </select>
-        </div>
-        <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Status</label>
-          <select
-            v-model="filtroStatus"
-            class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
+        </label>
+        <label class="block">
+          <span class="ui-label">Status</span>
+          <select v-model="filtros.status" class="ui-input py-1.5 text-xs">
             <option value="todos">Abertas e fechadas</option>
             <option value="abertas">Somente abertas</option>
             <option value="fechadas">Somente fechadas</option>
           </select>
-        </div>
-        <div class="flex flex-col">
-          <label class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Meta</label>
-          <select
-            v-model="filtroMeta"
-            class="px-3 py-1.5 rounded-lg border border-slate-200 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
+        </label>
+        <label class="block">
+          <span class="ui-label">Meta</span>
+          <select v-model="filtros.meta" class="ui-input py-1.5 text-xs">
             <option value="todos">Todas</option>
             <option value="dentro">Dentro da meta</option>
             <option value="fora">Fora da meta</option>
           </select>
-        </div>
+        </label>
         <div class="ml-auto flex items-center gap-2">
-          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
-            <i class="fas fa-filter text-[10px]"></i>
-            {{ auditoriasFiltradas.length }} auditoria(s)
+          <button v-if="filtrosAlterados" type="button" class="text-xs font-semibold text-slate-500 hover:text-red-600" @click="limparFiltros">
+            <i class="fas fa-rotate-left mr-1"></i>Limpar
+          </button>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+            <i class="fas fa-filter text-[10px]"></i>{{ auditoriasFiltradas.length }} auditoria(s)
           </span>
         </div>
       </div>
-    </UiCard>
+    </section>
 
-    <!-- Cards de Resumo -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Total no período -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total no período</p>
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600">
-            <i class="fas fa-history text-sm"></i>
+    <!-- KPIs com comparação ao período anterior -->
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <article v-for="k in kpis" :key="k.titulo" class="ui-card p-4">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ k.titulo }}</p>
+          <span class="inline-flex size-8 items-center justify-center rounded-xl" :class="k.alerta ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'">
+            <i :class="[k.icone, 'text-xs']"></i>
           </span>
         </div>
-        <p class="text-3xl font-bold text-slate-800">{{ resumoGeral.total }}</p>
-        <div class="flex items-center gap-3 text-[11px]">
-          <span class="inline-flex items-center gap-1 text-emerald-600 font-medium">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-            {{ resumoGeral.fechadas }} fechadas
-          </span>
-          <span class="inline-flex items-center gap-1 text-amber-600 font-medium">
-            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-            {{ resumoGeral.abertas }} abertas
-          </span>
-        </div>
-      </div>
-
-      <!-- Taxa de meta -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Taxa de meta</p>
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg" :class="resumoGeral.percDentroMeta >= 70 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'">
-            <i class="fas fa-bullseye text-sm"></i>
-          </span>
-        </div>
-        <p class="text-3xl font-bold" :class="resumoGeral.percDentroMeta >= 70 ? 'text-emerald-700' : 'text-amber-700'">
-          {{ resumoGeral.percDentroMeta.toFixed(1) }}%
+        <p class="mt-2 text-2xl font-bold tracking-tight md:text-3xl" :class="k.alerta ? 'text-amber-700' : 'text-slate-900'">{{ k.valor }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ k.detalhe }}</p>
+        <p v-if="k.delta !== null && resumoAnterior" class="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="classeDelta(k)" :title="`Período anterior: ${formatarDataBR(intervaloComparacao.inicio)} a ${formatarDataBR(intervaloComparacao.fim)}`">
+          <i :class="k.delta > 0 ? 'fas fa-arrow-up' : k.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="text-[9px]"></i>
+          {{ k.delta === 0 ? 'igual' : k.formatoDelta(k.delta) }} vs anterior
         </p>
-        <div class="w-full bg-slate-100 rounded-full h-2">
-          <div
-            class="h-2 rounded-full transition-all duration-500"
-            :class="resumoGeral.percDentroMeta >= 70 ? 'bg-emerald-500' : 'bg-amber-500'"
-            :style="{ width: Math.min(resumoGeral.percDentroMeta, 100) + '%' }"
-          ></div>
-        </div>
-        <div class="flex items-center gap-3 text-[11px]">
-          <span class="text-emerald-600 font-medium">{{ resumoGeral.dentroMeta }} dentro</span>
-          <span class="text-red-500 font-medium">{{ resumoGeral.foraMeta }} fora</span>
-        </div>
-      </div>
-
-      <!-- Parcial média -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Parcial média</p>
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg" :class="resumoGeral.percParcialMedia > 3 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'">
-            <i class="fas fa-hourglass-half text-sm"></i>
-          </span>
-        </div>
-        <p class="text-3xl font-bold" :class="resumoGeral.percParcialMedia > 3 ? 'text-amber-700' : 'text-emerald-700'">
-          {{ resumoGeral.percParcialMedia.toFixed(2) }}%
-        </p>
-        <div class="w-full bg-slate-100 rounded-full h-2">
-          <div
-            class="h-2 rounded-full transition-all duration-500"
-            :class="resumoGeral.percParcialMedia > 3 ? 'bg-amber-500' : 'bg-emerald-500'"
-            :style="{ width: Math.min(resumoGeral.percParcialMedia, 100) + '%' }"
-          ></div>
-        </div>
-        <p class="text-[11px] text-slate-500">Percentual médio pendente</p>
-      </div>
-
-      <!-- Conclusão média -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-3">
-        <div class="flex items-center justify-between">
-          <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Conclusão média</p>
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
-            <i class="fas fa-check-circle text-sm"></i>
-          </span>
-        </div>
-        <p class="text-3xl font-bold text-blue-700">
-          {{ resumoGeral.percConclusaoMedia.toFixed(2) }}%
-        </p>
-        <div class="w-full bg-slate-100 rounded-full h-2">
-          <div
-            class="h-2 rounded-full bg-blue-500 transition-all duration-500"
-            :style="{ width: Math.min(resumoGeral.percConclusaoMedia, 100) + '%' }"
-          ></div>
-        </div>
-        <p class="text-[11px] text-slate-500">Percentual médio concluído</p>
-      </div>
+      </article>
     </div>
 
-    <!-- Evolução mensal + Desempenho por tipo -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <!-- Evolução mensal -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
-        <div class="flex items-center gap-2">
-          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <i class="fas fa-calendar-week text-indigo-600 text-sm"></i>
-          </div>
-          <h2 class="text-sm font-bold text-slate-800">Evolução mensal</h2>
-        </div>
-        <div v-if="agrupadoPorMes.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
-          <i class="fas fa-calendar-times text-3xl mb-2"></i>
-          <p class="text-xs">Nenhuma auditoria encontrada para o período selecionado.</p>
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b-2 border-slate-100">
-                <th
-                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoMes, 'mes')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Mês
-                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mes' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoMes, 'total')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Qtd
-                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'total' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoMes, 'mediaParcial')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Parcial
-                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mediaParcial' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoMes, 'mediaConclusao')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Conclusão
-                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'mediaConclusao' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoMes, 'taxaMeta')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Meta
-                    <i class="fas text-[10px]" :class="ordenacaoMes.coluna === 'taxaMeta' ? (ordenacaoMes.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-for="(m, idx) in agrupadoPorMes" :key="m.mes" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ m.mesFormatado }}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <span class="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">{{ m.total }}</span>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full transition-all" :class="m.mediaParcial > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(m.mediaParcial, 100) + '%' }"></div>
-                    </div>
-                    <span class="font-semibold" :class="m.mediaParcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ m.mediaParcial.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-blue-400 transition-all" :style="{ width: Math.min(m.mediaConclusao, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-blue-700 font-semibold">{{ m.mediaConclusao.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-emerald-400 transition-all" :style="{ width: Math.min(m.taxaMeta, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-emerald-700 font-semibold">{{ m.taxaMeta.toFixed(1) }}%</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <UiTabs v-model="aba" :items="abas" sticky />
 
-      <!-- Desempenho por tipo -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
-        <div class="flex items-center gap-2">
-          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <i class="fas fa-layer-group text-indigo-600 text-sm"></i>
-          </div>
-          <h2 class="text-sm font-bold text-slate-800">Desempenho por tipo de auditoria</h2>
-        </div>
-        <div v-if="desempenhoTipos.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
-          <i class="fas fa-layer-group text-3xl mb-2"></i>
-          <p class="text-xs">Nenhuma auditoria encontrada para o período selecionado.</p>
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b-2 border-slate-100">
-                <th
-                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoTipos, 'tipo')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Tipo
-                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'tipo' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoTipos, 'total')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Qtd
-                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'total' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoTipos, 'mediaParcial')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Parcial
-                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'mediaParcial' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoTipos, 'mediaConclusao')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Conclusão
-                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'mediaConclusao' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoTipos, 'taxaMeta')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Meta
-                    <i class="fas text-[10px]" :class="ordenacaoTipos.coluna === 'taxaMeta' ? (ordenacaoTipos.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-for="(t, idx) in desempenhoTipos" :key="t.tipo" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                <td class="px-3 py-2.5">
-                  <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold" :class="getTipoConfig(t.tipo).cor">
-                    <i class="fas text-[9px]" :class="getTipoConfig(t.tipo).icone"></i>
-                    {{ t.tipo }}
-                  </span>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <span class="inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">{{ t.total }}</span>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full transition-all" :class="t.mediaParcial > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(t.mediaParcial, 100) + '%' }"></div>
-                    </div>
-                    <span class="font-semibold" :class="t.mediaParcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ t.mediaParcial.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-blue-400 transition-all" :style="{ width: Math.min(t.mediaConclusao, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-blue-700 font-semibold">{{ t.mediaConclusao.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-12 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-emerald-400 transition-all" :style="{ width: Math.min(t.taxaMeta, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-emerald-700 font-semibold">{{ t.taxaMeta.toFixed(1) }}%</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div v-if="!auditoriasFiltradas.length" class="ui-card px-6 py-14 text-center">
+      <i class="fas fa-magnifying-glass-chart text-3xl text-slate-300"></i>
+      <p class="mt-3 font-semibold text-slate-700">Nenhuma auditoria encontrada</p>
+      <p class="mt-1 text-sm text-slate-500">Ajuste o período ou os filtros.</p>
+      <UiButton v-if="filtrosAlterados" class="mt-4" variant="secondary" size="sm" @click="limparFiltros">Limpar filtros</UiButton>
     </div>
 
-    <!-- Desempenho por usuário + Desempenho por setor -->
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <!-- Desempenho por usuário -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
-        <div class="flex items-center gap-2">
-          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <i class="fas fa-users text-indigo-600 text-sm"></i>
+    <!-- ===== VISÃO GERAL ===== -->
+    <template v-else-if="aba === 'visao'">
+      <section v-if="insights.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div v-for="(i, idx) in insights" :key="idx" class="flex items-start gap-3 rounded-2xl border p-4" :class="tomInsight[i.tom]">
+          <i :class="[i.icone, 'mt-0.5']"></i>
+          <p class="text-sm font-medium leading-snug">{{ i.texto }}</p>
+        </div>
+      </section>
+
+      <section class="ui-card p-5 md:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">% pendente médio por mês</h2>
+            <p class="text-xs text-slate-500">Menor é melhor. Clique em um mês para ver as auditorias dele.</p>
           </div>
-          <h2 class="text-sm font-bold text-slate-800">Desempenho por usuário</h2>
-          <span v-if="desempenhoUsuarios.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ desempenhoUsuarios.length }} usuário(s)</span>
+          <button type="button" class="text-xs font-semibold text-indigo-600 hover:underline" @click="mostrarTabelaMeses = !mostrarTabelaMeses">
+            <i :class="mostrarTabelaMeses ? 'fas fa-chart-column' : 'fas fa-table'" class="mr-1"></i>{{ mostrarTabelaMeses ? 'Ver gráfico' : 'Ver tabela' }}
+          </button>
         </div>
-        <div v-if="desempenhoUsuarios.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
-          <i class="fas fa-users text-3xl mb-2"></i>
-          <p class="text-xs">Nenhuma informação de usuários encontrada no período.</p>
-        </div>
-        <div v-else class="overflow-x-auto">
+        <GraficoColunasMeta v-if="!mostrarTabelaMeses" class="mt-5" :pontos="pontosGrafico" :meta="META" @selecionar="filtrarMes" />
+        <div v-else class="mt-4 overflow-x-auto">
           <table class="w-full text-xs">
             <thead>
-              <tr class="border-b-2 border-slate-100">
-                <th
-                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'usuario'); paginaUsuarios = 1"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Usuário
-                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'usuario' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'lidos'); paginaUsuarios = 1"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Itens Lidos
-                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'lidos' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'comProblema'); paginaUsuarios = 1"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Com erro
-                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'comProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoUsuarios, 'percProblema'); paginaUsuarios = 1"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Problemas
-                    <i class="fas text-[10px]" :class="ordenacaoUsuarios.coluna === 'percProblema' ? (ordenacaoUsuarios.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
+              <tr class="border-b border-slate-100 text-slate-500">
+                <th class="px-3 py-2 text-left font-semibold">Mês</th>
+                <th class="px-3 py-2 text-right font-semibold">Auditorias</th>
+                <th class="px-3 py-2 text-right font-semibold">% Pendente médio</th>
+                <th class="px-3 py-2 text-right font-semibold">% Conclusão média</th>
+                <th class="px-3 py-2 text-right font-semibold">Na meta</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
-              <tr v-for="(u, idx) in desempenhoUsuariosPaginado" :key="u.usuario" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ u.usuario }}</td>
-                <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ u.lidos.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-red-400 transition-all" :style="{ width: Math.min(u.percProblema * 5, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-red-600 font-semibold">{{ u.percProblema.toFixed(2) }}%</span>
-                  </div>
-                </td>
+              <tr v-for="m in meses" :key="m.mes" class="hover:bg-slate-50">
+                <td class="px-3 py-2 font-medium text-slate-700">{{ m.rotulo }}</td>
+                <td class="px-3 py-2 text-right">{{ m.total }}</td>
+                <td class="px-3 py-2 text-right font-semibold" :class="(m.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ m.mediaPendente === null ? '—' : m.mediaPendente.toFixed(2) + '%' }}</td>
+                <td class="px-3 py-2 text-right">{{ m.mediaConclusao === null ? '—' : m.mediaConclusao.toFixed(2) + '%' }}</td>
+                <td class="px-3 py-2 text-right">{{ m.taxaMeta === null ? '—' : `${m.dentroMeta}/${m.fechadas} (${m.taxaMeta.toFixed(0)}%)` }}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <!-- Paginação -->
-        <div v-if="totalPaginasUsuarios > 1" class="flex items-center justify-between pt-2 border-t border-slate-100">
-          <p class="text-[11px] text-slate-500">
-            Página {{ paginaUsuarios }} de {{ totalPaginasUsuarios }}
+      </section>
+
+      <section class="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <article v-for="t in tipos" :key="t.tipo" class="ui-card p-5">
+          <div class="flex items-center justify-between">
+            <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-bold" :class="getTipoConfig(t.tipo).cor">
+              <i class="fas text-[10px]" :class="getTipoConfig(t.tipo).icone"></i>{{ t.tipo }}
+            </span>
+            <span class="inline-flex items-center gap-1 text-xs font-semibold" :class="iconeTendencia[t.tendencia].classe">
+              <i :class="iconeTendencia[t.tendencia].icone"></i>{{ iconeTendencia[t.tendencia].rotulo }}
+            </span>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl bg-slate-50 p-2">
+              <p class="text-lg font-bold text-slate-900">{{ t.total }}</p>
+              <p class="text-[10px] text-slate-500">auditorias</p>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-2">
+              <p class="text-lg font-bold" :class="(t.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ t.mediaPendente === null ? '—' : t.mediaPendente.toFixed(1) + '%' }}</p>
+              <p class="text-[10px] text-slate-500">pendente médio</p>
+            </div>
+            <div class="rounded-xl bg-slate-50 p-2">
+              <p class="text-lg font-bold text-slate-900">{{ t.taxaMeta === null ? '—' : t.taxaMeta.toFixed(0) + '%' }}</p>
+              <p class="text-[10px] text-slate-500">na meta</p>
+            </div>
+          </div>
+          <SparklineMeta v-if="t.serie.length > 1" class="mt-4" :pontos="t.serie" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
+        </article>
+      </section>
+    </template>
+
+    <!-- ===== SETORES ===== -->
+    <section v-else-if="aba === 'setores'" class="ui-card p-5 md:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Setores no período</h2>
+          <p class="text-xs text-slate-500">
+            "Acima da meta" conta em quantas auditorias o setor passou de {{ META }}% pendente.
+            <span v-if="setoresReincidentes" class="font-semibold text-red-600">{{ setoresReincidentes }} setor(es) reincidente(s).</span>
           </p>
-          <div class="flex items-center gap-1">
-            <button
-              @click="paginaUsuarios = 1"
-              :disabled="paginaUsuarios === 1"
-              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
-            >
-              <i class="fas fa-angle-double-left"></i>
-            </button>
-            <button
-              @click="paginaUsuarios--"
-              :disabled="paginaUsuarios === 1"
-              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
-            >
-              <i class="fas fa-angle-left"></i>
-            </button>
-            <template v-for="p in totalPaginasUsuarios" :key="p">
-              <button
-                v-if="p === 1 || p === totalPaginasUsuarios || (p >= paginaUsuarios - 1 && p <= paginaUsuarios + 1)"
-                @click="paginaUsuarios = p"
-                class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition"
-                :class="p === paginaUsuarios ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'"
-              >
-                {{ p }}
-              </button>
-              <span
-                v-else-if="p === paginaUsuarios - 2 || p === paginaUsuarios + 2"
-                class="text-slate-400 text-[11px] px-1"
-              >...</span>
-            </template>
-            <button
-              @click="paginaUsuarios++"
-              :disabled="paginaUsuarios === totalPaginasUsuarios"
-              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
-            >
-              <i class="fas fa-angle-right"></i>
-            </button>
-            <button
-              @click="paginaUsuarios = totalPaginasUsuarios"
-              :disabled="paginaUsuarios === totalPaginasUsuarios"
-              class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"
-            >
-              <i class="fas fa-angle-double-right"></i>
-            </button>
-          </div>
+        </div>
+        <div class="relative w-full sm:w-64">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+          <input v-model="buscaSetor" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Buscar setor...">
         </div>
       </div>
-
-      <!-- Desempenho por setor -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
-        <div class="flex items-center gap-2">
-          <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <i class="fas fa-store-alt text-indigo-600 text-sm"></i>
-          </div>
-          <h2 class="text-sm font-bold text-slate-800">Desempenho por setor</h2>
-          <span v-if="desempenhoSetores.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ desempenhoSetores.length }} setor(es)</span>
-        </div>
-        <div v-if="desempenhoSetores.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">
-          <i class="fas fa-store-alt text-3xl mb-2"></i>
-          <p class="text-xs">Nenhuma informação de setores encontrada no período.</p>
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b-2 border-slate-100">
-                <th
-                  class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoSetores, 'setor')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Setor
-                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'setor' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoSetores, 'lidos')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Itens Lidos
-                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoSetores, 'comProblema')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    Com erro
-                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoSetores, 'percPendente')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Pendentes
-                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percPendente' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-                <th
-                  class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                  @click="atualizarOrdenacao(ordenacaoSetores, 'percProblema')"
-                >
-                  <span class="inline-flex items-center gap-1">
-                    % Problemas
-                    <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                  </span>
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-if="totalSetores" class="bg-slate-100 border-b-2 border-slate-200">
-                <td class="px-3 py-2.5 text-slate-800 font-bold">{{ totalSetores.setor }}</td>
-                <td class="px-3 py-2.5 text-right text-slate-800 font-bold">{{ totalSetores.lidos.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right text-slate-800 font-bold">{{ totalSetores.comProblema.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-10 bg-slate-200 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full transition-all" :class="totalSetores.percPendente > 3 ? 'bg-amber-500' : 'bg-emerald-500'" :style="{ width: Math.min(totalSetores.percPendente, 100) + '%' }"></div>
-                    </div>
-                    <span class="font-bold" :class="totalSetores.percPendente > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ totalSetores.percPendente.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-10 bg-slate-200 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full transition-all" :class="totalSetores.percProblema > 3 ? 'bg-red-500' : 'bg-slate-400'" :style="{ width: Math.min(totalSetores.percProblema, 100) + '%' }"></div>
-                    </div>
-                    <span class="font-bold" :class="totalSetores.percProblema > 3 ? 'text-red-700' : 'text-slate-700'">{{ totalSetores.percProblema.toFixed(2) }}%</span>
-                  </div>
-                </td>
-              </tr>
-              <tr v-for="(s, idx) in desempenhoSetores" :key="s.setor" class="transition-colors" :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                <td class="px-3 py-2.5 text-slate-700 font-medium">{{ s.setor }}</td>
-                <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ s.lidos.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ s.comProblema.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full transition-all" :class="s.percPendente > 3 ? 'bg-amber-400' : 'bg-emerald-400'" :style="{ width: Math.min(s.percPendente, 100) + '%' }"></div>
-                    </div>
-                    <span class="font-semibold" :class="s.percPendente > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ s.percPendente.toFixed(2) }}%</span>
-                  </div>
-                </td>
-                <td class="px-3 py-2.5 text-right">
-                  <div class="flex items-center justify-end gap-2">
-                    <div class="w-10 bg-slate-100 rounded-full h-1.5 hidden sm:block">
-                      <div class="h-1.5 rounded-full bg-red-400 transition-all" :style="{ width: Math.min(s.percProblema * 5, 100) + '%' }"></div>
-                    </div>
-                    <span class="text-red-600 font-semibold">{{ s.percProblema.toFixed(2) }}%</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabela detalhada de auditorias -->
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
-      <div class="flex items-center gap-2">
-        <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-          <i class="fas fa-table text-indigo-600 text-sm"></i>
-        </div>
-        <h2 class="text-sm font-bold text-slate-800">Lista detalhada das auditorias filtradas</h2>
-        <span v-if="auditoriasParaTabela.length" class="ml-auto text-[10px] text-slate-400 font-medium">{{ auditoriasParaTabela.length }} registro(s)</span>
-      </div>
-      <div v-if="auditoriasParaTabela.length === 0" class="flex flex-col items-center justify-center py-10 text-slate-400">
-        <i class="fas fa-search text-4xl mb-3"></i>
-        <p class="text-sm font-medium">Nenhuma auditoria encontrada</p>
-        <p class="text-xs mt-1">Tente ajustar os filtros selecionados.</p>
-      </div>
-      <div v-else class="overflow-x-auto">
+      <div class="mt-4 overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="border-b-2 border-slate-100">
-              <th
-                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'data')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Data
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'data' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
+            <tr class="border-b-2 border-slate-100 text-slate-600">
+              <th v-for="[col, titulo, dir] in [['setor', 'Setor', 'left'], ['auditorias', 'Auditorias', 'right'], ['lidos', 'Lidos', 'right'], ['pendentes', 'Pendentes', 'right'], ['percPendente', '% Pendente', 'right'], ['percProblema', '% Problema', 'right'], ['reincidencia', 'Acima da meta', 'right'], ['ultimo', 'Última', 'right']]" :key="col"
+                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                @click="alternarOrdem(ordemSetores, col, col !== 'setor')">
+                {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemSetores, col)"></i>
               </th>
-              <th
-                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'tipo')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Tipo
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'tipo' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
+              <th class="px-3 py-2.5 text-left font-semibold">Últimas 12</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-50">
+            <tr v-if="totalSetores && !buscaSetor" class="bg-slate-50 font-bold text-slate-800">
+              <td class="px-3 py-2.5">GERAL</td>
+              <td class="px-3 py-2.5 text-right">{{ auditoriasFiltradas.length }}</td>
+              <td class="px-3 py-2.5 text-right">{{ totalSetores.lidos.toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right">{{ totalSetores.pendentes.toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right" :class="totalSetores.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ totalSetores.percPendente.toFixed(2) }}%</td>
+              <td class="px-3 py-2.5 text-right">{{ totalSetores.percProblema.toFixed(2) }}%</td>
+              <td class="px-3 py-2.5 text-right">—</td>
+              <td class="px-3 py-2.5 text-right">—</td>
+              <td></td>
+            </tr>
+            <tr v-for="s in setoresVisiveis" :key="s.setor" class="hover:bg-indigo-50/40">
+              <td class="max-w-56 truncate px-3 py-2.5 font-medium text-slate-800" :title="s.setor">{{ s.setor }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.auditorias }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.lidos.toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.pendentes.toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right font-semibold" :class="s.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ s.percPendente.toFixed(2) }}%</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.percProblema.toFixed(2) }}%</td>
+              <td class="px-3 py-2.5 text-right">
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold" :class="s.reincidencia >= 50 && s.auditorias >= 2 ? 'bg-red-50 text-red-700' : s.acimaDaMeta ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
+                  <i v-if="s.reincidencia >= 50 && s.auditorias >= 2" class="fas fa-repeat text-[9px]"></i>{{ s.acimaDaMeta }}/{{ s.auditorias }}
                 </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'status')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Status
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'status' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'meta')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Meta
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'meta' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'parcial')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  % Parcial
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'parcial' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'conclusao')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  % Conclusão
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'conclusao' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'totalItens')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Itens
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'totalItens' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'pendentes')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Pendentes
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'pendentes' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
-              </th>
-              <th
-                class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors"
-                @click="atualizarOrdenacao(ordenacaoAuditorias, 'lidos')"
-              >
-                <span class="inline-flex items-center gap-1">
-                  Lidos
-                  <i class="fas text-[10px]" :class="ordenacaoAuditorias.coluna === 'lidos' ? (ordenacaoAuditorias.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" />
-                </span>
+              </td>
+              <td class="px-3 py-2.5 text-right">
+                <span class="font-semibold" :class="(s.ultimo ?? 0) > META ? 'text-red-700' : 'text-slate-700'">{{ s.ultimo === null ? '—' : s.ultimo.toFixed(1) + '%' }}</span>
+                <i class="ml-1 text-[10px]" :class="[iconeTendencia[s.tendencia].icone, iconeTendencia[s.tendencia].classe]" :title="iconeTendencia[s.tendencia].rotulo"></i>
+              </td>
+              <td class="w-32 px-3 py-1.5">
+                <SparklineMeta v-if="s.historico.length > 1" altura-classe="h-7" :pontos="s.historico.slice(-12)" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!setoresVisiveis.length" class="py-10 text-center text-sm text-slate-500">Nenhum setor encontrado.</p>
+      </div>
+    </section>
+
+    <!-- ===== USUÁRIOS ===== -->
+    <section v-else-if="aba === 'usuarios'" class="ui-card p-5 md:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Produtividade por usuário</h2>
+          <p class="text-xs text-slate-500">Leituras = itens lidos + leituras com problema, somadas no período.</p>
+        </div>
+        <div class="relative w-full sm:w-64">
+          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+          <input v-model="buscaUsuario" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Buscar usuário...">
+        </div>
+      </div>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b-2 border-slate-100 text-slate-600">
+              <th class="w-10 px-3 py-2.5 text-left font-semibold">#</th>
+              <th v-for="[col, titulo, dir] in [['usuario', 'Usuário', 'left'], ['auditorias', 'Auditorias', 'right'], ['leituras', 'Leituras', 'left'], ['mediaPorAuditoria', 'Média/auditoria', 'right'], ['comProblema', 'Com problema', 'right'], ['percProblema', '% Problema', 'right'], ['ultimaData', 'Última', 'right']]" :key="col"
+                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                @click="alternarOrdem(ordemUsuarios, col, col !== 'usuario')">
+                {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemUsuarios, col)"></i>
               </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-50">
-            <tr
-              v-for="(a, idx) in auditoriasParaTabela"
-              :key="a.id"
-              class="transition-colors cursor-pointer group"
-              :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'"
-              @click="abrirAuditoria(a.id)"
-            >
-              <td class="px-3 py-2.5 text-slate-700 font-medium">
-                <span class="group-hover:text-indigo-600 transition-colors">{{ a.dataFormatada }}</span>
-              </td>
+            <tr v-for="u in usuariosPagina" :key="u.usuario" class="hover:bg-indigo-50/40">
               <td class="px-3 py-2.5">
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold" :class="getTipoConfig(a.tipo).cor">
-                  <i class="fas text-[9px]" :class="getTipoConfig(a.tipo).icone"></i>
-                  {{ a.tipo }}
-                </span>
+                <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
               </td>
+              <td class="px-3 py-2.5 font-medium text-slate-800">{{ u.usuario }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ u.auditorias }}</td>
               <td class="px-3 py-2.5">
-                <span
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                  :class="a.statusRaw === 'fechada' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'"
-                >
-                  <span class="h-1.5 w-1.5 rounded-full" :class="a.statusRaw === 'fechada' ? 'bg-emerald-500' : 'bg-sky-500'"></span>
-                  {{ a.status }}
-                </span>
+                <div class="flex items-center gap-2">
+                  <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                    <div class="h-full rounded-full bg-indigo-500" :style="{ width: `${(u.leituras / maiorLeitura) * 100}%` }"></div>
+                  </div>
+                  <span class="font-semibold text-slate-800">{{ u.leituras.toLocaleString('pt-BR') }}</span>
+                </div>
               </td>
-              <td class="px-3 py-2.5">
-                <span
-                  v-if="a.meta !== '-'"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                  :class="a.metaAlcancada ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'"
-                >
-                  <i class="fas text-[9px]" :class="a.metaAlcancada ? 'fa-check' : 'fa-times'"></i>
-                  {{ a.metaAlcancada ? 'Dentro' : 'Fora' }}
-                </span>
-                <span v-else class="text-slate-400">-</span>
-              </td>
-              <td class="px-3 py-2.5 text-right">
-                <span v-if="a.parcial != null" class="font-semibold" :class="a.parcial > 3 ? 'text-amber-700' : 'text-emerald-700'">{{ a.parcial.toFixed(2) }}%</span>
-              </td>
-              <td class="px-3 py-2.5 text-right">
-                <span v-if="a.conclusao != null" class="text-blue-700 font-semibold">{{ a.conclusao.toFixed(2) }}%</span>
-              </td>
-              <td class="px-3 py-2.5 text-right text-slate-700">{{ typeof a.totalItens === 'number' ? a.totalItens.toLocaleString('pt-BR') : a.totalItens }}</td>
-              <td class="px-3 py-2.5 text-right text-amber-700 font-semibold">{{ typeof a.pendentes === 'number' ? a.pendentes.toLocaleString('pt-BR') : a.pendentes }}</td>
-              <td class="px-3 py-2.5 text-right text-emerald-700 font-semibold">{{ typeof a.lidos === 'number' ? a.lidos.toLocaleString('pt-BR') : a.lidos }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ Math.round(u.mediaPorAuditoria).toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right text-slate-600">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
+              <td class="px-3 py-2.5 text-right font-semibold" :class="u.percProblema > 5 ? 'text-red-700' : u.percProblema > 2 ? 'text-amber-700' : 'text-slate-700'">{{ u.percProblema.toFixed(2) }}%</td>
+              <td class="px-3 py-2.5 text-right text-slate-500">{{ formatarDataBR(u.ultimaData) }}</td>
             </tr>
           </tbody>
         </table>
+        <p v-if="!usuariosOrdenados.length" class="py-10 text-center text-sm text-slate-500">Nenhum usuário encontrado. Auditorias importadas de backups regionais podem não ter dados por usuário.</p>
       </div>
-    </div>
+      <div v-if="totalPaginasUsuarios > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <span>Página {{ paginaUsuarios }} de {{ totalPaginasUsuarios }}</span>
+        <div class="flex gap-1">
+          <UiButton size="sm" variant="secondary" :disabled="paginaUsuarios === 1" @click="paginaUsuarios--"><i class="fas fa-angle-left"></i></UiButton>
+          <UiButton size="sm" variant="secondary" :disabled="paginaUsuarios === totalPaginasUsuarios" @click="paginaUsuarios++"><i class="fas fa-angle-right"></i></UiButton>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== AUDITORIAS ===== -->
+    <template v-else-if="aba === 'auditorias'">
+      <!-- Comparação -->
+      <section v-if="comparacao" class="ui-card ui-fade-in border-indigo-200 p-5 md:p-6">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Comparação de auditorias</h2>
+            <p class="text-xs text-slate-500">
+              Base: {{ comparacao.anterior.tipo }} de {{ formatarDataBR(comparacao.anterior.data) }} → {{ comparacao.atual.tipo }} de {{ formatarDataBR(comparacao.atual.data) }}
+              <span v-if="comparacao.anterior.tipo !== comparacao.atual.tipo" class="font-semibold text-amber-600">(tipos diferentes)</span>
+            </p>
+          </div>
+          <button type="button" class="text-xs font-semibold text-slate-500 hover:text-red-600" @click="selecionadas = []"><i class="fas fa-times mr-1"></i>Fechar</button>
+        </div>
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="rounded-xl bg-slate-50 p-3">
+            <p class="text-[11px] font-semibold uppercase text-slate-500">% Pendente</p>
+            <p class="mt-1 text-lg font-bold text-slate-900">{{ comparacao.resultado.anterior.percentualPendente.toFixed(2) }}% → {{ comparacao.resultado.atual.percentualPendente.toFixed(2) }}%</p>
+            <p class="text-xs font-semibold" :class="comparacao.resultado.diferencaPendente <= 0 ? 'text-emerald-700' : 'text-red-700'">
+              <i :class="comparacao.resultado.diferencaPendente <= 0 ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+              {{ Math.abs(comparacao.resultado.diferencaPendente).toFixed(2) }} p.p.
+            </p>
+          </div>
+          <div class="rounded-xl bg-slate-50 p-3">
+            <p class="text-[11px] font-semibold uppercase text-slate-500">Itens pendentes</p>
+            <p class="mt-1 text-lg font-bold text-slate-900">{{ comparacao.resultado.anterior.pendentes }} → {{ comparacao.resultado.atual.pendentes }}</p>
+            <p class="text-xs text-slate-500">SKU {{ comparacao.resultado.anterior.total }} → {{ comparacao.resultado.atual.total }}</p>
+          </div>
+          <div class="rounded-xl bg-slate-50 p-3">
+            <p class="text-[11px] font-semibold uppercase text-slate-500">Setores</p>
+            <p class="mt-1 text-sm font-semibold"><span class="text-emerald-700">{{ comparacao.resultado.melhoraram.length }} melhoraram</span> · <span class="text-red-700">{{ comparacao.resultado.pioraram.length }} pioraram</span></p>
+            <p v-if="comparacao.resultado.novos.length || comparacao.resultado.ausentes.length" class="text-xs text-slate-500">{{ comparacao.resultado.novos.length }} novos · {{ comparacao.resultado.ausentes.length }} ausentes</p>
+          </div>
+        </div>
+        <div v-if="setoresComparacao.length" class="mt-4 overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-slate-100 text-slate-500">
+                <th class="px-3 py-2 text-left font-semibold">Setor (maiores mudanças)</th>
+                <th class="px-3 py-2 text-right font-semibold">Antes</th>
+                <th class="px-3 py-2 text-right font-semibold">Depois</th>
+                <th class="px-3 py-2 text-right font-semibold">Diferença</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="s in setoresComparacao" :key="s.setor">
+                <td class="px-3 py-2 font-medium text-slate-700">{{ s.setor }}</td>
+                <td class="px-3 py-2 text-right">{{ s.anterior === null ? '—' : s.anterior.toFixed(1) + '%' }}</td>
+                <td class="px-3 py-2 text-right">{{ s.atual === null ? '—' : s.atual.toFixed(1) + '%' }}</td>
+                <td class="px-3 py-2 text-right font-semibold" :class="s.diferenca === null ? 'text-slate-400' : s.diferenca > 0 ? 'text-red-700' : 'text-emerald-700'">
+                  {{ s.diferenca === null ? (s.atual === null ? 'ausente' : 'novo') : `${s.diferenca > 0 ? '+' : ''}${s.diferenca.toFixed(1)} p.p.` }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="ui-card p-5 md:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Auditorias do período</h2>
+            <p class="text-xs text-slate-500">
+              Marque duas para comparar.
+              <span v-if="selecionadas.length === 1" class="font-semibold text-indigo-600">Selecione mais uma.</span>
+            </p>
+          </div>
+          <div class="relative w-full sm:w-64">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+            <input v-model="buscaAuditoria" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Data, tipo, #id, fora...">
+          </div>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="border-b-2 border-slate-100 text-slate-600">
+                <th class="w-8 px-3 py-2.5"><span class="sr-only">Comparar</span></th>
+                <th v-for="[col, titulo, dir] in [['data', 'Data', 'left'], ['tipo', 'Tipo', 'left'], ['status', 'Status', 'left'], ['meta', 'Meta', 'left'], ['pendente', '% Pendente', 'right'], ['total', 'Itens', 'right'], ['pendentes', 'Pendentes', 'right'], ['lidos', 'Lidos', 'right']]" :key="col"
+                  class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                  @click="alternarOrdem(ordemAuditorias, col)">
+                  {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemAuditorias, col)"></i>
+                </th>
+                <th class="px-3 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="l in auditoriasPagina" :key="l.id" class="group" :class="selecionadas.includes(l.id) ? 'bg-indigo-50/70' : 'hover:bg-slate-50'">
+                <td class="px-3 py-2.5">
+                  <input type="checkbox" class="size-4 cursor-pointer rounded accent-indigo-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
+                </td>
+                <td class="px-3 py-2.5 font-medium text-slate-800">{{ l.dataFormatada }} <span class="text-[10px] text-slate-400">#{{ l.id }}</span></td>
+                <td class="px-3 py-2.5">
+                  <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold" :class="getTipoConfig(l.tipo).cor">
+                    <i class="fas text-[9px]" :class="getTipoConfig(l.tipo).icone"></i>{{ l.tipo }}
+                  </span>
+                </td>
+                <td class="px-3 py-2.5">
+                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.fechada ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'">
+                    <i :class="l.fechada ? 'fas fa-lock' : 'fas fa-spinner'" class="text-[9px]"></i>{{ l.status }}
+                  </span>
+                </td>
+                <td class="px-3 py-2.5">
+                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.dentroMeta ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                    <i class="fas text-[9px]" :class="l.dentroMeta ? 'fa-check' : 'fa-times'"></i>{{ l.meta }}
+                  </span>
+                </td>
+                <td class="px-3 py-2.5 text-right font-semibold" :class="l.pendente > META ? 'text-red-700' : 'text-emerald-700'">{{ l.pendente.toFixed(2) }}%</td>
+                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.total.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.pendentes.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.lidos.toLocaleString('pt-BR') }}</td>
+                <td class="px-3 py-2.5 text-right">
+                  <button type="button" class="rounded-lg px-2 py-1 font-semibold text-indigo-600 hover:bg-indigo-50" @click="abrirAuditoria(l.id)">Abrir <i class="fas fa-arrow-right text-[9px]"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="!auditoriasOrdenadas.length" class="py-10 text-center text-sm text-slate-500">Nenhuma auditoria corresponde à busca.</p>
+        </div>
+        <div v-if="totalPaginasAuditorias > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+          <span>{{ auditoriasOrdenadas.length }} auditorias · página {{ paginaAuditorias }} de {{ totalPaginasAuditorias }}</span>
+          <div class="flex gap-1">
+            <UiButton size="sm" variant="secondary" :disabled="paginaAuditorias === 1" @click="paginaAuditorias--"><i class="fas fa-angle-left"></i></UiButton>
+            <UiButton size="sm" variant="secondary" :disabled="paginaAuditorias === totalPaginasAuditorias" @click="paginaAuditorias++"><i class="fas fa-angle-right"></i></UiButton>
+          </div>
+        </div>
+      </section>
+    </template>
   </div>
 </template>

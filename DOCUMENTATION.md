@@ -87,6 +87,16 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - Deduplicação por código em O(n) (`utils/deduplicar.js`) e agrupamento por local/setor em passada única na tela de detalhes.
 - Bibliotecas em chunks separados (`vendor-vue`, `vendor-db`) e `console.log` removido do build de produção.
 
+### 4.6 Análise de auditorias (`pages/AnaliseAuditorias.vue`, `utils/analiseHistorica.js`)
+- **Filtros lembrados** neste navegador: período rápido (30 dias a 12 meses, tudo) ou datas, tipo, status e meta. Datas comparadas como texto ISO (sem erro de fuso).
+- **Indicadores com comparação** ao período anterior de mesma duração (auditorias, taxa na meta, % pendente médio, itens auditados). Todos derivados do SKU atual.
+- **Destaques automáticos**: tendência mensal, variação vs período anterior, melhor mês, tipo com menor taxa na meta e setor reincidente.
+- **Gráfico mensal** do % pendente com linha da meta; clicar em um mês filtra e abre a lista daquele mês. Alternativa em tabela.
+- **Setores**: consolidado do período, quantas vezes cada setor passou da meta (reincidência), último valor, tendência e mini gráfico das últimas 12 auditorias.
+- **Usuários**: ranking por leituras, média por auditoria, % de leituras com problema e última participação.
+- **Auditorias**: busca, paginação, CSV e **comparação de duas auditorias** (variação geral e por setor).
+- **Detalhe da auditoria**: card "Caminho até a meta" (quantos itens faltam ler ou a folga) e comparação com a auditoria anterior do mesmo tipo (setores que melhoraram/pioraram).
+
 ---
 
 ## � 5. Guia de Uso

@@ -6,6 +6,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
 import ModalMetrica from '../components/ModalMetrica.vue'
 import ModalSetorLocal from '../components/ModalSetorLocal.vue'
+import ComparativoAnterior from '../components/ComparativoAnterior.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 import { printTableInNewWindow, printHtmlInNewWindow } from '../utils/print'
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
@@ -2752,6 +2753,8 @@ const fecharRelatorio = () => {
               <p class="text-[11px] text-slate-400">Requer atenção</p>
             </div>
           </div>
+
+          <ComparativoAnterior :auditoria="auditoria" :historico="store.auditorias" />
 
           <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm flex flex-col gap-2">
