@@ -223,7 +223,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               <!-- Corredor: o número é o corredor (onde se anda); em volta, 4 faces de gôndola.
                    C/D no fundo e A/B na frente; A de frente para B, C de frente para D. -->
               <div v-if="(areas.get(p.id)?.tipo || interpretarLocal(p.id).tipo) === 'gondola'" class="flex h-full overflow-hidden rounded-md ring-1 ring-slate-300 transition" :class="[selecionado === p.id ? 'ring-4 ring-blue-500' : 'group-hover:ring-2 group-hover:ring-blue-400', p.w < p.h ? 'flex-row' : 'flex-col']">
-                <div v-for="lado in [['C', 'A'], null, ['D', 'B']]" :key="lado ? lado.join('') : 'corredor'" class="flex min-h-0 min-w-0" :class="[p.w < p.h ? 'flex-col' : 'flex-row', lado ? 'basis-[30%]' : 'basis-[40%]']">
+                <div v-for="lado in [['D', 'B'], null, ['C', 'A']]" :key="lado ? lado.join('') : 'corredor'" class="flex min-h-0 min-w-0" :class="[p.w < p.h ? 'flex-col' : 'flex-row', lado ? 'basis-[30%]' : 'basis-[40%]']">
                   <template v-if="lado">
                     <div v-for="f in lado" :key="f" class="flex min-h-0 min-w-0 flex-1 items-center justify-center text-[0.8em] font-bold leading-none" :class="[classeFace(areas.get(p.id), f), f === 'C' || f === 'D' ? (p.w < p.h ? 'border-b border-white/70' : 'border-r border-white/70') : '']" :title="`${p.id}${f}`">
                       {{ f }}
