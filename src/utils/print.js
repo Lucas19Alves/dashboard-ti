@@ -30,6 +30,8 @@ const ESTILOS = `
   .card-value, .indicador .valor { font-size: 19px; font-weight: 800; margin-top: 2px; color: var(--cor-texto, #0f172a); }
   .card-sub, .indicador .detalhe { font-size: 9.5px; color: #64748b; margin-top: 1px; }
   .section, .secao { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+  .secao.tabela { break-inside: auto; page-break-inside: auto; }
+  .secao.tabela > h2, .secao.tabela > .sub { break-after: avoid; page-break-after: avoid; }
   .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .grade > .secao { margin-bottom: 0; }
   .painel { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
@@ -40,13 +42,13 @@ const ESTILOS = `
   .barra .preenchido { position: absolute; inset: 0 auto 0 0; border-radius: 99px; }
   .barra .meta { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed #475569; }
   .barra .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .colunas { display: flex; align-items: flex-end; gap: 6px; height: 130px; padding: 0 2px; border-bottom: 1px solid #cbd5e1; position: relative; }
+  .colunas { display: flex; align-items: flex-end; gap: 6px; height: 130px; padding: 0 44px 0 2px; border-bottom: 1px solid #cbd5e1; position: relative; }
   .colunas .c { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
   .colunas .c .b { width: 70%; max-width: 34px; border-radius: 4px 4px 0 0; }
   .colunas .c .n { font-size: 9px; font-weight: 700; margin-bottom: 2px; }
   .colunas .linha-meta { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #475569; }
-  .colunas .linha-meta span { position: absolute; right: 0; top: -12px; font-size: 8.5px; color: #475569; background: #fff; padding: 0 2px; }
-  .rotulos { display: flex; gap: 6px; padding: 3px 2px 0; }
+  .colunas .linha-meta span { position: absolute; right: 0; top: -6px; font-size: 8.5px; color: #475569; background: #fff; padding: 0 2px; }
+  .rotulos { display: flex; gap: 6px; padding: 3px 44px 0 2px; }
   .rotulos span { flex: 1; text-align: center; font-size: 8.5px; color: #64748b; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .empilhada { display: flex; height: 16px; border-radius: 99px; overflow: hidden; gap: 2px; background: #fff; }
   .legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 7px; font-size: 10px; color: #334155; }
@@ -62,6 +64,20 @@ const ESTILOS = `
   td .mini b { position: absolute; inset: 0 auto 0 0; border-radius: 99px; }
   .rodape { margin-top: 10px; font-size: 9px; color: #94a3b8; text-align: right; }
   .vazio { color: #94a3b8; font-style: italic; }
+  thead { display: table-header-group; }
+  .pagina { break-before: page; page-break-before: always; }
+  .capitulo { break-after: avoid; page-break-after: avoid; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 2px solid #1d4ed8; padding-bottom: 6px; margin-bottom: 12px; }
+  .capitulo h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0; }
+  .capitulo h2 .num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: #1d4ed8; color: #fff; font-size: 12px; }
+  .capitulo p { margin: 0; color: #64748b; font-size: 10px; text-align: right; max-width: 55%; }
+  .sumario { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; font-size: 10px; color: #475569; }
+  .sumario span { border: 1px solid #e2e8f0; border-radius: 99px; padding: 2px 9px; }
+  .sumario b { color: #1d4ed8; margin-right: 3px; }
+  .selo { display: inline-block; border-radius: 99px; padding: 1px 7px; font-size: 9px; font-weight: 700; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chips span { border-radius: 6px; padding: 3px 8px; background: #fef2f2; color: #b91c1c; font-weight: 600; font-size: 10px; }
+  .nota { font-size: 9.5px; color: #64748b; margin: 6px 0 0; }
+  svg.spark { display: block; }
 `
 
 const cabecalho = (titulo, subtitulo) => {
@@ -116,14 +132,39 @@ export const blocoTabela = ({ titulo, subtitulo, colunas = [], linhas = [] }) =>
   const celula = (linha, col) => {
     const v = linha?.[col.chave]
     const texto = escapeHtml(col.format && v != null ? col.format(v) : numero(v ?? ''))
+    if (col.html) return col.html(v, linha)
     if (!col.barra || typeof v !== 'number') return texto
     const largura = Math.max(0, Math.min(100, (v / (col.barra.max || 1)) * 100))
     const tom = typeof col.barra.tom === 'function' ? col.barra.tom(v, linha) : col.barra.tom
     return `<span class="mini"><b style="width:${largura}%;background:${cor(tom)}"></b></span>${texto}`
   }
-  return `<div class="secao">${titulo ? `<h2>${escapeHtml(titulo)}</h2>` : ''}${subtitulo ? `<p class="sub">${escapeHtml(subtitulo)}</p>` : ''}<table>
+  return `<div class="secao tabela">${titulo ? `<h2>${escapeHtml(titulo)}</h2>` : ''}${subtitulo ? `<p class="sub">${escapeHtml(subtitulo)}</p>` : ''}<table>
     <thead><tr>${colunas.map(c => `<th style="text-align:${alinhar(c)}">${escapeHtml(c.titulo)}</th>`).join('')}</tr></thead>
     <tbody>${linhas.map(l => `<tr>${colunas.map(c => `<td style="text-align:${alinhar(c)}">${celula(l, c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+}
+
+// Título de capítulo; `novaPagina` começa uma folha nova.
+export const blocoCapitulo = ({ numero, titulo, descricao = '', novaPagina = false }) => `<div class="capitulo${novaPagina ? ' pagina' : ''}">
+  <h2>${numero ? `<span class="num">${escapeHtml(numero)}</span>` : ''}${escapeHtml(titulo)}</h2>${descricao ? `<p>${escapeHtml(descricao)}</p>` : ''}</div>`
+
+export const selo = (texto, tom = 'neutro') => {
+  const fundo = { bom: '#ecfdf5', ruim: '#fef2f2', alerta: '#fffbeb', neutro: '#eff6ff', cinza: '#f1f5f9' }[tom] || '#eff6ff'
+  return `<span class="selo" style="background:${fundo};color:${cor(tom)}">${escapeHtml(texto)}</span>`
+}
+
+// Mini gráfico de linha em SVG; `meta` desenha linha tracejada e o último ponto fica colorido.
+export const sparkline = (valores = [], { meta = null, largura = 96, altura = 22 } = {}) => {
+  const v = valores.map(Number).filter(Number.isFinite)
+  if (v.length < 2) return '<span class="vazio">—</span>'
+  const max = Math.max(...v, meta ?? 0) * 1.1 || 1
+  const x = i => ((i / (v.length - 1)) * (largura - 4) + 2).toFixed(1)
+  const y = n => (altura - 2 - (n / max) * (altura - 4)).toFixed(1)
+  const ultimo = v.at(-1)
+  const tom = meta !== null && ultimo > meta ? 'ruim' : 'bom'
+  return `<svg class="spark" width="${largura}" height="${altura}" viewBox="0 0 ${largura} ${altura}">
+    ${meta !== null ? `<line x1="0" x2="${largura}" y1="${y(meta)}" y2="${y(meta)}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>` : ''}
+    <polyline fill="none" stroke="#64748b" stroke-width="1.4" stroke-linejoin="round" points="${v.map((n, i) => `${x(i)},${y(n)}`).join(' ')}"/>
+    <circle cx="${x(v.length - 1)}" cy="${y(ultimo)}" r="2.4" fill="${cor(tom)}"/></svg>`
 }
 
 export const grade = (...blocos) => {
@@ -133,21 +174,27 @@ export const grade = (...blocos) => {
 }
 
 // ---------- Janela de impressão ----------
-const abrirJanela = (titulo, corpo) => {
+const textoCss = t => `"${String(t ?? '').replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ').replace(/</g, '\\3c ')}"`
+// Numeração das folhas no rodapé (navegadores com suporte a margens de @page).
+const estiloPaginacao = rodape => `@page { @bottom-left { content: ${textoCss(rodape)}; font: 8.5px Inter, system-ui, sans-serif; color: #94a3b8; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8.5px Inter, system-ui, sans-serif; color: #94a3b8; } }`
+
+const abrirJanela = (titulo, corpo, { rodape = null } = {}) => {
   if (typeof window === 'undefined') return
   const win = window.open('', '_blank')
   if (!win) return
   win.document.open()
-  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}</style></head>
-    <body>${corpo}<p class="rodape">Dashboard TI · dados salvos neste navegador</p></body></html>`)
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}${rodape ? estiloPaginacao(rodape) : ''}</style></head>
+    <body>${corpo}${rodape ? '' : '<p class="rodape">Dashboard TI · dados salvos neste navegador</p>'}</body></html>`)
   win.document.close()
   win.onafterprint = () => { win.close() }
   setTimeout(() => { win.focus(); win.print() }, 350)
 }
 
 // Relatório completo: cabeçalho + blocos HTML já montados.
-export const imprimirRelatorioVisual = ({ titulo, subtitulo = '', indicadores = [], blocos = [] }) => {
-  abrirJanela(titulo, `${cabecalho(titulo, subtitulo)}${blocoIndicadores(indicadores)}${blocos.filter(Boolean).join('')}`)
+// `rodape` ativa a numeração "Página X de Y" com esse texto à esquerda.
+export const imprimirRelatorioVisual = ({ titulo, subtitulo = '', indicadores = [], blocos = [], antesDosIndicadores = '', rodape = null }) => {
+  abrirJanela(titulo, `${cabecalho(titulo, subtitulo)}${antesDosIndicadores}${blocoIndicadores(indicadores)}${blocos.filter(Boolean).join('')}`, { rodape })
 }
 
 // Lista de itens com resumo gráfico opcional.

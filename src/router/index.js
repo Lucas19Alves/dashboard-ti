@@ -6,6 +6,7 @@ const Auditorias = () => import('../pages/Auditorias.vue')
 const AuditoriaDetalhes = () => import('../pages/AuditoriaDetalhes.vue')
 const Vencimentos = () => import('../pages/Vencimentos.vue')
 const AnaliseAuditorias = () => import('../pages/AnaliseAuditorias.vue')
+const Documentacao = () => import('../pages/Documentacao.vue')
 
 const routes = [
   {
@@ -37,6 +38,12 @@ const routes = [
     name: 'Vencimentos',
     meta: { titulo: 'Vencimentos' },
     component: Vencimentos
+  },
+  {
+    path: '/documentacao',
+    name: 'Documentacao',
+    meta: { titulo: 'Documentação' },
+    component: Documentacao
   },
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

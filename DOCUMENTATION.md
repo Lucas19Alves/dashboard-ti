@@ -21,7 +21,8 @@ O Dashboard TI é uma aplicação web (SPA) moderna que permite aos gestores de 
 - **Roteamento**: [Vue Router 4](https://router.vuejs.org/)
 - **Estilização**: [Tailwind CSS](https://tailwindcss.com/)
 - **Banco de Dados Local**: [Dexie.js](https://dexie.org/) (Wrapper para IndexedDB)
-- **Processamento de Planilhas**: [SheetJS (XLSX)](https://sheetjs.com/)
+- **Processamento de Planilhas**: [read-excel-file](https://gitlab.com/catamphetamine/read-excel-file) em Web Worker
+- **Imagens de relatório**: [html-to-image](https://github.com/bubkoo/html-to-image)
 - **Ícones**: [Font Awesome](https://fontawesome.com/)
 
 ---
@@ -95,6 +96,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Setores**: consolidado do período, quantas vezes cada setor passou da meta (reincidência), último valor, tendência e mini gráfico das últimas 12 auditorias.
 - **Usuários**: ranking por leituras, média por auditoria, % de leituras com problema e última participação.
 - **Auditorias**: busca, paginação, CSV e **comparação de duas auditorias** (variação geral e por setor).
+- **Relatório PDF** em folhas A4 numeradas ("Página X de Y"): 1 resumo do período (indicadores, conclusões, gráfico mensal, tabela por tipo e comparação com o período anterior), 2 setores (reincidentes, % pendente, tendência e evolução), 3 usuários (matrícula, nome, leituras, % problema) e 4 auditorias do período com resumo por mês. Tabelas longas continuam na folha seguinte repetindo o cabeçalho.
 - **Detalhe da auditoria**: card "Caminho até a meta" (quantos itens faltam ler ou a folga) e comparação com a auditoria anterior do mesmo tipo (setores que melhoraram/pioraram).
 
 ### 4.7 Interface, listas e relatórios
@@ -102,8 +104,9 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Auditorias**: cards de auditorias em andamento sem bordas, com anel de conclusão e "faltam X itens para a meta"; histórico por tipo agrupado por mês, com resumo do tipo, filtro por situação e "mostrar mais".
 - **Aba Usuários** (`components/AbaUsuariosAuditoria.vue`): pódio, leituras do time por hora, cartões/tabela/mapa de horas por usuário (ritmo, pico, período ativo, problemas) e "quem leu cada setor" com alerta de dependência de uma só pessoa. Exporta CSV.
 - **Modais de lista** (`components/ui/UiListaItens.vue`): busca, filtros com contagem, agrupamento, ordenação, carregamento incremental, CSV, impressão e cópia do código. Usado em métricas, itens do local, usuário e vencimentos.
-- **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): indicadores, composição, destaques, setores vs meta, top locais, leituras por hora, usuários; imprime/salva PDF, salva imagem e copia um resumo em texto para compartilhar.
+- **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): % pendente em destaque, cards (SKU, lidos, pendentes, com problema e desatualizados na Etiqueta), tabela de % pendente por setor, top 10 locais e locais sem leitura; imprime/salva PDF e salva uma imagem quadrada em alta resolução para compartilhar.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
+- **Documentação in-app** (`/documentacao`, `utils/markdown.js`): este documento dentro do sistema, com sumário fixo, busca e links para cada seção (`/documentacao#backup-e-seguranca`). Aberta pelo botão Documentação em "Sobre" ou pela busca rápida.
 
 ### 4.8 Detalhe da auditoria: navegação e mapa da loja
 - **Navegação**: barra de abas fixa (Visão geral, Mapa da loja, Usuários, Dados e Estatísticas; a aba Atenção só aparece pelo endereço `?aba=atencao`), com contadores, setas do teclado e resumo compacto (% pendente) ao rolar. A aba fica na URL (`?aba=mapa`).
@@ -115,7 +118,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 
 ---
 
-## � 5. Guia de Uso
+## 📖 5. Guia de Uso
 
 ### 5.1 Realizando uma Auditoria
 1. Acesse a aba **Auditorias**.
@@ -151,4 +154,4 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - Portfólio: [Portfolio Lucas Alves](https://portfolio-lucasalves.vercel.app/)
 
 ---
-*Documentação ampliada e atualizada em 05/04/2026.*
+*Documentação ampliada e atualizada em 10/10/2026.*
