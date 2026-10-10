@@ -8,7 +8,8 @@ import ModalSetorLocal from '../components/ModalSetorLocal.vue'
 import ComparativoAnterior from '../components/ComparativoAnterior.vue'
 import AbaUsuariosAuditoria from '../components/AbaUsuariosAuditoria.vue'
 import RelatorioAuditoria from '../components/RelatorioAuditoria.vue'
-import UiTabs from '../components/ui/UiTabs.vue'
+import MapaLoja from '../components/MapaLoja.vue'
+import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import { printTableInNewWindow, blocoBarras, blocoTabela, imprimirRelatorioVisual } from '../utils/print'
@@ -126,16 +127,15 @@ const colunasDados = computed(() => {
   return colunasDadosBase
 })
 
-const abaPadrao = ref('dashboard')
+// A aba fica na URL (?aba=mapa): recarregar ou compartilhar o link mantém a seção.
+const ABAS_VALIDAS = ['dashboard', 'mapa', 'usuarios', 'dados', 'estatisticas', 'atencao']
 const abaAtiva = computed({
-  get: () => route.query.aba === 'atencao' ? 'atencao' : abaPadrao.value,
+  get: () => (ABAS_VALIDAS.includes(route.query.aba) ? route.query.aba : 'dashboard'),
   set: valor => {
-    abaPadrao.value = valor
-    if (route.query.aba === 'atencao') {
-      const query = { ...route.query }
-      delete query.aba
-      router.replace({ query })
-    }
+    const query = { ...route.query }
+    if (valor === 'dashboard') delete query.aba
+    else query.aba = valor
+    router.replace({ query })
   }
 })
 const filtroUsuario = ref('')
@@ -237,12 +237,22 @@ const collapsedSections = ref({
 
 // UI/UX Improvements - Filter states
 
-const abasDetalhes = [
-  { value: 'dashboard', label: 'Dashboard', icon: 'fas fa-chart-line' },
-  { value: 'usuarios', label: 'Usuários', icon: 'fas fa-users-cog' },
-  { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
-  { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' }
-]
+const abasDetalhes = computed(() => {
+  const usuarios = auditoria.value?.analise?.usuarios?.length || Object.keys(auditoria.value?.analise?.porUsuario || {}).length
+  const alertas = sinaisAuditoria.value?.sinais?.length || 0
+  return [
+    { value: 'dashboard', label: 'Visão geral', icon: 'fas fa-chart-line' },
+    { value: 'mapa', label: 'Mapa da loja', icon: 'fas fa-map-location-dot' },
+    { value: 'usuarios', label: 'Usuários', icon: 'fas fa-users', badge: usuarios || null },
+    { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
+    { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' },
+    ...(alertas ? [{ value: 'atencao', label: 'Atenção', icon: 'fas fa-triangle-exclamation', badge: alertas, tom: 'alerta' }] : [])
+  ]
+})
+const resumoNavegacao = computed(() => {
+  const pendente = metricasGerais.value?.percentualPendente ?? 0
+  return { titulo: `${auditoria.value?.tipo || ''} · ${dataAuditoriaBR.value}`, pendente: `${pendente.toFixed(2)}% pendente`, naMeta: pendente <= 3 }
+})
 
 const sinaisAuditoria = computed(() => analisarSinaisAuditoria(auditoria.value?.dados, auditoria.value?.data, {
   tipoAuditoria: auditoria.value?.tipo,
@@ -2115,17 +2125,17 @@ const fecharRelatorio = () => {
 <template>
   <div v-if="auditoria" class="min-h-screen bg-slate-50">
     <!-- Header -->
-    <div class="bg-blue-700 py-6 text-white shadow-lg">
+    <div class="bg-blue-700 py-5 text-white">
       <div class="ui-container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <button 
             @click="voltar" 
-            class="mb-3 px-3 py-1.5 flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg transition text-white text-sm font-medium backdrop-blur-sm"
+            class="mb-2 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-blue-100 transition hover:bg-white/10 hover:text-white"
           >
             <i class="fas fa-arrow-left"></i> 
             <span>Voltar</span>
           </button>
-          <h1 class="text-4xl font-bold">{{ auditoria.tipo }}</h1>
+          <h1 class="text-3xl font-bold tracking-tight">{{ auditoria.tipo }}</h1>
           <p class="text-blue-100 mt-2 flex items-center flex-wrap gap-2">
             <span><i class="fas fa-calendar mr-2"></i>{{ dataAuditoriaBR }}</span>
             <span>|</span>
@@ -2177,7 +2187,7 @@ const fecharRelatorio = () => {
             </button>
           </div>
           <div>
-            <div class="text-5xl font-bold">{{ (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0).toFixed(2) }}%</div>
+            <div class="text-4xl font-black tracking-tight">{{ (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0).toFixed(2) }}%</div>
             <p class="text-blue-100">Pendente</p>
             <div class="mt-2">
               <span
@@ -2207,9 +2217,7 @@ const fecharRelatorio = () => {
       </div>
     </div>
 
-    <div class="ui-container mt-4">
-      <UiTabs v-model="abaAtiva" :items="abasDetalhes" sticky />
-    </div>
+    <NavAbasAuditoria v-model="abaAtiva" :items="abasDetalhes" :resumo="resumoNavegacao" @relatorio="abrirRelatorio" />
 
     <!-- Conteúdo -->
     <div class="ui-container py-6">
@@ -2737,6 +2745,13 @@ const fecharRelatorio = () => {
       </div>
 
       <!-- USUÁRIOS -->
+      <MapaLoja
+        v-if="abaAtiva === 'mapa'"
+        :auditoria="auditoria"
+        :is-item-lido="isItemLido"
+        @ver-itens="abrirItensDoLocal"
+      />
+
       <AbaUsuariosAuditoria
         v-if="abaAtiva === 'usuarios'"
         :auditoria="auditoria"
