@@ -40,27 +40,36 @@ const topLocais = computed(() => [...props.locais].filter(l => l.pendentes > 0).
 const maiorLocal = computed(() => Math.max(1, ...topLocais.value.map(l => l.pendentes)))
 const locaisSemLeitura = computed(() => [...(analise.value.locaisSemLeitura || [])].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true })))
 
-// ---------- Imagem Full HD (1920 px de largura) ----------
+// ---------- Imagem: layout de 1920 px renderizado 4x (7680 px de largura) ----------
 const area = ref(null)
 const gerandoImagem = ref(false)
-const LARGURA_IMAGEM = 1920
-const ALTURA_MINIMA = 1080
+const LARGURA_LAYOUT = 1920
+const MARGEM = 12
+// Navegadores com limite de canvas menor (ex.: Safari no celular) caem para 2x ou 1x.
+const ESCALAS = [4, 2, 1]
 const nomeBase = computed(() => `relatorio-${props.auditoria.tipo}-${dataBR.value}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-'))
 
 const salvarImagem = async () => {
   if (!area.value) return
   gerandoImagem.value = true
-  // Clona o relatório fora da tela com 1920 px para o layout de desktop largo.
+  // Clona o relatório fora da tela com largura fixa para o layout de desktop largo.
   const palco = document.createElement('div')
-  palco.style.cssText = `position:fixed;left:-99999px;top:0;width:${LARGURA_IMAGEM}px;background:#fff;padding:48px;box-sizing:border-box;`
-  const clone = area.value.cloneNode(true)
-  palco.appendChild(clone)
+  palco.style.cssText = `position:fixed;left:-99999px;top:0;width:${LARGURA_LAYOUT}px;background:#fff;padding:${MARGEM}px;box-sizing:border-box;`
+  palco.appendChild(area.value.cloneNode(true))
   document.body.appendChild(palco)
   try {
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
-    const altura = Math.max(ALTURA_MINIMA, Math.ceil(palco.scrollHeight))
-    palco.style.height = `${altura}px`
-    const url = await toPng(palco, { cacheBust: true, pixelRatio: 1, width: LARGURA_IMAGEM, height: altura, backgroundColor: '#ffffff', style: { left: '0', position: 'static' } })
+    const altura = Math.ceil(palco.scrollHeight)
+    let url = ''
+    for (const escala of ESCALAS) {
+      try {
+        url = await toPng(palco, { cacheBust: true, pixelRatio: escala, width: LARGURA_LAYOUT, height: altura, backgroundColor: '#ffffff', style: { left: '0', position: 'static' } })
+      } catch {
+        url = ''
+      }
+      if (url.length > 100) break
+    }
+    if (!url) throw new Error('Não foi possível gerar a imagem.')
     const link = document.createElement('a')
     link.download = `${nomeBase.value}.png`
     link.href = url
