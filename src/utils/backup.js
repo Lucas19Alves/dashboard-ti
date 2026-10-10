@@ -1,5 +1,6 @@
 import { db } from '../db/appDb'
 import { registrarBackupRealizado } from './saudeDados'
+import { carregarLayoutSalvo, layoutValido, salvarLayout } from './mapaLoja'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 const BACKUP_VERSION = 2
@@ -78,6 +79,12 @@ export const validarBackup = (dados) => {
 
   if (registroInvalido) {
     throw new Error('Backup inválido: um ou mais registros estão corrompidos.')
+  }
+
+  // Configurações são opcionais (backups antigos não têm); se vierem, precisam ser válidas.
+  const mapa = dados.configuracoes?.mapaLoja
+  if (mapa != null && !layoutValido(mapa)) {
+    throw new Error('Backup inválido: o layout do mapa da loja está corrompido.')
   }
 
   return dados
@@ -196,7 +203,8 @@ export const exportarBackupJson = async () => {
     versao: BACKUP_VERSION,
     geradoEm: new Date().toISOString(),
     auditorias: auditoriasComStatus,
-    vencimentos
+    vencimentos,
+    configuracoes: { mapaLoja: carregarLayoutSalvo() }
   }
 
   const jsonBlob = new Blob([JSON.stringify(payload)], {
@@ -244,6 +252,8 @@ export const importarBackupJson = async (file) => {
   })
 
   limparStatusLocalLegado()
+  // Restaura o layout do mapa só quando o backup tem um; senão mantém o atual.
+  if (dados.configuracoes?.mapaLoja) salvarLayout(dados.configuracoes.mapaLoja)
 
   return { auditorias, vencimentos, versao: dados.versao, origem: dados.origem || 'dashboard-ti' }
 }
