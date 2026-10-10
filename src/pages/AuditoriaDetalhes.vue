@@ -10,6 +10,7 @@ import UiTabs from '../components/ui/UiTabs.vue'
 import { printTableInNewWindow, printHtmlInNewWindow } from '../utils/print'
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
 import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
+import { baixarCsv } from '../utils/csv'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -274,20 +275,7 @@ const exportarRegistrosSinal = sinal => {
     ['usuario', 'Usuário'], ['situacao', 'Situação'], ['estoque', 'Estoque'],
     ['diasSemVenda', 'Dias sem venda'], ['colunaData', 'Coluna de data'], ['colunaHora', 'Coluna de hora']
   ]
-  const csv = [
-    colunas.map(([, titulo]) => titulo),
-    ...sinal.registros.map(registro => colunas.map(([chave]) => registro[chave] ?? ''))
-  ].map(linha => linha.map(valor => {
-    const conteudo = String(valor)
-    const seguro = /^[=+@\-\t\r]/.test(conteudo) ? `'${conteudo}` : conteudo
-    return `"${seguro.replaceAll('"', '""')}"`
-  }).join(';')).join('\r\n')
-  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `auditoria-${auditoria.value?.id || 'sem-id'}-${sinal.tipo}.csv`
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  baixarCsv(sinal.registros, colunas, `auditoria-${auditoria.value?.id || 'sem-id'}-${sinal.tipo}.csv`)
 }
 
 const readOnly = computed(() => auditoria.value?.status === 'fechada')
@@ -2048,20 +2036,28 @@ const setoresComAnalise = computed(() => {
   if (!auditoria.value?.analise || !auditoria.value.analise.porSetor) return []
   const analise = auditoria.value.analise
 
+  // Fallback de desatualizados calculado em uma única passada pelos itens.
+  let desatualizadosPorSetor = null
+  const contarDesatualizados = (setor) => {
+    if (!desatualizadosPorSetor) {
+      desatualizadosPorSetor = new Map()
+      for (const item of Array.isArray(auditoria.value?.dados) ? auditoria.value.dados : []) {
+        const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+        if (!s.includes('desatualizad')) continue
+        const set = String(item['Classe de Produto Raiz'] || 'Não especificado').trim()
+        desatualizadosPorSetor.set(set, (desatualizadosPorSetor.get(set) || 0) + 1)
+      }
+    }
+    return desatualizadosPorSetor.get(setor) || 0
+  }
+
   return Object.entries(analise.porSetor)
     .map(([setor, dados]) => {
       const lidos = dados.lidos || 0
       const pendentes = dados.pendentes || 0
       const comProblema = dados.comProblema || 0
       let desatualizados = dados.desatualizados || 0
-      if (desatualizados === 0 && Array.isArray(auditoria.value?.dados)) {
-        const soma = (auditoria.value.dados || []).reduce((acc, item) => {
-          const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
-          const set = String(item['Classe de Produto Raiz'] || 'Não especificado').trim()
-          return acc + ((set === setor && s.includes('desatualizad')) ? 1 : 0)
-        }, 0)
-        if (soma > 0) desatualizados = soma
-      }
+      if (desatualizados === 0) desatualizados = contarDesatualizados(setor)
       const totalLidos = lidos + comProblema // Total lidos (corretos + problemas)
       const total = lidos + pendentes + comProblema
       const percentualPendente = total > 0 ? parseFloat(((pendentes / total) * 100).toFixed(2)) : 0
@@ -2105,7 +2101,19 @@ const setoresComAnalise = computed(() => {
 const locaisComAnalise = computed(() => {
   if (!auditoria.value?.analise || !auditoria.value.analise.porLocal) return []
   const analise = auditoria.value.analise
-  const dadosCompletos = auditoria.value.dados || []
+  const dadosCompletos = Array.isArray(auditoria.value.dados) ? auditoria.value.dados : []
+
+  // Agrupa uma única vez por local (antes era O(locais × itens)).
+  const itensPorLocal = new Map()
+  const desatualizadosPorLocal = new Map()
+  for (const item of dadosCompletos) {
+    const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
+    let lista = itensPorLocal.get(itemLocal)
+    if (!lista) itensPorLocal.set(itemLocal, (lista = []))
+    lista.push(item)
+    const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
+    if (s.includes('desatualizad')) desatualizadosPorLocal.set(itemLocal, (desatualizadosPorLocal.get(itemLocal) || 0) + 1)
+  }
 
   const locais = Object.entries(analise.porLocal)
     .map(([local, dados]) => {
@@ -2116,20 +2124,8 @@ const locaisComAnalise = computed(() => {
       const totalLidos = lidos + comProblema
       const total = lidos + pendentes + comProblema
 
-      // Contar desatualizados por local
-      let desatualizados = 0
-      if (Array.isArray(dadosCompletos)) {
-        desatualizados = dadosCompletos.reduce((acc, item) => {
-          const s = normalizar(item['Situação'] || item['Situação atual da auditoria'] || item._situacao || '')
-          const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
-          return acc + ((itemLocal === nomeLocal && s.includes('desatualizad')) ? 1 : 0)
-        }, 0)
-      }
-
-      const itensDoLocal = dadosCompletos.filter(item => {
-        const itemLocal = (item['Local'] || 'Não especificado').toString().trim()
-        return itemLocal === nomeLocal
-      })
+      const desatualizados = desatualizadosPorLocal.get(nomeLocal) || 0
+      const itensDoLocal = itensPorLocal.get(nomeLocal) || []
       return {
         nome: nomeLocal,
         lidos: lidos,

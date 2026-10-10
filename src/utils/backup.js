@@ -1,4 +1,5 @@
 import { db } from '../db/appDb'
+import { registrarBackupRealizado } from './saudeDados'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 const BACKUP_VERSION = 2
@@ -205,6 +206,7 @@ export const exportarBackupJson = async () => {
   const blobFinal = gzipBlob || jsonBlob
 
   baixarBlob(blobFinal, criarNomeBackup(Boolean(gzipBlob)))
+  registrarBackupRealizado()
 
   return {
     compactado: Boolean(gzipBlob),

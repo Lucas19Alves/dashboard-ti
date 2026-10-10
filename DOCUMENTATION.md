@@ -75,6 +75,18 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
   - `vencimentos`: Armazena a última lista de vencimentos importada.
 - **Sincronização de Status**: O status de "fechada/aberta" das auditorias é sincronizado entre o IndexedDB e o LocalStorage para garantir consistência rápida na UI.
 
+### 4.4 Painel inicial, busca rápida e saúde dos dados
+- **Agenda da semana**: mostra os tipos planejados para cada dia (Seg–Qui) e o estado de cada auditoria (na meta, fora da meta, em andamento, não criada). Clicar abre a auditoria ou o formulário já preenchido (`/auditorias?data=AAAA-MM-DD&tipo=Etiqueta`).
+- **Evolução do % pendente**: série das últimas 10 auditorias por tipo, com a meta de 3% como referência (`utils/metricasAuditoria.js`).
+- **Busca rápida** (`Ctrl/⌘ + K` ou `/`): páginas, ações (nova auditoria do dia, exportar backup), auditorias por tipo/data/ID e produtos com validade.
+- **Vencimentos filtráveis por URL**: `/vencimentos?prazo=vencidos`, `?setor=...`, `?busca=...`; a aba Explorar exporta a lista filtrada em CSV.
+- **Saúde dos dados**: lembrete quando não há backup há 7 dias ou mais, uso do armazenamento do navegador e opção de proteger o IndexedDB contra limpeza automática (`navigator.storage.persist`).
+
+### 4.5 Desempenho
+- `dados` e `analise` das auditorias são guardados com `markRaw` (sem proxies reativos profundos), pois sempre são substituídos por inteiro.
+- Deduplicação por código em O(n) (`utils/deduplicar.js`) e agrupamento por local/setor em passada única na tela de detalhes.
+- Bibliotecas em chunks separados (`vendor-vue`, `vendor-db`) e `console.log` removido do build de produção.
+
 ---
 
 ## � 5. Guia de Uso

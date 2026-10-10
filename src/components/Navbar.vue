@@ -1,145 +1,158 @@
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import UiButton from './ui/UiButton.vue'
 import UiModal from './ui/UiModal.vue'
+import { usePaleta } from '../composables/usePaleta'
 
 const isOpen = ref(false)
 const mostrarSobre = ref(false)
+const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
 const route = useRoute()
+const { abrir: abrirBusca } = usePaleta()
+const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
 
-const toggleMenu = () => {
-  isOpen.value = !isOpen.value
-}
+const links = [
+  { to: '/', label: 'Início', icon: 'fas fa-home' },
+  { to: '/auditorias', label: 'Auditorias', icon: 'fas fa-clipboard-check' },
+  { to: '/auditorias/analise', label: 'Análise', icon: 'fas fa-chart-line' },
+  { to: '/vencimentos', label: 'Vencimentos', icon: 'fas fa-calendar-alt' }
+]
 
 const isActive = (path) => {
   if (path === '/') return route.path === '/'
+  if (path === '/auditorias') return route.path === '/auditorias' || route.path.startsWith('/auditoria/')
   return route.path === path || route.path.startsWith(`${path}/`)
 }
+
+watch(() => route.fullPath, () => { isOpen.value = false })
 
 const abrirSobre = () => {
   isOpen.value = false
   mostrarSobre.value = true
 }
 
-const fecharSobre = () => {
-  mostrarSobre.value = false
+const abrirBuscaMobile = () => {
+  isOpen.value = false
+  abrirBusca()
 }
 
+const atualizarConexao = () => { online.value = navigator.onLine }
+onMounted(() => {
+  window.addEventListener('online', atualizarConexao)
+  window.addEventListener('offline', atualizarConexao)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('online', atualizarConexao)
+  window.removeEventListener('offline', atualizarConexao)
+})
 </script>
 
 <template>
-  <nav class="sticky top-0 z-40 border-b border-blue-800 bg-blue-700/95 text-white shadow-lg shadow-blue-950/10 backdrop-blur-xl">
-    <div class="max-w-7xl mx-auto px-4">
-      <div class="flex justify-between items-center h-16">
-        <div class="flex items-center gap-4">
-          <div class="flex-shrink-0 font-bold text-xl flex items-center gap-2.5 tracking-tight">
-            <span class="inline-flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
-              <i class="fas fa-chart-pie text-sm"></i>
-            </span>
-            <span>Dashboard <span class="text-blue-200">TI</span></span>
-          </div>
+  <nav class="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 text-white shadow-lg shadow-blue-950/10 print:hidden">
+    <div class="mx-auto max-w-7xl px-4">
+      <div class="flex h-16 items-center justify-between gap-3">
+        <router-link to="/" class="flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight">
+          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+            <i class="fas fa-chart-pie text-sm"></i>
+          </span>
+          <span>Dashboard <span class="text-blue-200">TI</span></span>
+        </router-link>
+
+        <div class="hidden items-center gap-1 rounded-2xl bg-white/10 p-1 ring-1 ring-white/10 md:flex">
+          <router-link
+            v-for="link in links"
+            :key="link.to"
+            :to="link.to"
+            class="flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition"
+            :class="isActive(link.to) ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10'"
+            :aria-current="isActive(link.to) ? 'page' : undefined"
+          >
+            <i :class="[link.icon, 'text-xs']"></i>
+            {{ link.label }}
+          </router-link>
         </div>
 
-        <div class="flex items-center gap-3">
-          <div class="hidden md:flex space-x-2">
-            <router-link 
-              to="/" 
-              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
-            >
-              <i class="fas fa-home"></i>
-              Início
-            </router-link>
-            <router-link 
-              to="/auditorias" 
-              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', route.path === '/auditorias' || route.path.startsWith('/auditoria/') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
-            >
-              <i class="fas fa-search"></i>
-              Auditorias
-            </router-link>
-            <router-link 
-              to="/auditorias/analise" 
-              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/auditorias/analise') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
-            >
-              <i class="fas fa-chart-line"></i>
-              Análise
-            </router-link>
-            <router-link 
-              to="/vencimentos" 
-              :class="['flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition', isActive('/vencimentos') ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10']"
-            >
-              <i class="fas fa-calendar-alt"></i>
-              Vencimentos
-            </router-link>
-          </div>
+        <div class="flex items-center gap-2">
+          <span
+            v-if="!online"
+            class="hidden items-center gap-1.5 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100 ring-1 ring-amber-300/40 sm:inline-flex"
+            title="Sem conexão. Os dados continuam salvos neste navegador."
+          >
+            <i class="fas fa-wifi text-[10px]"></i>Offline
+          </span>
+
+          <button
+            type="button"
+            class="hidden h-9 items-center gap-2 rounded-xl bg-white/10 pl-3 pr-2 text-sm text-blue-50 ring-1 ring-white/15 transition hover:bg-white/20 lg:inline-flex"
+            title="Busca rápida"
+            @click="abrirBusca"
+          >
+            <i class="fas fa-search text-xs"></i>
+            <span class="mr-4">Buscar...</span>
+            <kbd class="rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd>
+          </button>
+          <button
+            type="button"
+            class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 lg:hidden"
+            title="Busca rápida"
+            aria-label="Busca rápida"
+            @click="abrirBusca"
+          >
+            <i class="fas fa-search text-sm"></i>
+          </button>
 
           <button
             type="button"
             @click="abrirSobre"
-            class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-500/80 hover:bg-blue-400 transition shadow-sm"
+            class="hidden size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:inline-flex"
             title="Sobre o projeto"
             aria-label="Sobre o projeto"
           >
-            <i class="fas fa-info-circle text-lg"></i>
+            <i class="fas fa-info-circle"></i>
           </button>
 
           <button
-            @click="toggleMenu"
-            class="md:hidden inline-flex items-center justify-center p-2 rounded-md hover:bg-blue-700 transition"
+            type="button"
+            @click="isOpen = !isOpen"
+            class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:hidden"
             :aria-expanded="isOpen"
             aria-label="Abrir menu de navegação"
           >
-            <i class="fas fa-bars text-2xl"></i>
+            <i :class="isOpen ? 'fas fa-times' : 'fas fa-bars'"></i>
           </button>
         </div>
       </div>
 
-      <!-- Mobile Menu -->
-      <div v-if="isOpen" class="md:hidden pb-4 space-y-2">
-        <router-link 
-          to="/" 
-          :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition block', isActive('/') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-        >
-          <i class="fas fa-home"></i>
-          Início
-        </router-link>
-        <router-link
-          to="/auditorias/analise"
-          class="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition hover:bg-blue-700"
-        >
-          <i class="fas fa-chart-line"></i>
-          Análise
-        </router-link>
-        <router-link 
-          to="/auditorias" 
-          :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition block', isActive('/auditorias') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-        >
-          <i class="fas fa-search"></i>
-          Auditorias
-        </router-link>
-        <router-link 
-          to="/vencimentos" 
-          :class="['flex items-center gap-2 px-4 py-2 rounded-md font-medium transition block', isActive('/vencimentos') ? 'bg-blue-700' : 'hover:bg-blue-700']"
-        >
-          <i class="fas fa-calendar-alt"></i>
-          Vencimentos
-        </router-link>
-        <button
-          type="button"
-          @click="abrirSobre"
-          class="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition text-sm text-blue-50 hover:bg-blue-700"
-        >
-          <i class="fas fa-info-circle"></i>
-          Sobre
-        </button>
-      </div>
+      <transition name="menu">
+        <div v-if="isOpen" class="space-y-1 pb-4 md:hidden">
+          <router-link
+            v-for="link in links"
+            :key="link.to"
+            :to="link.to"
+            class="flex items-center gap-3 rounded-xl px-4 py-2.5 font-semibold transition"
+            :class="isActive(link.to) ? 'bg-white text-blue-700' : 'text-blue-50 hover:bg-white/10'"
+          >
+            <i :class="[link.icon, 'w-4 text-center text-sm']"></i>
+            {{ link.label }}
+          </router-link>
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <button type="button" @click="abrirBuscaMobile" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
+              <i class="fas fa-search"></i>Buscar
+            </button>
+            <button type="button" @click="abrirSobre" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
+              <i class="fas fa-info-circle"></i>Sobre
+            </button>
+          </div>
+        </div>
+      </transition>
     </div>
 
     <UiModal
       v-if="mostrarSobre"
       title="Sobre o projeto"
       subtitle="Informações sobre o desenvolvedor"
-      @close="fecharSobre"
+      @close="mostrarSobre = false"
     >
       <div class="space-y-5 text-sm text-slate-600">
         <p>
@@ -150,6 +163,15 @@ const fecharSobre = () => {
         <div class="rounded-lg bg-slate-50 px-4 py-3">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Criado por</p>
           <p class="mt-1 font-semibold text-slate-900">Lucas Alves</p>
+        </div>
+
+        <div class="rounded-lg border border-slate-100 px-4 py-3">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Atalhos</p>
+          <ul class="mt-2 space-y-1.5 text-xs">
+            <li class="flex justify-between"><span>Busca rápida</span><kbd class="rounded bg-slate-100 px-1.5 font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd></li>
+            <li class="flex justify-between"><span>Busca rápida (fora de campos)</span><kbd class="rounded bg-slate-100 px-1.5 font-semibold">/</kbd></li>
+            <li class="flex justify-between"><span>Fechar janelas</span><kbd class="rounded bg-slate-100 px-1.5 font-semibold">Esc</kbd></li>
+          </ul>
         </div>
 
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -169,8 +191,21 @@ const fecharSobre = () => {
       </div>
 
       <template #footer>
-        <UiButton variant="secondary" size="sm" @click="fecharSobre">Fechar</UiButton>
+        <UiButton variant="secondary" size="sm" @click="mostrarSobre = false">Fechar</UiButton>
       </template>
     </UiModal>
   </nav>
 </template>
+
+<style scoped>
+.menu-enter-active,
+.menu-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.menu-enter-from,
+.menu-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+</style>

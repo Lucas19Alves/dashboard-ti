@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { toPng } from 'html-to-image'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { printTableInNewWindow } from '../utils/print'
+import { baixarCsv } from '../utils/csv'
 import UiButton from '../components/ui/UiButton.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiModal from '../components/ui/UiModal.vue'
@@ -12,6 +13,7 @@ import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 
 const router = useRouter()
+const route = useRoute()
 const store = useVencimentosStore()
 const toastStore = useAuditoriasStore()
 
@@ -25,7 +27,7 @@ const inputRef = ref(null)
 // Abas (3 tabs)
 const abaAtiva = ref('visao')
 const abas = ['visao', 'explorar', 'analise']
-const abasDisplay = { visao: 'Visao Geral', explorar: 'Explorar', analise: 'Analise' }
+const abasDisplay = { visao: 'Visão Geral', explorar: 'Explorar', analise: 'Análise' }
 const iconeAba = (tab) => ({
   visao: 'fas fa-chart-line',
   explorar: 'fas fa-search',
@@ -76,7 +78,7 @@ const statusPills = [
   { valor: '', label: 'Todos', icone: 'fas fa-layer-group', cor: 'bg-slate-100 text-slate-700 border-slate-200', corAtiva: 'bg-slate-700 text-white border-slate-700' },
   { valor: 'vencidos', label: 'Vencidos', icone: 'fas fa-times-circle', cor: 'bg-red-50 text-red-700 border-red-200', corAtiva: 'bg-red-600 text-white border-red-600' },
   { valor: 'hoje', label: 'Hoje', icone: 'fas fa-clock', cor: 'bg-orange-50 text-orange-700 border-orange-200', corAtiva: 'bg-orange-500 text-white border-orange-500' },
-  { valor: 'ate3', label: 'Ate 3 dias', icone: 'fas fa-hourglass-half', cor: 'bg-yellow-50 text-yellow-700 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500' },
+  { valor: 'ate3', label: 'Até 3 dias', icone: 'fas fa-hourglass-half', cor: 'bg-yellow-50 text-yellow-700 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500' },
   { valor: 'futuro', label: 'Futuro', icone: 'fas fa-check-circle', cor: 'bg-green-50 text-green-700 border-green-200', corAtiva: 'bg-green-600 text-white border-green-600' }
 ]
 
@@ -173,7 +175,7 @@ const prazoBadgeClasses = (prazo) => ({
 })
 
 const prazoBadgeLabel = (prazo) =>
-  ({ vencidos: 'Vencido', hoje: 'Hoje', ate3: 'Ate 3 dias', futuro: 'Futuro' })[prazo] || prazo
+  ({ vencidos: 'Vencido', hoje: 'Hoje', ate3: 'Até 3 dias', futuro: 'Futuro' })[prazo] || prazo
 
 // --- Computed: Resumo ---
 const resumo = computed(() => store.analise || { total: 0, vencidos: 0, hoje: 0, ate3: 0 })
@@ -182,8 +184,8 @@ const resumo = computed(() => store.analise || { total: 0, vencidos: 0, hoje: 0,
 const alertaBanner = computed(() => {
   const r = resumo.value
   if (!r.total) return { icone: 'fas fa-info-circle', texto: 'Nenhum dado carregado.', classe: 'bg-slate-50 border-slate-200 text-slate-700', iconeCor: 'text-slate-400' }
-  if (r.vencidos > 0) return { icone: 'fas fa-exclamation-circle', texto: `Atencao: ${r.vencidos} itens vencidos requerem acao imediata. ${r.hoje + r.ate3} itens vencem nos proximos 3 dias.`, classe: 'bg-red-50 border-red-200 text-red-800', iconeCor: 'text-red-500' }
-  if (r.hoje + r.ate3 > 0) return { icone: 'fas fa-exclamation-triangle', texto: `${r.hoje} itens vencem hoje e ${r.ate3} nos proximos 3 dias. Planeje acoes preventivas.`, classe: 'bg-amber-50 border-amber-200 text-amber-800', iconeCor: 'text-amber-500' }
+  if (r.vencidos > 0) return { icone: 'fas fa-exclamation-circle', texto: `Atenção: ${r.vencidos} itens vencidos requerem ação imediata. ${r.hoje + r.ate3} itens vencem nos próximos 3 dias.`, classe: 'bg-red-50 border-red-200 text-red-800', iconeCor: 'text-red-500' }
+  if (r.hoje + r.ate3 > 0) return { icone: 'fas fa-exclamation-triangle', texto: `${r.hoje} itens vencem hoje e ${r.ate3} nos próximos 3 dias. Planeje ações preventivas.`, classe: 'bg-amber-50 border-amber-200 text-amber-800', iconeCor: 'text-amber-500' }
   return { icone: 'fas fa-check-circle', texto: 'Todas as validades estao sob controle. Nenhum item critico encontrado.', classe: 'bg-emerald-50 border-emerald-200 text-emerald-800', iconeCor: 'text-emerald-500' }
 })
 
@@ -340,7 +342,7 @@ const navegarSetorExplorar = (nomeSetor) => {
 
 // --- Colunas ---
 const colunasItens = [
-  { chave: '_codigo', titulo: 'Codigo', sortable: true },
+  { chave: '_codigo', titulo: 'Código', sortable: true },
   { chave: '_produto', titulo: 'Produto', sortable: true },
   { chave: '_setor', titulo: 'Setor', sortable: true },
   { chave: '_fornecedor', titulo: 'Fornecedor', sortable: true },
@@ -356,7 +358,7 @@ const colunasFornecedores = [
   { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
   { chave: 'vencidos', titulo: 'Vencidos', sortable: true, alinhamento: 'right' },
   { chave: 'hoje', titulo: 'Hoje', sortable: true, alinhamento: 'right' },
-  { chave: 'ate3', titulo: 'Ate 3 dias', sortable: true, alinhamento: 'right' }
+  { chave: 'ate3', titulo: 'Até 3 dias', sortable: true, alinhamento: 'right' }
 ]
 
 const rowClassPrazo = (item) => {
@@ -476,6 +478,26 @@ const imprimir = (alvo) => {
   }
 }
 
+const exportarFiltradosCsv = () => {
+  const base = itensFiltradosOrdenados.value
+  if (!base.length) return
+  const linhas = base.map(item => ({ ...item, _prazo: prazoBadgeLabel(item._prazo) }))
+  const colunas = [...colunasItens, { chave: '_acao', titulo: 'Ação' }, { chave: '_responsavel', titulo: 'Responsável' }]
+  baixarCsv(linhas, colunas, `vencimentos-${new Date().toISOString().slice(0, 10)}`)
+  toastStore.addToast(`${base.length} itens exportados em CSV.`, 'success')
+}
+
+// Links externos (ex.: busca global) podem abrir a aba Explorar já filtrada.
+const aplicarFiltrosDaRota = () => {
+  const { busca: termo, prazo, setor } = route.query
+  if (!termo && !prazo && !setor) return
+  if (typeof termo === 'string') busca.value = termo
+  if (typeof prazo === 'string') filtroStatus.value = prazo
+  if (typeof setor === 'string') filtroSetor.value = setor
+  abaAtiva.value = 'explorar'
+}
+watch(() => route.query, aplicarFiltrosDaRota, { immediate: true })
+
 const imprimirAnalise = (alvo) => {
   if (alvo === 'setores') {
     const dados = setoresAnalise.value.map(s => ({
@@ -490,9 +512,9 @@ const imprimirAnalise = (alvo) => {
       { chave: 'total', titulo: 'Total', alinhamento: 'right' },
       { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
       { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
-      { chave: 'ate3', titulo: 'Ate 3 dias', alinhamento: 'right' }
+      { chave: 'ate3', titulo: 'Até 3 dias', alinhamento: 'right' }
     ]
-    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Analise por Setor')
+    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Análise por Setor')
   } else if (alvo === 'fornecedores') {
     const dados = fornecedoresRanking.value.map(f => ({
       fornecedor: f.fornecedor,
@@ -504,10 +526,10 @@ const imprimirAnalise = (alvo) => {
     }))
     const colunas = [
       { chave: 'fornecedor', titulo: 'Fornecedor' },
-      { chave: 'criticos', titulo: 'Criticos', alinhamento: 'right' },
+      { chave: 'criticos', titulo: 'Críticos', alinhamento: 'right' },
       { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
       { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
-      { chave: 'ate3', titulo: 'Ate 3 dias', alinhamento: 'right' },
+      { chave: 'ate3', titulo: 'Até 3 dias', alinhamento: 'right' },
       { chave: 'total', titulo: 'Total', alinhamento: 'right' }
     ]
     if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Ranking de Fornecedores')
@@ -580,7 +602,7 @@ const exportarDetalhamentoSetor = async () => {
       <UiPageHeader title="Vencimentos" subtitle="Controle de validades e itens críticos." icon="fas fa-calendar-alt" tone="orange">
         <template #actions>
           <UiButton v-if="store.itens.length > 0" @click="mostrarUpload = true">
-            <i class="fas fa-file-upload mr-2"></i>Nova Importacao
+            <i class="fas fa-file-upload mr-2"></i>Nova Importação
           </UiButton>
           <UiButton v-if="store.itens.length > 0" variant="dangerSoft" @click="limparDados">
             <i class="fas fa-trash-alt mr-1"></i>Limpar
@@ -669,7 +691,7 @@ const exportarDetalhamentoSetor = async () => {
                 <div>
                   <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
-                  <p class="mt-1.5 text-xs text-red-400">Requer acao imediata</p>
+                  <p class="mt-1.5 text-xs text-red-400">Requer ação imediata</p>
                 </div>
                 <div
                   class="h-11 w-11 rounded-xl bg-red-50 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -697,9 +719,9 @@ const exportarDetalhamentoSetor = async () => {
               class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Ate 3 Dias</p>
+                  <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Até 3 Dias</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
-                  <p class="mt-1.5 text-xs text-yellow-500">Remarcacao e giro de estoque</p>
+                  <p class="mt-1.5 text-xs text-yellow-500">Remarcação e giro de estoque</p>
                 </div>
                 <div
                   class="h-11 w-11 rounded-xl bg-yellow-50 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -739,7 +761,7 @@ const exportarDetalhamentoSetor = async () => {
                   <th class="px-4 py-3 text-center text-[11px] font-bold text-orange-500 uppercase tracking-wider w-20">
                     Hoje</th>
                   <th class="px-4 py-3 text-center text-[11px] font-bold text-yellow-600 uppercase tracking-wider w-20">
-                    Ate 3d</th>
+                    Até 3d</th>
                   <th class="w-10"></th>
                 </tr>
               </thead>
@@ -790,7 +812,7 @@ const exportarDetalhamentoSetor = async () => {
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
           <div class="flex items-center justify-between mb-5">
             <div>
-              <h2 class="text-base font-bold text-gray-900">Itens Mais Criticos</h2>
+              <h2 class="text-base font-bold text-gray-900">Itens Mais Críticos</h2>
               <p class="text-xs text-slate-500">Top 10 itens com validade mais urgente</p>
             </div>
             <button @click="verCriticos"
@@ -893,10 +915,16 @@ const exportarDetalhamentoSetor = async () => {
             <p class="text-sm text-slate-600">
               <span class="font-bold text-gray-900">{{ itensFiltrados.length }}</span> itens encontrados
             </p>
-            <button @click="imprimir('filtrados')"
-              class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
-              <i class="fas fa-print mr-1.5"></i>Imprimir
-            </button>
+            <div class="flex items-center gap-2">
+              <button @click="exportarFiltradosCsv" :disabled="!itensFiltrados.length"
+                class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium border border-emerald-200 transition disabled:opacity-50">
+                <i class="fas fa-file-csv mr-1.5"></i>CSV
+              </button>
+              <button @click="imprimir('filtrados')"
+                class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
+                <i class="fas fa-print mr-1.5"></i>Imprimir
+              </button>
+            </div>
           </div>
 
           <!-- Search -->
@@ -1152,7 +1180,7 @@ const exportarDetalhamentoSetor = async () => {
                 <div
                   class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[52px]">
                   <span class="text-sm font-bold text-yellow-700 tabular-nums">{{ setor.ate3 }}</span>
-                  <span class="text-[9px] text-yellow-600 font-medium">Ate 3d</span>
+                  <span class="text-[9px] text-yellow-600 font-medium">Até 3d</span>
                 </div>
               </div>
 

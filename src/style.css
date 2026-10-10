@@ -20,12 +20,21 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f7fb;
+  background:
+    radial-gradient(1200px 500px at 100% -10%, rgba(37, 99, 235, 0.07), transparent 60%),
+    radial-gradient(900px 400px at -10% 0%, rgba(99, 102, 241, 0.05), transparent 60%),
+    #f5f7fb;
+  background-attachment: fixed;
 }
 
-button, input, select, textarea { font: inherit; }
+/* Em camada base para não sobrescrever utilitários como text-xs em botões. */
+@layer base {
+  button, input, select, textarea { font: inherit; }
+}
 button, a { -webkit-tap-highlight-color: transparent; }
 
 :focus-visible {
@@ -55,6 +64,28 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .ui-badge { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold; }
   .ui-modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm; }
   .ui-modal { @apply w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200/70 bg-white/95 shadow-2xl backdrop-blur; }
+}
+
+/* Transições compartilhadas */
+.pagina-enter-active,
+.pagina-leave-active { transition: opacity 0.16s ease, transform 0.16s ease; }
+.pagina-enter-from { opacity: 0; transform: translateY(6px); }
+.pagina-leave-to { opacity: 0; }
+
+.ui-fade-in { animation: ui-fade-in 0.16s ease-out; }
+.ui-pop-in { animation: ui-pop-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.ui-skeleton {
+  background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
+  background-size: 400% 100%;
+  animation: ui-shimmer 1.4s ease infinite;
+}
+
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes ui-shimmer { from { background-position: 100% 50%; } to { background-position: 0 50%; } }
+
+@media print {
+  body { background: #fff; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,108 +1,181 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { exportarBackupJson, importarBackupJson } from '../utils/backup'
+import { formatarDataBR } from '../utils/busca'
+import {
+  META_PENDENTE_PERCENTUAL,
+  dentroDaMeta,
+  metricasAuditoria,
+  montarAgendaSemana,
+  paraISOLocal,
+  serieEvolucao
+} from '../utils/metricasAuditoria'
+import {
+  descreverUltimoBackup,
+  formatarBytes,
+  obterUltimoBackup,
+  obterUsoArmazenamento,
+  precisaLembrarBackup,
+  solicitarArmazenamentoPersistente
+} from '../utils/saudeDados'
+import { usePaleta } from '../composables/usePaleta'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
-import UiPageHeader from '../components/ui/UiPageHeader.vue'
+import SparklineMeta from '../components/ui/SparklineMeta.vue'
 
+const router = useRouter()
 const auditoriasStore = useAuditoriasStore()
 const vencStore = useVencimentosStore()
+const { abrir: abrirBusca } = usePaleta()
 
-const totalAuditorias = computed(() => Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.length : 0)
-const auditoriasAbertas = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(a => a && a.status !== 'fechada').length : 0))
-const auditoriasFechadas = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(a => a && a.status === 'fechada').length : 0))
+const auditorias = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(Boolean) : []))
+const totalAuditorias = computed(() => auditorias.value.length)
+const auditoriasAbertas = computed(() => auditorias.value.filter(a => a.status !== 'fechada').length)
+const auditoriasFechadas = computed(() => auditorias.value.filter(a => a.status === 'fechada'))
+const taxaMeta = computed(() => {
+  const fechadas = auditoriasFechadas.value
+  if (!fechadas.length) return null
+  return Math.round((fechadas.filter(dentroDaMeta).length / fechadas.length) * 100)
+})
 
 const resumoVenc = computed(() => vencStore.analise || { total: 0, vencidos: 0, hoje: 0, ate3: 0 })
-
 const totalCriticosPrazo = computed(() => resumoVenc.value.vencidos + resumoVenc.value.hoje + resumoVenc.value.ate3)
 
+// ---------- Saudação ----------
+const agora = new Date()
+const saudacao = agora.getHours() < 12 ? 'Bom dia' : agora.getHours() < 18 ? 'Boa tarde' : 'Boa noite'
+const dataExtenso = (texto => texto.charAt(0).toUpperCase() + texto.slice(1))(agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }))
+const tiposHoje = computed(() => auditoriasStore.tiposAuditoriaPorDia[agora.getDay()] || [])
+
+// ---------- Agenda ----------
+const agenda = computed(() => montarAgendaSemana(auditorias.value, auditoriasStore.tiposAuditoriaPorDia, agora))
+const estadosAgenda = {
+  meta: { rotulo: 'Na meta', icone: 'fas fa-circle-check', classe: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
+  foraMeta: { rotulo: 'Fora da meta', icone: 'fas fa-circle-xmark', classe: 'border-red-200 bg-red-50 text-red-800' },
+  andamento: { rotulo: 'Em andamento', icone: 'fas fa-spinner', classe: 'border-blue-200 bg-blue-50 text-blue-800' },
+  hoje: { rotulo: 'Criar hoje', icone: 'fas fa-plus', classe: 'border-blue-300 border-dashed bg-white text-blue-700' },
+  atrasada: { rotulo: 'Não criada', icone: 'fas fa-triangle-exclamation', classe: 'border-amber-200 bg-amber-50 text-amber-800' },
+  futura: { rotulo: 'Planejada', icone: 'fas fa-clock', classe: 'border-slate-200 bg-slate-50 text-slate-500' }
+}
+const abrirItemAgenda = (dia, item) => {
+  if (item.auditoria) router.push(`/auditoria/${item.auditoria.id}`)
+  else router.push({ path: '/auditorias', query: { data: dia.data, tipo: item.tipo } })
+}
+
+// ---------- Evolução ----------
+const evolucao = computed(() => ['Etiqueta', 'Presença', 'Ruptura'].map(tipo => {
+  const pontos = serieEvolucao(auditorias.value, tipo, 10)
+  const atual = pontos.at(-1)
+  const anterior = pontos.at(-2)
+  return {
+    tipo,
+    pontos,
+    atual: atual?.valor ?? null,
+    variacao: atual && anterior ? atual.valor - anterior.valor : null,
+    naMeta: atual ? atual.valor <= META_PENDENTE_PERCENTUAL : null
+  }
+}))
+
+// ---------- Vencimentos ----------
 const statusValidades = computed(() => {
   const r = resumoVenc.value
-  if (!r.total) {
-    return {
-      titulo: 'Sem dados de validades',
-      descricao: 'Abra a tela de Vencimentos para carregar os dados mais recentes.',
-      classe: 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (r.vencidos > 0) {
-    return {
-      titulo: 'Risco alto em validades',
-      descricao: `${r.vencidos} itens já vencidos e ${r.hoje + r.ate3} muito próximos.`,
-      classe: 'bg-red-50 text-red-800'
-    }
-  }
-  if (r.hoje + r.ate3 > 0) {
-    return {
-      titulo: 'Atenção aos próximos dias',
-      descricao: `${r.hoje + r.ate3} itens vencendo hoje ou em até 3 dias.`,
-      classe: 'bg-yellow-50 text-yellow-800'
-    }
-  }
-  return {
-    titulo: 'Validades sob controle',
-    descricao: 'Nenhum item crítico nos próximos dias.',
-    classe: 'bg-green-50 text-green-800'
-  }
+  if (!r.total) return { titulo: 'Sem dados de validades', classe: 'bg-slate-100 text-slate-600', icone: 'fas fa-circle-info' }
+  if (r.vencidos > 0) return { titulo: 'Risco alto em validades', classe: 'bg-red-50 text-red-700', icone: 'fas fa-circle-exclamation' }
+  if (r.hoje + r.ate3 > 0) return { titulo: 'Atenção aos próximos dias', classe: 'bg-amber-50 text-amber-700', icone: 'fas fa-triangle-exclamation' }
+  return { titulo: 'Validades sob controle', classe: 'bg-emerald-50 text-emerald-700', icone: 'fas fa-circle-check' }
 })
+
+const faixasPrazo = computed(() => {
+  const r = resumoVenc.value
+  return [
+    { chave: 'vencidos', rotulo: 'Vencidos', valor: r.vencidos, dica: 'Ação imediata na gôndola', icone: 'fas fa-exclamation-triangle', cor: 'red' },
+    { chave: 'hoje', rotulo: 'Vencem hoje', valor: r.hoje, dica: 'Quebras e promoções', icone: 'fas fa-sun', cor: 'orange' },
+    { chave: 'ate3', rotulo: 'Até 3 dias', valor: r.ate3, dica: 'Planejar giro e remarcação', icone: 'fas fa-hourglass-half', cor: 'amber' }
+  ]
+})
+const coresFaixa = {
+  red: 'border-red-100 bg-red-50 text-red-700 hover:border-red-300',
+  orange: 'border-orange-100 bg-orange-50 text-orange-700 hover:border-orange-300',
+  amber: 'border-amber-100 bg-amber-50 text-amber-700 hover:border-amber-300'
+}
 
 const setoresCriticos = computed(() => {
   const mapa = vencStore.analise?.porSetor || {}
-  const lista = Object.entries(mapa).map(([nome, v]) => ({
-    nome,
-    vencidos: v?.vencidos || 0,
-    hoje: v?.hoje || 0,
-    ate3: v?.ate3 || 0,
-    total: v?.total || 0
-  }))
-  return lista
+  return Object.entries(mapa)
+    .map(([nome, v]) => ({ nome, vencidos: v?.vencidos || 0, hoje: v?.hoje || 0, ate3: v?.ate3 || 0, total: v?.total || 0 }))
     .filter(s => s.vencidos || s.hoje || s.ate3)
     .sort((a, b) => (b.vencidos - a.vencidos) || (b.hoje - a.hoje) || (b.ate3 - a.ate3))
     .slice(0, 5)
 })
+const maiorCriticoSetor = computed(() => Math.max(1, ...setoresCriticos.value.map(s => s.vencidos + s.hoje + s.ate3)))
 
 const itensCriticos = computed(() => {
-  const lista = Array.isArray(vencStore.itens) ? vencStore.itens : []
-  const rank = { vencidos: 0, hoje: 1, ate3: 2, futuro: 3 }
-  return lista
-    .filter(i => ['vencidos', 'hoje', 'ate3'].includes(i?._prazo))
-    .sort((a, b) => {
-      const ra = rank[a?._prazo] ?? 9
-      const rb = rank[b?._prazo] ?? 9
-      if (ra !== rb) return ra - rb
-      const da = a?._diasParaVencer ?? 9999
-      const db = b?._diasParaVencer ?? 9999
-      return da - db
-    })
+  const rank = { vencidos: 0, hoje: 1, ate3: 2 }
+  return (Array.isArray(vencStore.itens) ? vencStore.itens : [])
+    .filter(i => i?._prazo in rank)
+    .sort((a, b) => (rank[a._prazo] - rank[b._prazo]) || ((a._diasParaVencer ?? 9999) - (b._diasParaVencer ?? 9999)))
     .slice(0, 6)
 })
+const rotuloPrazo = { vencidos: 'Vencido', hoje: 'Hoje', ate3: 'Até 3 dias' }
+const classePrazo = {
+  vencidos: 'border-red-200 bg-red-50 text-red-700',
+  hoje: 'border-orange-200 bg-orange-50 text-orange-700',
+  ate3: 'border-amber-200 bg-amber-50 text-amber-700'
+}
+const descreverDias = (dias) => {
+  if (dias === null || dias === undefined) return '-'
+  if (dias < 0) return `há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? '' : 's'}`
+  if (dias === 0) return 'hoje'
+  return `em ${dias} dia${dias === 1 ? '' : 's'}`
+}
+
+// ---------- Últimas auditorias ----------
+const ultimasAuditorias = computed(() => [...auditorias.value]
+  .sort((a, b) => String(b.data).localeCompare(String(a.data)) || b.id - a.id)
+  .slice(0, 5)
+  .map(a => ({ ...a, metricas: metricasAuditoria(a) })))
+
+// ---------- Backup e armazenamento ----------
+const ultimoBackup = ref(obterUltimoBackup())
+const armazenamento = ref(null)
+const temDados = computed(() => totalAuditorias.value > 0 || resumoVenc.value.total > 0)
+const lembrarBackup = computed(() => precisaLembrarBackup(ultimoBackup.value, temDados.value))
+const percentualUso = computed(() => {
+  const a = armazenamento.value
+  return a?.cota ? Math.min(100, (a.usado / a.cota) * 100) : 0
+})
+
+onMounted(async () => {
+  armazenamento.value = await obterUsoArmazenamento()
+})
+
+const protegerArmazenamento = async () => {
+  const ok = await solicitarArmazenamentoPersistente()
+  armazenamento.value = await obterUsoArmazenamento()
+  auditoriasStore.addToast(
+    ok ? 'Armazenamento protegido: o navegador não apagará os dados automaticamente.' : 'O navegador não permitiu proteger o armazenamento. Mantenha backups regulares.',
+    ok ? 'success' : 'warning'
+  )
+}
 
 const importarInput = ref(null)
-
-const dispararImportarBackup = () => {
-  importarInput.value?.click()
-}
-
-const formatarTamanho = (bytes) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+const exportando = ref(false)
 
 const handleExportarBackup = async () => {
+  exportando.value = true
   try {
     const resultado = await exportarBackupJson()
-    const reducao = resultado.tamanhoOriginal > 0
-      ? Math.round((1 - resultado.tamanhoFinal / resultado.tamanhoOriginal) * 100)
-      : 0
-    const detalhe = resultado.compactado
-      ? `${formatarTamanho(resultado.tamanhoFinal)} (${reducao}% menor)`
-      : formatarTamanho(resultado.tamanhoFinal)
+    const reducao = resultado.tamanhoOriginal > 0 ? Math.round((1 - resultado.tamanhoFinal / resultado.tamanhoOriginal) * 100) : 0
+    const detalhe = resultado.compactado ? `${formatarBytes(resultado.tamanhoFinal)} (${reducao}% menor)` : formatarBytes(resultado.tamanhoFinal)
+    ultimoBackup.value = obterUltimoBackup()
     auditoriasStore.addToast(`Backup exportado: ${detalhe}.`, 'success')
   } catch (err) {
     auditoriasStore.addToast('Erro ao exportar backup: ' + (err?.message || 'desconhecido'), 'error')
+  } finally {
+    exportando.value = false
   }
 }
 
@@ -113,6 +186,7 @@ const handleArquivoBackup = async (e) => {
     const resultado = await importarBackupJson(arquivo)
     await auditoriasStore.carregarAuditoriasPersistidas()
     await vencStore.carregarVencimentosPersistidos()
+    armazenamento.value = await obterUsoArmazenamento()
     const mensagem = resultado.origem === 'backup-regional'
       ? `Backup regional convertido: ${resultado.auditorias.length} auditorias importadas.`
       : 'Backup importado com sucesso!'
@@ -123,60 +197,296 @@ const handleArquivoBackup = async (e) => {
     e.target.value = ''
   }
 }
-
-const ultimasAuditorias = computed(() => {
-  const arr = Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias : []
-  return arr.slice(-5).reverse()
-})
-
-const statusAuditorias = computed(() => {
-  if (!totalAuditorias.value) {
-    return {
-      titulo: 'Nenhuma auditoria registrada',
-      descricao: 'Inicie uma nova auditoria para começar a acompanhar o progresso.',
-      classe: 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (auditoriasAbertas.value > 0) {
-    return {
-      titulo: 'Auditorias em andamento',
-      descricao: `${auditoriasAbertas.value} auditoria(s) ainda abertas para acompanhamento.`,
-      classe: 'bg-blue-50 text-blue-800'
-    }
-  }
-  return {
-    titulo: 'Todas as auditorias fechadas',
-    descricao: 'Nenhuma auditoria aberta no momento.',
-    classe: 'bg-green-50 text-green-800'
-  }
-})
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8">
-    <div class="max-w-7xl mx-auto space-y-6">
-      <UiPageHeader
-        title="Painel Operacional"
-        subtitle="Visão rápida das validades e auditorias da loja."
-        icon="fas fa-home"
-      >
-        <template #actions>
-          <UiButton to="/vencimentos" variant="warning">
-            <i class="fas fa-clock"></i>
-            Ver detalhes de Validades
-          </UiButton>
-          <UiButton to="/auditorias">
-            <i class="fas fa-clipboard-check"></i>
-            Ver Auditorias
-          </UiButton>
-          <UiButton variant="success" @click="handleExportarBackup">
-            <i class="fas fa-download"></i>
-            Exportar backup
-          </UiButton>
-          <UiButton variant="dark" @click="dispararImportarBackup">
-            <i class="fas fa-upload"></i>
-            Importar backup
-          </UiButton>
+  <div class="ui-page">
+    <!-- Cabeçalho -->
+    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-sm font-semibold text-blue-600">{{ dataExtenso }}</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{{ saudacao }}! Painel operacional</h1>
+        <p class="mt-1 text-sm text-slate-500">
+          <template v-if="tiposHoje.length">Hoje é dia de auditoria de <span class="font-semibold text-slate-700">{{ tiposHoje.join(', ') }}</span>.</template>
+          <template v-else>Sem auditorias planejadas para hoje.</template>
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <UiButton variant="secondary" @click="abrirBusca">
+          <i class="fas fa-search"></i>Buscar
+        </UiButton>
+        <UiButton v-for="tipo in tiposHoje" :key="tipo" :to="{ path: '/auditorias', query: { data: paraISOLocal(agora), tipo } }">
+          <i class="fas fa-plus"></i>Nova {{ tipo }}
+        </UiButton>
+        <UiButton to="/vencimentos" variant="warning">
+          <i class="fas fa-clock"></i>Validades
+        </UiButton>
+      </div>
+    </header>
+
+    <!-- Lembrete de backup -->
+    <div v-if="lembrarBackup" class="ui-fade-in flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
+      <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+        <i class="fas fa-shield-halved"></i>
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-bold text-amber-900">{{ descreverUltimoBackup(ultimoBackup) }}</p>
+        <p class="text-xs text-amber-800">Os dados ficam apenas neste navegador. Exporte um backup para não perder o histórico.</p>
+      </div>
+      <UiButton variant="warning" size="sm" :disabled="exportando" @click="handleExportarBackup">
+        <i :class="exportando ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>Fazer backup agora
+      </UiButton>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatCard title="Itens críticos" :value="totalCriticosPrazo" description="Vencidos, hoje ou até 3 dias." icon="fas fa-bolt" tone="red" :critical="totalCriticosPrazo > 0" />
+      <StatCard title="Itens monitorados" :value="resumoVenc.total" description="Itens com validade acompanhada." icon="fas fa-box-open" tone="green" />
+      <StatCard title="Auditorias abertas" :value="auditoriasAbertas" :description="`${totalAuditorias} no histórico.`" icon="fas fa-clipboard-list" tone="blue" />
+      <StatCard
+        title="Taxa na meta"
+        :value="taxaMeta === null ? '—' : `${taxaMeta}%`"
+        :description="`Fechadas com até ${META_PENDENTE_PERCENTUAL}% pendente.`"
+        icon="fas fa-bullseye"
+        :tone="taxaMeta === null || taxaMeta >= 80 ? 'indigo' : 'amber'"
+      />
+    </div>
+
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div class="space-y-6 xl:col-span-2">
+        <!-- Agenda da semana -->
+        <section class="ui-card p-5 md:p-6">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Agenda da semana</h2>
+              <p class="text-xs text-slate-500">Auditorias planejadas e situação de cada uma.</p>
+            </div>
+            <RouterLink to="/auditorias" class="text-xs font-semibold text-blue-600 hover:underline">Calendário</RouterLink>
+          </div>
+          <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div
+              v-for="dia in agenda"
+              :key="dia.data"
+              class="rounded-xl border p-3"
+              :class="dia.ehHoje ? 'border-blue-300 bg-blue-50/40 ring-2 ring-blue-100' : 'border-slate-100'"
+            >
+              <p class="flex items-center justify-between text-xs font-semibold capitalize" :class="dia.ehHoje ? 'text-blue-700' : 'text-slate-500'">
+                {{ dia.dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) }}
+                <span v-if="dia.ehHoje" class="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Hoje</span>
+              </p>
+              <button
+                v-for="item in dia.itens"
+                :key="item.tipo"
+                type="button"
+                class="mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm"
+                :class="estadosAgenda[item.estado].classe"
+                @click="abrirItemAgenda(dia, item)"
+              >
+                <i :class="[estadosAgenda[item.estado].icone, 'text-xs']"></i>
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-bold">{{ item.tipo }}</span>
+                  <span class="block text-[11px] font-medium opacity-80">
+                    {{ estadosAgenda[item.estado].rotulo }}<template v-if="item.auditoria"> · {{ metricasAuditoria(item.auditoria).percentualPendente.toFixed(1) }}%</template>
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Evolução -->
+        <section class="ui-card p-5 md:p-6">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Evolução do % pendente</h2>
+            <p class="text-xs text-slate-500">Últimas 10 auditorias de cada tipo. Linha tracejada = meta de {{ META_PENDENTE_PERCENTUAL }}%. Menor é melhor.</p>
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <article v-for="serie in evolucao" :key="serie.tipo" class="rounded-xl border border-slate-100 p-4">
+              <div class="flex items-start justify-between gap-2">
+                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ serie.tipo }}</p>
+                <span
+                  v-if="serie.naMeta !== null"
+                  class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                  :class="serie.naMeta ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'"
+                >
+                  <i :class="serie.naMeta ? 'fas fa-check' : 'fas fa-xmark'"></i>{{ serie.naMeta ? 'Na meta' : 'Fora' }}
+                </span>
+              </div>
+              <template v-if="serie.pontos.length">
+                <div class="mt-1 flex items-baseline gap-2">
+                  <p class="text-2xl font-bold tracking-tight text-slate-900">{{ serie.atual.toFixed(1) }}%</p>
+                  <p v-if="serie.variacao !== null" class="text-xs font-semibold text-slate-500">
+                    <i :class="serie.variacao <= 0 ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
+                    {{ Math.abs(serie.variacao).toFixed(1) }} p.p.
+                  </p>
+                </div>
+                <SparklineMeta
+                  class="mt-3"
+                  :pontos="serie.pontos"
+                  :meta="META_PENDENTE_PERCENTUAL"
+                  @selecionar="p => router.push(`/auditoria/${p.id}`)"
+                />
+              </template>
+              <p v-else class="mt-6 pb-6 text-center text-xs text-slate-400">Sem auditorias deste tipo.</p>
+            </article>
+          </div>
+        </section>
+
+        <!-- Validades -->
+        <section class="ui-card p-5 md:p-6">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Saúde das validades</h2>
+              <p class="text-xs text-slate-500">{{ resumoVenc.total }} itens monitorados. Clique para filtrar.</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold" :class="statusValidades.classe">
+              <i :class="statusValidades.icone"></i>{{ statusValidades.titulo }}
+            </span>
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <RouterLink
+              v-for="faixa in faixasPrazo"
+              :key="faixa.chave"
+              :to="{ path: '/vencimentos', query: { prazo: faixa.chave } }"
+              class="group rounded-xl border p-4 transition"
+              :class="coresFaixa[faixa.cor]"
+            >
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold">{{ faixa.rotulo }}</p>
+                <i :class="[faixa.icone, 'text-xs opacity-70']"></i>
+              </div>
+              <p class="mt-2 text-3xl font-bold">{{ faixa.valor }}</p>
+              <p class="mt-1 flex items-center justify-between text-[11px] opacity-80">
+                {{ faixa.dica }}
+                <i class="fas fa-arrow-right opacity-0 transition group-hover:opacity-100"></i>
+              </p>
+            </RouterLink>
+          </div>
+
+          <div class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-slate-900">Setores mais críticos</h3>
+                <RouterLink to="/vencimentos" class="text-xs font-medium text-blue-600 hover:underline">Ver todos</RouterLink>
+              </div>
+              <p v-if="!setoresCriticos.length" class="rounded-xl bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">Sem setores críticos.</p>
+              <ul v-else class="space-y-2">
+                <li v-for="s in setoresCriticos" :key="s.nome">
+                  <RouterLink :to="{ path: '/vencimentos', query: { setor: s.nome } }" class="block rounded-lg px-2 py-1.5 transition hover:bg-slate-50">
+                    <div class="flex items-center justify-between gap-2 text-xs">
+                      <span class="truncate font-semibold text-slate-800">{{ s.nome }}</span>
+                      <span class="shrink-0 text-slate-500">{{ s.vencidos }} venc. · {{ s.hoje }} hoje · {{ s.ate3 }} até 3d</span>
+                    </div>
+                    <div class="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full bg-slate-100">
+                      <span v-if="s.vencidos" class="rounded-full bg-red-500" :style="{ width: `${(s.vencidos / maiorCriticoSetor) * 100}%` }"></span>
+                      <span v-if="s.hoje" class="rounded-full bg-orange-400" :style="{ width: `${(s.hoje / maiorCriticoSetor) * 100}%` }"></span>
+                      <span v-if="s.ate3" class="rounded-full bg-amber-300" :style="{ width: `${(s.ate3 / maiorCriticoSetor) * 100}%` }"></span>
+                    </div>
+                  </RouterLink>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-slate-900">Itens mais urgentes</h3>
+                <RouterLink :to="{ path: '/vencimentos', query: { prazo: 'vencidos' } }" class="text-xs font-medium text-blue-600 hover:underline">Ver todos</RouterLink>
+              </div>
+              <p v-if="!itensCriticos.length" class="rounded-xl bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">Sem itens críticos.</p>
+              <ul v-else class="divide-y divide-slate-100">
+                <li v-for="i in itensCriticos" :key="i._codigo + '-' + i._validadeISO" class="flex items-center justify-between gap-3 py-2">
+                  <div class="min-w-0">
+                    <p class="truncate text-xs font-semibold text-slate-900">{{ i._produto || i['Produto'] || '-' }}</p>
+                    <p class="truncate text-[11px] text-slate-500">{{ i._codigo || '-' }} · {{ i._setor || '-' }}</p>
+                  </div>
+                  <div class="shrink-0 text-right">
+                    <span class="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold" :class="classePrazo[i._prazo]">{{ rotuloPrazo[i._prazo] }}</span>
+                    <p class="mt-0.5 text-[11px] text-slate-500">{{ formatarDataBR(i._validadeISO) }} · {{ descreverDias(i._diasParaVencer) }}</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="space-y-6">
+        <!-- Últimas auditorias -->
+        <section class="ui-card">
+          <div class="flex items-center justify-between border-b border-slate-100 p-4">
+            <div>
+              <h2 class="text-sm font-bold text-slate-900 md:text-base">Últimas auditorias</h2>
+              <p class="text-[11px] text-slate-500">{{ auditoriasAbertas }} em andamento · {{ auditoriasFechadas.length }} fechadas</p>
+            </div>
+            <RouterLink to="/auditorias" class="text-xs font-medium text-blue-600 hover:underline">Ver todas</RouterLink>
+          </div>
+          <p v-if="!ultimasAuditorias.length" class="p-6 text-center text-sm text-slate-500">Sem auditorias registradas.</p>
+          <ul v-else class="divide-y divide-slate-100">
+            <li v-for="a in ultimasAuditorias" :key="a.id">
+              <RouterLink :to="'/auditoria/' + a.id" class="flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50">
+                <span
+                  class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl"
+                  :class="a.status === 'fechada' ? 'bg-slate-100 text-slate-500' : 'bg-blue-50 text-blue-600'"
+                >
+                  <i :class="a.status === 'fechada' ? 'fas fa-lock' : 'fas fa-clipboard-list'" class="text-xs"></i>
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-semibold text-slate-900">{{ a.tipo || '-' }}</p>
+                  <p class="text-[11px] text-slate-500">{{ formatarDataBR(a.data) }} · {{ a.status === 'fechada' ? 'Fechada' : 'Em andamento' }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-bold" :class="a.metricas.percentualPendente <= META_PENDENTE_PERCENTUAL ? 'text-emerald-700' : 'text-red-700'">
+                    {{ a.metricas.percentualPendente.toFixed(1) }}%
+                  </p>
+                  <p class="text-[10px] text-slate-400">pendente</p>
+                </div>
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Dados locais -->
+        <section class="ui-card space-y-4 p-5">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 md:text-base">Dados e backup</h2>
+            <p class="text-[11px] text-slate-500">Tudo fica salvo apenas neste navegador.</p>
+          </div>
+
+          <div class="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+            <i class="fas fa-clock-rotate-left text-slate-400"></i>
+            <p class="text-xs font-medium" :class="lembrarBackup ? 'text-amber-700' : 'text-slate-700'">{{ descreverUltimoBackup(ultimoBackup) }}</p>
+          </div>
+
+          <div v-if="armazenamento" class="space-y-1.5">
+            <div class="flex justify-between text-xs">
+              <span class="font-medium text-slate-600">Espaço usado</span>
+              <span class="text-slate-500">{{ formatarBytes(armazenamento.usado) }} de {{ formatarBytes(armazenamento.cota) }}</span>
+            </div>
+            <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div class="h-full rounded-full" :class="percentualUso > 80 ? 'bg-red-500' : 'bg-blue-600'" :style="{ width: `${Math.max(1, percentualUso)}%` }"></div>
+            </div>
+            <p class="flex items-center gap-1.5 text-[11px]" :class="armazenamento.persistente ? 'text-emerald-700' : 'text-slate-500'">
+              <i :class="armazenamento.persistente ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
+              {{ armazenamento.persistente ? 'Armazenamento protegido contra limpeza automática' : 'O navegador pode apagar os dados se faltar espaço' }}
+            </p>
+            <button
+              v-if="!armazenamento.persistente"
+              type="button"
+              class="text-xs font-semibold text-blue-600 hover:underline"
+              @click="protegerArmazenamento"
+            >
+              Proteger armazenamento
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <UiButton variant="success" size="sm" :disabled="exportando" @click="handleExportarBackup">
+              <i :class="exportando ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>Exportar
+            </UiButton>
+            <UiButton variant="dark" size="sm" @click="importarInput?.click()">
+              <i class="fas fa-upload"></i>Importar
+            </UiButton>
+          </div>
           <input
             ref="importarInput"
             type="file"
@@ -184,319 +494,8 @@ const statusAuditorias = computed(() => {
             class="hidden"
             @change="handleArquivoBackup"
           >
-        </template>
-      </UiPageHeader>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard title="Itens críticos" :value="totalCriticosPrazo" description="Vencidos, hoje ou até 3 dias." icon="fas fa-bolt" tone="red" :critical="totalCriticosPrazo > 0" />
-        <StatCard title="Itens monitorados" :value="resumoVenc.total" description="Itens com validade acompanhada." icon="fas fa-box-open" tone="green" />
-        <StatCard title="Auditorias abertas" :value="auditoriasAbertas" description="Pendentes de conclusão." icon="fas fa-clipboard-list" tone="blue" />
-        <StatCard title="Auditorias totais" :value="totalAuditorias" description="Histórico registrado no sistema." icon="fas fa-history" tone="indigo" />
-      </div>
-
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <section class="xl:col-span-2 space-y-6">
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6 space-y-4">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <h2 class="text-lg md:text-xl font-bold text-gray-900">Saúde das validades</h2>
-                <p class="text-xs md:text-sm text-gray-500">Resumo dos itens monitorados por prazo de vencimento.</p>
-              </div>
-              <div
-                class="hidden md:flex items-center px-3 py-1 rounded-full text-xs font-medium"
-                :class="statusValidades.classe"
-              >
-                <span class="truncate">{{ statusValidades.titulo }}</span>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div class="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-medium text-red-800">Vencidos</p>
-                  <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-red-100 text-red-700">
-                    <i class="fas fa-exclamation-triangle text-xs"></i>
-                  </span>
-                </div>
-                <p class="mt-2 text-2xl md:text-3xl font-bold text-red-700">{{ resumoVenc.vencidos }}</p>
-                <p class="mt-1 text-[11px] text-red-600">Requer ação imediata na gôndola.</p>
-              </div>
-              <div class="bg-orange-50 border border-orange-100 rounded-xl p-4 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-medium text-orange-800">Vencem hoje</p>
-                  <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-orange-100 text-orange-700">
-                    <i class="fas fa-sun text-xs"></i>
-                  </span>
-                </div>
-                <p class="mt-2 text-2xl md:text-3xl font-bold text-orange-600">{{ resumoVenc.hoje }}</p>
-                <p class="mt-1 text-[11px] text-orange-600">Organizar quebras e ações promocionais.</p>
-              </div>
-              <div class="bg-yellow-50 border border-yellow-100 rounded-xl p-4 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-medium text-yellow-800">Até 3 dias</p>
-                  <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-yellow-100 text-yellow-700">
-                    <i class="fas fa-hourglass-half text-xs"></i>
-                  </span>
-                </div>
-                <p class="mt-2 text-2xl md:text-3xl font-bold text-yellow-700">{{ resumoVenc.ate3 }}</p>
-                <p class="mt-1 text-[11px] text-yellow-700">Planejar giro e remarcações.</p>
-              </div>
-              <div class="bg-green-50 border border-green-100 rounded-xl p-4 flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-medium text-green-800">Itens monitorados</p>
-                  <span class="inline-flex items-center justify-center h-7 w-7 rounded-full bg-green-100 text-green-700">
-                    <i class="fas fa-boxes text-xs"></i>
-                  </span>
-                </div>
-                <p class="mt-2 text-2xl md:text-3xl font-bold text-green-700">{{ resumoVenc.total }}</p>
-                <p class="mt-1 text-[11px] text-green-700">
-                  {{ totalCriticosPrazo }} em situação crítica ou de atenção.
-                </p>
-              </div>
-            </div>
-
-            <div
-              class="md:hidden mt-2 px-3 py-2 rounded-lg text-xs font-medium"
-              :class="statusValidades.classe"
-            >
-              <div class="font-semibold">{{ statusValidades.titulo }}</div>
-              <div class="mt-0.5 text-[11px] text-inherit/90">{{ statusValidades.descricao }}</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-              <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 class="font-semibold text-gray-900 text-sm md:text-base">Setores mais críticos</h3>
-                  <p class="text-[11px] text-gray-500">Top setores com maior concentração de itens vencidos.</p>
-                </div>
-                <RouterLink to="/vencimentos" class="text-xs text-blue-600 hover:underline font-medium">
-                  Ver todos
-                </RouterLink>
-              </div>
-              <div class="p-4 flex-1">
-                <div v-if="setoresCriticos.length === 0" class="text-sm text-gray-500">
-                  Sem dados de setores críticos.
-                </div>
-                <div v-else class="space-y-2">
-                  <div
-                    v-for="(s, idx) in setoresCriticos"
-                    :key="s.nome"
-                    class="flex items-center gap-3 rounded-xl px-3.5 py-3 transition-colors border"
-                    :class="s.vencidos > 0 ? 'bg-red-50/60 border-red-100 hover:bg-red-50' : s.hoje > 0 ? 'bg-orange-50/50 border-orange-100 hover:bg-orange-50' : 'bg-yellow-50/50 border-yellow-100 hover:bg-yellow-50'"
-                  >
-                    <span
-                      class="flex-shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-lg text-xs font-bold text-white"
-                      :class="s.vencidos > 0 ? 'bg-red-500' : s.hoje > 0 ? 'bg-orange-400' : 'bg-yellow-400'"
-                    >
-                      {{ idx + 1 }}
-                    </span>
-                    <div class="min-w-0 flex-1">
-                      <p class="text-sm font-semibold text-gray-900 truncate">{{ s.nome }}</p>
-                      <p class="text-[11px] text-gray-500 mt-0.5">{{ s.total }} itens monitorados</p>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                      <span v-if="s.vencidos > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
-                        {{ s.vencidos }}
-                      </span>
-                      <span v-if="s.hoje > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
-                        {{ s.hoje }}
-                      </span>
-                      <span v-if="s.ate3 > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
-                        {{ s.ate3 }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-              <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 class="font-semibold text-gray-900 text-sm md:text-base">Itens mais críticos</h3>
-                  <p class="text-[11px] text-gray-500">Itens com menor prazo de validade.</p>
-                </div>
-                <RouterLink to="/vencimentos" class="text-xs text-blue-600 hover:underline font-medium">
-                  Ver todos
-                </RouterLink>
-              </div>
-              <div class="p-4 flex-1">
-                <div v-if="itensCriticos.length === 0" class="text-sm text-gray-500">
-                  Sem itens críticos no momento.
-                </div>
-                <div v-else class="space-y-2">
-                  <div
-                    v-for="i in itensCriticos"
-                    :key="i._codigo + '-' + i._validadeISO"
-                    class="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 transition"
-                  >
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <p class="text-xs font-semibold text-gray-900">{{ i._codigo || '-' }}</p>
-                        <span
-                          class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
-                          :class="{
-                            'border-red-200 bg-red-50 text-red-700': i._prazo === 'vencidos',
-                            'border-orange-200 bg-orange-50 text-orange-700': i._prazo === 'hoje',
-                            'border-yellow-200 bg-yellow-50 text-yellow-700': i._prazo === 'ate3'
-                          }"
-                        >
-                          {{ i._prazo === 'vencidos' ? 'Vencido' : i._prazo === 'hoje' ? 'Hoje' : 'Até 3 dias' }}
-                        </span>
-                      </div>
-                      <p class="text-xs text-gray-700 truncate max-w-xs mt-0.5">
-                        {{ i._produto || i['Produto'] || '-' }}
-                      </p>
-                      <p class="text-[11px] text-gray-500 mt-0.5">
-                        {{ i._setor || '-' }}
-                      </p>
-                    </div>
-                    <div class="text-right text-xs whitespace-nowrap">
-                      <div class="text-gray-500">Validade</div>
-                      <div class="font-semibold text-gray-800">{{ i._validadeISO || '-' }}</div>
-                      <div
-                        class="mt-1 font-semibold"
-                        :class="{
-                          'text-red-700': i._prazo === 'vencidos',
-                          'text-orange-700': i._prazo === 'hoje',
-                          'text-yellow-700': i._prazo === 'ate3'
-                        }"
-                      >
-                        {{ i._diasParaVencer }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
-
-        <section class="space-y-6">
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6 space-y-4">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <h2 class="text-lg md:text-xl font-bold text-gray-900">Status das auditorias</h2>
-                <p class="text-xs md:text-sm text-gray-500">Acompanhamento rápido das auditorias abertas e fechadas.</p>
-              </div>
-            </div>
-
-            <div
-              class="px-3 py-2 rounded-lg text-xs md:text-sm font-medium"
-              :class="statusAuditorias.classe"
-            >
-              <div>{{ statusAuditorias.titulo }}</div>
-              <div class="text-[11px] md:text-xs mt-0.5 text-inherit/90">
-                {{ statusAuditorias.descricao }}
-              </div>
-            </div>
-
-            <div class="grid grid-cols-3 gap-3">
-              <div class="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                <p class="text-[11px] text-blue-800">Abertas</p>
-                <p class="mt-1 text-2xl font-bold text-blue-700">{{ auditoriasAbertas }}</p>
-              </div>
-              <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                <p class="text-[11px] text-slate-800">Fechadas</p>
-                <p class="mt-1 text-2xl font-bold text-slate-800">{{ auditoriasFechadas }}</p>
-              </div>
-              <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
-                <p class="text-[11px] text-indigo-800">Total</p>
-                <p class="mt-1 text-2xl font-bold text-indigo-700">{{ totalAuditorias }}</p>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-2 text-xs text-gray-500">
-              <div class="flex items-center gap-2">
-                <span class="h-2 w-2 rounded-full bg-blue-500"></span>
-                <span>Foque nas auditorias abertas para manter o indicador dentro da meta.</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="h-2 w-2 rounded-full bg-slate-400"></span>
-                <span>Use as auditorias fechadas como histórico para acompanhar evolução.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 flex flex-col">
-            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 class="font-semibold text-gray-900 text-sm md:text-base">Últimas auditorias</h3>
-                <p class="text-[11px] text-gray-500">Histórico recente para entrar rápido nos detalhes.</p>
-              </div>
-              <RouterLink to="/auditorias" class="text-xs text-blue-600 hover:underline font-medium">
-                Ver todas
-              </RouterLink>
-            </div>
-            <div class="p-4">
-              <div v-if="ultimasAuditorias.length === 0" class="text-sm text-gray-500">
-                Sem auditorias registradas.
-              </div>
-              <div v-else class="space-y-2">
-                <div
-                  v-for="a in ultimasAuditorias"
-                  :key="a.id"
-                  class="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 transition"
-                >
-                  <div class="min-w-0">
-                    <p class="text-xs font-semibold text-gray-900 truncate">
-                      {{ a.id }}
-                    </p>
-                    <p class="text-[11px] text-gray-500 mt-0.5">
-                      {{ a.tipo || '-' }}
-                    </p>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span
-                      class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
-                      :class="{
-                        'border-green-200 bg-green-50 text-green-700': a.status === 'fechada',
-                        'border-blue-200 bg-blue-50 text-blue-700': a.status !== 'fechada'
-                      }"
-                    >
-                      {{ a.status || '-' }}
-                    </span>
-                    <RouterLink
-                      :to="'/auditoria/' + a.id"
-                      class="inline-flex items-center px-2.5 py-1 text-[11px] rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium"
-                    >
-                      Abrir
-                    </RouterLink>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6 space-y-3">
-            <h3 class="font-semibold text-gray-900 text-sm md:text-base">Atalhos rápidos</h3>
-            <div class="grid grid-cols-2 gap-3 text-xs">
-              <RouterLink
-                to="/vencimentos"
-                class="flex flex-col items-start gap-1 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5 hover:bg-orange-100 transition"
-              >
-                <span class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-orange-200 text-orange-700">
-                  <i class="fas fa-list-ul text-[11px]"></i>
-                </span>
-                <span class="font-semibold text-orange-900">Painel de validades</span>
-                <span class="text-[11px] text-orange-700">Ver todos os itens e aplicar filtros.</span>
-              </RouterLink>
-              <RouterLink
-                to="/auditorias"
-                class="flex flex-col items-start gap-1 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 hover:bg-blue-100 transition"
-              >
-                <span class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-200 text-blue-700">
-                  <i class="fas fa-search text-[11px]"></i>
-                </span>
-                <span class="font-semibold text-blue-900">Lista de auditorias</span>
-                <span class="text-[11px] text-blue-700">Gerir auditorias em andamento e encerradas.</span>
-              </RouterLink>
-            </div>
-          </div>
-        </section>
-      </div>
+      </aside>
     </div>
   </div>
 </template>
