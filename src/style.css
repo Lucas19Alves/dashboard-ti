@@ -50,7 +50,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 @layer components {
-  .ui-page { @apply mx-auto w-full max-w-7xl space-y-6 px-4 py-6 md:px-8 md:py-8; }
+  /* Largura única do sistema: aproveita telas grandes sem esticar demais em ultrawide. */
+  .ui-container { @apply mx-auto w-full max-w-[1760px] px-4 sm:px-6 lg:px-8 2xl:px-10; }
+  .ui-page { @apply mx-auto w-full max-w-[1760px] space-y-6 px-4 py-6 sm:px-6 md:py-8 lg:px-8 2xl:px-10; }
   .ui-card { @apply rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm backdrop-blur; box-shadow: var(--ui-shadow); }
   .ui-card-hover { @apply transition duration-200 hover:-translate-y-0.5 hover:border-blue-200; }
   .ui-title { @apply text-2xl font-bold tracking-tight text-slate-950 md:text-3xl; }

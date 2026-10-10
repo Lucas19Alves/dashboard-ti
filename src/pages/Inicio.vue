@@ -252,8 +252,8 @@ const handleArquivoBackup = async (e) => {
       />
     </div>
 
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-      <div class="space-y-6 xl:col-span-2">
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3 2xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div class="space-y-6 xl:col-span-2 2xl:col-span-1">
         <!-- Agenda da semana -->
         <section class="ui-card p-5 md:p-6">
           <div class="flex items-center justify-between gap-2">

@@ -6,9 +6,11 @@ import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { printTableInNewWindow } from '../utils/print'
 import { baixarCsv } from '../utils/csv'
+import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiModal from '../components/ui/UiModal.vue'
+import UiListaItens from '../components/ui/UiListaItens.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 
@@ -254,6 +256,31 @@ const itensSetorModal = computed(() => {
   if (!setorModalNome.value || setorModalNome.value === 'Todos') return store.itens
   return store.itens.filter(i => i._setor === setorModalNome.value)
 })
+
+// Listas dos modais de setor e fornecedor.
+const coresPrazo = { vencidos: 'bg-red-50 text-red-700', hoje: 'bg-orange-50 text-orange-700', ate3: 'bg-amber-50 text-amber-700', futuro: 'bg-slate-100 text-slate-600' }
+const colunasListaVenc = [
+  { chave: '_codigo', titulo: 'Código' },
+  { chave: '_produto', titulo: 'Produto', largura: 'max-w-72' },
+  { chave: '_setor', titulo: 'Setor', largura: 'max-w-40' },
+  { chave: '_fornecedor', titulo: 'Fornecedor', largura: 'max-w-40' },
+  { chave: '_local', titulo: 'Local' },
+  { chave: '_validadeISO', titulo: 'Validade', valor: i => formatarDataBR(i._validadeISO) },
+  { chave: '_diasParaVencer', titulo: 'Dias', alinhamento: 'right' },
+  { chave: '_estoque', titulo: 'Estoque', alinhamento: 'right' },
+  { chave: 'prazo', titulo: 'Status', alinhamento: 'center', valor: i => prazoBadgeLabel(i._prazo), badge: v => coresPrazo[Object.keys(coresPrazo).find(k => prazoBadgeLabel(k) === v)] || coresPrazo.futuro }
+]
+const facetasListaVenc = [
+  { chave: 'prazo', titulo: 'Status', valor: i => prazoBadgeLabel(i._prazo) },
+  { chave: '_setor', titulo: 'Setor' },
+  { chave: '_fornecedor', titulo: 'Fornecedor' }
+]
+const resumoPrazos = lista => [
+  ['vencidos', 'Vencidos', 'bg-red-50 text-red-800'],
+  ['hoje', 'Vencem hoje', 'bg-orange-50 text-orange-800'],
+  ['ate3', 'Até 3 dias', 'bg-amber-50 text-amber-800'],
+  ['futuro', 'Futuros', 'bg-slate-50 text-slate-800']
+].map(([chave, rotulo, fundo]) => ({ chave, rotulo, fundo, valor: lista.filter(i => i._prazo === chave).length }))
 
 // --- Computed: Fornecedores ---
 const fornecedores = computed(() => {
@@ -595,8 +622,8 @@ const exportarDetalhamentoSetor = async () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8">
-    <div class="max-w-7xl mx-auto space-y-6">
+  <div class="min-h-[calc(100vh-4rem)]">
+    <div class="ui-page">
 
       <!-- ===== HEADER ===== -->
       <UiPageHeader title="Vencimentos" subtitle="Controle de validades e itens críticos." icon="fas fa-calendar-alt" tone="orange">
@@ -1239,119 +1266,17 @@ const exportarDetalhamentoSetor = async () => {
       </template>
 
       <!-- ===== MODAL SETOR ===== -->
-      <div v-if="modalSetorAberto"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
-        @click="fecharModalSetor">
-        <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
-          @click.stop>
-          <div
-            class="bg-orange-700 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
-            <div>
-              <h2 class="text-xl font-bold">{{ setorModalNome }}</h2>
-              <p class="text-orange-100 text-sm mt-1">{{ itensSetorModal.length }} itens neste setor</p>
-            </div>
-            <button @click="fecharModalSetor" class="text-white hover:opacity-80 transition">
-              <i class="fas fa-times text-xl"></i>
-            </button>
-          </div>
-          <div class="p-4 overflow-y-auto flex-1">
-            <!-- Search -->
-            <div class="mb-3">
-              <div class="relative max-w-xs">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input v-model="buscaSetorModal" placeholder="Buscar por codigo ou produto..."
-                  class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
-              </div>
-            </div>
-
-            <!-- Table -->
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="border-b-2 border-slate-100">
-                    <th v-for="col in colunasItens" :key="col.chave"
-                      class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
-                      :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
-                      @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoSetorModal, col.chave)">
-                      {{ col.titulo }}
-                      <template v-if="col.sortable">
-                        <i v-if="ordenacaoSetorModal.coluna !== col.chave" class="fas fa-sort text-slate-300 ml-1"></i>
-                        <i v-else-if="ordenacaoSetorModal.direcao === 'asc'"
-                          class="fas fa-sort-up text-indigo-600 ml-1"></i>
-                        <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
-                      </template>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="itensSetorModalPaginados.length === 0">
-                    <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
-                      <i class="fas fa-inbox text-3xl mb-2 block"></i>
-                      <p class="text-sm">Nenhum item encontrado</p>
-                    </td>
-                  </tr>
-                  <tr v-for="(item, idx) in itensSetorModalPaginados" :key="item._codigo + item._validadeISO + idx"
-                    :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                    <td class="px-3 py-2">{{ item._codigo }}</td>
-                    <td class="px-3 py-2">{{ item._produto }}</td>
-                    <td class="px-3 py-2">{{ item._setor }}</td>
-                    <td class="px-3 py-2">{{ item._fornecedor }}</td>
-                    <td class="px-3 py-2">{{ item._local }}</td>
-                    <td class="px-3 py-2">{{ item._validadeISO }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
-                    <td class="px-3 py-2">
-                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
-                        :class="prazoBadgeClasses(item._prazo)">
-                        {{ prazoBadgeLabel(item._prazo) }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Pagination -->
-            <div v-if="totalPaginasSetorModal > 1"
-              class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaSetorModal, totalPaginasSetorModal) }} de {{
-                totalPaginasSetorModal }}</p>
-              <div class="flex items-center gap-1">
-                <button @click="paginaSetorModal = Math.max(1, paginaSetorModal - 1)" :disabled="paginaSetorModal <= 1"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                <template
-                  v-for="p in paginasVisiveisVenc(totalPaginasSetorModal, Math.min(paginaSetorModal, totalPaginasSetorModal))"
-                  :key="'psm' + p">
-                  <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
-                  <button v-else @click="paginaSetorModal = p"
-                    class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                    :class="p === Math.min(paginaSetorModal, totalPaginasSetorModal) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
-                    {{ p }}
-                  </button>
-                </template>
-                <button @click="paginaSetorModal = Math.min(totalPaginasSetorModal, paginaSetorModal + 1)"
-                  :disabled="paginaSetorModal >= totalPaginasSetorModal"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-              </div>
+      <UiModal v-if="modalSetorAberto" :title="setorModalNome === 'Todos' ? 'Todos os setores' : setorModalNome" :subtitle="`${itensSetorModal.length} itens com validade monitorada`" width="max-w-6xl" @close="fecharModalSetor">
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div v-for="f in resumoPrazos(itensSetorModal)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
+              <p class="text-[11px] font-bold uppercase tracking-wider opacity-80">{{ f.rotulo }}</p>
+              <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
           </div>
-          <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
-            <button @click="fecharModalSetor"
-              class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium text-sm">
-              Fechar
-            </button>
-            <button @click="imprimir('modal-setor')"
-              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-sm transition">
-              <i class="fas fa-print mr-2"></i>Imprimir
-            </button>
-          </div>
+          <UiListaItens :itens="itensSetorModal" :colunas="colunasListaVenc" :facetas="facetasListaVenc" :titulo="`Vencimentos - ${setorModalNome}`" :ordem-inicial="{ chave: '_diasParaVencer', direcao: 'asc' }" />
         </div>
-      </div>
-
+      </UiModal>
       <div v-if="modalAcaoAberto" class="ui-modal-backdrop" @click.self="modalAcaoAberto = false">
         <form class="ui-modal p-6" @submit.prevent="salvarAcao">
           <div class="flex items-start justify-between gap-4">
@@ -1385,122 +1310,17 @@ const exportarDetalhamentoSetor = async () => {
       </div>
 
       <!-- ===== MODAL FORNECEDOR ===== -->
-      <div v-if="modalFornecedorAberto && fornecedorSelecionado"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-8"
-        @click="limparFornecedor">
-        <div class="relative bg-white rounded-lg shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col max-h-[90vh]"
-          @click.stop>
-          <div
-            class="bg-blue-700 text-white p-4 md:p-5 flex items-center justify-between shrink-0">
-            <div>
-              <h2 class="text-xl font-bold"><i class="fas fa-truck mr-2"></i>{{ fornecedorSelecionado }}</h2>
-              <p class="text-blue-100 text-sm mt-1">{{ itensFornecedor.length }} itens deste fornecedor</p>
-            </div>
-            <button @click="limparFornecedor" class="text-white hover:opacity-80 transition">
-              <i class="fas fa-times text-xl"></i>
-            </button>
-          </div>
-          <div class="p-4 overflow-y-auto flex-1">
-            <!-- Search -->
-            <div class="mb-3">
-              <div class="relative max-w-xs">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input v-model="buscaFornecedorModal" placeholder="Buscar por codigo ou produto..."
-                  class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
-              </div>
-            </div>
-
-            <!-- Table -->
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="border-b-2 border-slate-100">
-                    <th v-for="col in colunasItens" :key="col.chave"
-                      class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
-                      :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
-                      @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedorModal, col.chave)">
-                      {{ col.titulo }}
-                      <template v-if="col.sortable">
-                        <i v-if="ordenacaoFornecedorModal.coluna !== col.chave"
-                          class="fas fa-sort text-slate-300 ml-1"></i>
-                        <i v-else-if="ordenacaoFornecedorModal.direcao === 'asc'"
-                          class="fas fa-sort-up text-indigo-600 ml-1"></i>
-                        <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
-                      </template>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="itensFornecedorPaginados.length === 0">
-                    <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
-                      <i class="fas fa-inbox text-3xl mb-2 block"></i>
-                      <p class="text-sm">Nenhum item encontrado</p>
-                    </td>
-                  </tr>
-                  <tr v-for="(item, idx) in itensFornecedorPaginados" :key="item._codigo + item._validadeISO + idx"
-                    :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
-                    <td class="px-3 py-2">{{ item._codigo }}</td>
-                    <td class="px-3 py-2">{{ item._produto }}</td>
-                    <td class="px-3 py-2">{{ item._setor }}</td>
-                    <td class="px-3 py-2">{{ item._fornecedor }}</td>
-                    <td class="px-3 py-2">{{ item._local }}</td>
-                    <td class="px-3 py-2">{{ item._validadeISO }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
-                    <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
-                    <td class="px-3 py-2">
-                      <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
-                        :class="prazoBadgeClasses(item._prazo)">
-                        {{ prazoBadgeLabel(item._prazo) }}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Pagination -->
-            <div v-if="totalPaginasFornecedorModal > 1"
-              class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-              <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedorModal, totalPaginasFornecedorModal)
-                }} de
-                {{ totalPaginasFornecedorModal }}</p>
-              <div class="flex items-center gap-1">
-                <button @click="paginaFornecedorModal = Math.max(1, paginaFornecedorModal - 1)"
-                  :disabled="paginaFornecedorModal <= 1"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                  <i class="fas fa-chevron-left"></i>
-                </button>
-                <template
-                  v-for="p in paginasVisiveisVenc(totalPaginasFornecedorModal, Math.min(paginaFornecedorModal, totalPaginasFornecedorModal))"
-                  :key="'pfm' + p">
-                  <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
-                  <button v-else @click="paginaFornecedorModal = p"
-                    class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                    :class="p === Math.min(paginaFornecedorModal, totalPaginasFornecedorModal) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
-                    {{ p }}
-                  </button>
-                </template>
-                <button
-                  @click="paginaFornecedorModal = Math.min(totalPaginasFornecedorModal, paginaFornecedorModal + 1)"
-                  :disabled="paginaFornecedorModal >= totalPaginasFornecedorModal"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                  <i class="fas fa-chevron-right"></i>
-                </button>
-              </div>
+      <UiModal v-if="modalFornecedorAberto && fornecedorSelecionado" :title="fornecedorSelecionado" :subtitle="`${itensFornecedor.length} itens deste fornecedor`" width="max-w-6xl" @close="limparFornecedor">
+        <div class="space-y-4">
+          <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div v-for="f in resumoPrazos(itensFornecedor)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
+              <p class="text-[11px] font-bold uppercase tracking-wider opacity-80">{{ f.rotulo }}</p>
+              <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
           </div>
-          <div class="bg-gray-50 px-4 py-3 flex justify-end gap-2 shrink-0 border-t">
-            <button @click="limparFornecedor"
-              class="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 transition font-medium text-sm">
-              Fechar
-            </button>
-            <button @click="imprimir('modal-fornecedor')"
-              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-sm transition">
-              <i class="fas fa-print mr-2"></i>Imprimir
-            </button>
-          </div>
+          <UiListaItens :itens="itensFornecedor" :colunas="colunasListaVenc" :facetas="facetasListaVenc" :titulo="`Vencimentos - ${fornecedorSelecionado}`" :ordem-inicial="{ chave: '_diasParaVencer', direcao: 'asc' }" />
         </div>
-      </div>
+      </UiModal>
 
     </div>
   </div>

@@ -25,7 +25,7 @@ const progressoMeta = computed(() => {
 <template>
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     <!-- Distância até a meta -->
-    <section class="rounded-2xl border p-5 shadow-sm" :class="faltam > 0 ? 'border-amber-200 bg-amber-50/70' : 'border-emerald-200 bg-emerald-50/70'">
+    <section class="rounded-2xl p-5 shadow-sm" :class="faltam > 0 ? 'bg-amber-50' : 'bg-emerald-50'">
       <div class="flex items-start gap-3">
         <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" :class="faltam > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'">
           <i :class="faltam > 0 ? 'fas fa-flag-checkered' : 'fas fa-circle-check'"></i>
@@ -52,7 +52,7 @@ const progressoMeta = computed(() => {
     </section>
 
     <!-- Comparativo com a anterior -->
-    <section class="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm">
+    <section class="rounded-2xl bg-white p-5 shadow-sm">
       <div class="flex items-start justify-between gap-2">
         <div>
           <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Comparado à {{ auditoria.tipo }} anterior</p>

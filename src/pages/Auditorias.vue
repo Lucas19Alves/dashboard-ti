@@ -3,8 +3,12 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { criarPreviaPlanilha } from '../utils/planilha'
-import { metricasAuditoria } from '../utils/metricasAuditoria'
+import { META_PENDENTE_PERCENTUAL, dentroDaMeta, metricasAuditoria, serieEvolucao } from '../utils/metricasAuditoria'
+import { itensParaMeta, resumirAuditorias, rotuloMes } from '../utils/analiseHistorica'
 import StatCard from '../components/ui/StatCard.vue'
+import UiModal from '../components/ui/UiModal.vue'
+import UiButton from '../components/ui/UiButton.vue'
+import SparklineMeta from '../components/ui/SparklineMeta.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 
@@ -26,8 +30,6 @@ const getMetricasCard = metricasAuditoria
 // Filtros e Paginação
 const filtroTexto = ref('')
 const ordenacao = ref('data_desc') // data_desc, data_asc, progresso_desc, progresso_asc
-const paginaAtual = ref(1)
-const itensPorPagina = 8
 
 // Filtro de Data
 const mostrarFiltroData = ref(false)
@@ -90,9 +92,8 @@ const handleFiltroDataInput = (e, tipo) => {
   }
 }
 
-// Resetar paginação ao trocar de aba
+// Limpa a busca ao trocar de aba
 watch(abaAtiva, () => {
-  paginaAtual.value = 1
   filtroTexto.value = ''
 })
 
@@ -317,6 +318,7 @@ const auditoriasFiltradas = computed(() => {
     const termo = filtroTexto.value.toLowerCase()
     auditorias = auditorias.filter(a => 
       a.id.toString().includes(termo) ||
+      formatarDataISO(String(a.data).slice(0, 10)).includes(termo) ||
       (a.sku && a.sku.toString().toLowerCase().includes(termo))
     )
   }
@@ -363,12 +365,7 @@ const auditoriasFiltradas = computed(() => {
   return auditorias
 })
 
-const totalPaginas = computed(() => Math.ceil(auditoriasFiltradas.value.length / itensPorPagina))
 
-const auditoriasPaginadas = computed(() => {
-  const inicio = (paginaAtual.value - 1) * itensPorPagina
-  return auditoriasFiltradas.value.slice(inicio, inicio + itensPorPagina)
-})
 
 const totalAuditorias = computed(() => Array.isArray(store.auditorias) ? store.auditorias.length : 0)
 const auditoriasAbertas = computed(() =>
@@ -378,41 +375,9 @@ const auditoriasFechadas = computed(() =>
   Array.isArray(store.auditorias) ? store.auditorias.filter(a => a && a.status === 'fechada') : []
 )
 
-const parcialMediaGeral = computed(() => {
-  const lista = Array.isArray(store.auditorias) ? store.auditorias.filter(a => a) : []
-  if (!lista.length) return 0
-  const soma = lista.reduce((acc, a) => {
-    if (!a.analise) return acc
-    const analise = a.analise
-    const v = typeof analise.parcialPercentual === 'number' ? analise.parcialPercentual : 0
-    return acc + (Number.isFinite(v) ? v : 0)
-  }, 0)
-  return soma / lista.length
-})
+// Média do % pendente derivada do SKU atual (igual aos cards).
+const parcialMediaGeral = computed(() => resumirAuditorias(store.auditorias.filter(Boolean)).mediaPendente ?? 0)
 
-const statusAuditorias = computed(() => {
-  const total = totalAuditorias.value
-  const abertas = auditoriasAbertas.value.length
-  if (!total) {
-    return {
-      titulo: 'Nenhuma auditoria cadastrada',
-      descricao: 'Use o calendário para iniciar uma nova auditoria.',
-      classe: 'bg-gray-100 text-gray-700'
-    }
-  }
-  if (abertas > 0) {
-    return {
-      titulo: 'Auditorias em andamento',
-      descricao: `${abertas} de ${total} auditorias estão abertas para acompanhamento.`,
-      classe: 'bg-blue-50 text-blue-800'
-    }
-  }
-  return {
-    titulo: 'Todas as auditorias fechadas',
-    descricao: 'Nenhuma auditoria aberta no momento.',
-    classe: 'bg-green-50 text-green-800'
-  }
-})
 
 const excluirAuditoria = (id) => {
   idParaExcluir.value = id
@@ -626,49 +591,88 @@ const abrirCriacaoPelaRota = () => {
 }
 abrirCriacaoPelaRota()
 
-const parcialRestante = (a) => {
-  if (!a) return 0
-  const v = (a.analise && typeof a.analise.parcialPercentual === 'number')
-    ? a.analise.parcialPercentual
-    : (typeof a.parcial === 'number' ? a.parcial : 0)
-  return Number.isFinite(v) ? v : 0
+// Atalho do cabeçalho: abre o formulário para hoje com o tipo planejado do dia.
+const novaAuditoriaHoje = () => {
+  const hoje = new Date()
+  const iso = formatISO(hoje)
+  const tipo = (store.tiposAuditoriaPorDia[hoje.getDay()] || [])[0] || formulario.value.tipo
+  abaAtiva.value = 'calendario'
+  criarAPartirCalendario(iso, tipo, hoje.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }))
+  requestAnimationFrame(() => document.getElementById('fileInputNovaAuditoria')?.closest('.ui-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 
-const textoMeta = (a) => {
-  if (!a) return ''
-  return a.metaAlcancada ? 'Dentro da Meta' : 'Fora da Meta'
+// ---------- Listas: ativas (calendário) e histórico por tipo ----------
+const META = META_PENDENTE_PERCENTUAL
+const coresTipo = {
+  'Etiqueta': { chip: 'bg-violet-50 text-violet-700', barra: 'bg-violet-500', icone: 'fas fa-tag' },
+  'Presença': { chip: 'bg-sky-50 text-sky-700', barra: 'bg-sky-500', icone: 'fas fa-check-square' },
+  'Ruptura': { chip: 'bg-orange-50 text-orange-700', barra: 'bg-orange-500', icone: 'fas fa-exclamation-triangle' }
 }
+const corTipo = tipo => coresTipo[tipo] || { chip: 'bg-slate-100 text-slate-600', barra: 'bg-slate-400', icone: 'fas fa-clipboard' }
 
+// Anel de progresso (SVG): circunferência para r=26.
+const CIRCUNFERENCIA = 2 * Math.PI * 26
+const tracoAnel = percentual => `${(Math.min(100, Math.max(0, percentual)) / 100) * CIRCUNFERENCIA} ${CIRCUNFERENCIA}`
+const faltamParaMeta = a => itensParaMeta(a)
+
+const filtroSituacao = ref('todas')
+const situacoes = [
+  { valor: 'todas', rotulo: 'Todas' },
+  { valor: 'abertas', rotulo: 'Em andamento' },
+  { valor: 'fechadas', rotulo: 'Fechadas' },
+  { valor: 'dentro', rotulo: 'Na meta' },
+  { valor: 'fora', rotulo: 'Fora da meta' }
+]
+const limiteHistorico = ref(30)
+watch([abaAtiva, filtroSituacao, filtroTexto, ordenacao, filtroDataTipo], () => { limiteHistorico.value = 30 })
+
+const historicoFiltrado = computed(() => auditoriasFiltradas.value.filter(a => {
+  if (filtroSituacao.value === 'abertas') return a.status !== 'fechada'
+  if (filtroSituacao.value === 'fechadas') return a.status === 'fechada'
+  if (filtroSituacao.value === 'dentro') return dentroDaMeta(a)
+  if (filtroSituacao.value === 'fora') return !dentroDaMeta(a)
+  return true
+}))
+
+// Agrupa por mês só quando a ordenação é por data; senão, um único grupo.
+const gruposHistorico = computed(() => {
+  const visiveis = historicoFiltrado.value.slice(0, limiteHistorico.value)
+  if (!ordenacao.value.startsWith('data')) return [{ chave: 'todos', rotulo: 'Resultados', itens: visiveis, resumo: resumirAuditorias(visiveis) }]
+  const grupos = []
+  for (const a of visiveis) {
+    const chave = String(a.data).slice(0, 7)
+    let grupo = grupos.at(-1)
+    if (!grupo || grupo.chave !== chave) grupos.push((grupo = { chave, rotulo: rotuloMes(chave), itens: [] }))
+    grupo.itens.push(a)
+  }
+  return grupos.map(g => ({ ...g, resumo: resumirAuditorias(g.itens) }))
+})
+
+const resumoTipo = computed(() => {
+  if (abaAtiva.value === 'calendario') return null
+  const doTipo = store.auditorias.filter(a => a.tipo === abaAtiva.value)
+  return { ...resumirAuditorias(doTipo), serie: serieEvolucao(doTipo, abaAtiva.value, 15) }
+})
+
+
+
+// Dias do calendário sem borda: o estado aparece só pelo fundo.
 const classesCardDia = (d) => {
-  if (diaSelecionado.value && diaSelecionado.value.data === d.data) {
-    return 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-100'
-  }
-  const mapa = auditoriasPorDiaTipo.value || {}
-  const porData = mapa[d.data]
-  if (!porData) {
-    return 'border-gray-200 bg-gray-50 hover:border-blue-400 hover:bg-gray-100'
-  }
+  if (diaSelecionado.value && diaSelecionado.value.data === d.data) return 'bg-blue-100/70 shadow-md'
+  const porData = (auditoriasPorDiaTipo.value || {})[d.data]
+  if (!porData) return 'bg-slate-50 hover:bg-slate-100'
   const lista = Object.values(porData).flat()
-  const temAberta = lista.some(a => a.status !== 'fechada')
-  if (temAberta) {
-    return 'border-blue-300 bg-blue-50/60 hover:border-blue-400 hover:bg-blue-50'
-  }
-  const foraMeta = lista.some(a => a.status === 'fechada' && !a.metaAlcancada)
-  if (foraMeta) {
-    return 'border-red-200 bg-red-50/60 hover:border-red-400 hover:bg-red-50'
-  }
-  return 'border-green-200 bg-green-50/60 hover:border-green-400 hover:bg-green-50'
+  if (lista.some(a => a.status !== 'fechada')) return 'bg-blue-50 hover:bg-blue-100/70'
+  if (lista.some(a => a.status === 'fechada' && !dentroDaMeta(a))) return 'bg-red-50 hover:bg-red-100/70'
+  return 'bg-emerald-50 hover:bg-emerald-100/70'
 }
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] px-4 py-6 md:px-8 md:py-8 max-w-7xl mx-auto space-y-6">
+  <div class="ui-page min-h-[calc(100vh-4rem)]">
       <UiPageHeader title="Auditorias" subtitle="Organize, acompanhe e finalize as auditorias da loja." icon="fas fa-search">
         <template #actions>
-          <div class="inline-flex max-w-md flex-col gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 sm:flex-row sm:items-center sm:gap-2 md:text-sm">
-            <span class="font-semibold">{{ statusAuditorias.titulo }}</span>
-            <span class="text-[11px] opacity-80 md:text-xs">{{ statusAuditorias.descricao }}</span>
-          </div>
+<UiButton @click="novaAuditoriaHoje"><i class="fas fa-plus"></i>Nova auditoria</UiButton>
         </template>
       </UiPageHeader>
 
@@ -676,87 +680,43 @@ const classesCardDia = (d) => {
         <StatCard title="Auditorias ativas" :value="auditoriasAbertas.length" description="Em andamento no momento." icon="fas fa-play" tone="blue" />
         <StatCard title="Auditorias fechadas" :value="auditoriasFechadas.length" description="Concluídas e disponíveis no histórico." icon="fas fa-lock" tone="green" />
         <StatCard title="Total de auditorias" :value="totalAuditorias" description="Registradas no sistema." icon="fas fa-clipboard-list" tone="indigo" />
-        <StatCard title="Parcial média" :value="`${parcialMediaGeral.toFixed(1)}%`" description="Quanto falta em média para entregar." icon="fas fa-chart-line" tone="amber" />
+        <StatCard title="Pendente médio" :value="`${parcialMediaGeral.toFixed(1)}%`" :description="`Média de todas as auditorias. Meta: até ${META}%.`" icon="fas fa-chart-line" :tone="parcialMediaGeral > META ? 'amber' : 'green'" />
       </div>
 
       <UiTabs v-model="abaAtiva" :items="abasAuditoria" />
 
-    <!-- Modal de Confirmação de Exclusão -->
-    <div
-      v-if="mostrarModalExclusao"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      @click.self="fecharModalExclusao"
-    >
-      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all scale-100 animate-in fade-in zoom-in duration-200">
-        <div class="text-center">
-          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-            <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
-          </div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2">Confirmar Exclusão</h3>
-          <p class="text-sm text-gray-500 mb-6">
-            Tem certeza que deseja excluir esta auditoria? Esta ação não pode ser desfeita e todos os dados associados serão perdidos.
-          </p>
-          <div class="flex justify-center gap-3">
-            <button
-              @click="fecharModalExclusao"
-              class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200"
-            >
-              Cancelar
-            </button>
-            <button
-              @click="confirmarExclusao"
-              class="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              Sim, excluir
-            </button>
-          </div>
-        </div>
+    <UiModal v-if="mostrarModalExclusao" title="Excluir auditoria" subtitle="Esta ação não pode ser desfeita." width="max-w-md" @close="fecharModalExclusao">
+      <div class="flex items-start gap-3">
+        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600"><i class="fas fa-trash"></i></span>
+        <p class="text-sm text-slate-600">Todos os dados importados e a análise desta auditoria serão apagados deste navegador. Considere exportar um backup antes.</p>
       </div>
-    </div>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="fecharModalExclusao">Cancelar</UiButton>
+        <UiButton variant="danger" size="sm" @click="confirmarExclusao"><i class="fas fa-trash"></i>Excluir</UiButton>
+      </template>
+    </UiModal>
 
-    <!-- Modal de Confirmação de Fechamento -->
-    <div
-      v-if="mostrarModalFechamento"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      @click.self="fecharModalFechamento"
-    >
-      <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform transition-all scale-100 animate-in fade-in zoom-in duration-200">
-        <div class="text-center">
-          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-            <i class="fas fa-lock text-yellow-600 text-xl"></i>
-          </div>
-          <h3 class="text-lg font-bold text-gray-900 mb-2">Confirmar Fechamento</h3>
-          <p class="text-sm text-gray-500 mb-6">
-            Deseja fechar esta auditoria? Ela não aparecerá mais na lista de ativas, mas poderá ser consultada no histórico.
-          </p>
-          <div class="flex justify-center gap-3">
-            <button
-              @click="fecharModalFechamento"
-              class="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200"
-            >
-              Cancelar
-            </button>
-            <button
-              @click="confirmarFechamento"
-              class="px-4 py-2 rounded-lg bg-yellow-600 text-white font-medium hover:bg-yellow-700 transition shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-            >
-              Sim, fechar
-            </button>
-          </div>
-        </div>
+    <UiModal v-if="mostrarModalFechamento" title="Fechar auditoria" subtitle="Ela sai das ativas e fica no histórico." width="max-w-md" @close="fecharModalFechamento">
+      <div class="flex items-start gap-3">
+        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><i class="fas fa-lock"></i></span>
+        <p class="text-sm text-slate-600">Depois de fechada, a auditoria fica somente para consulta e entra nos indicadores de meta.</p>
       </div>
-    </div>
+      <template #footer>
+        <UiButton variant="secondary" size="sm" @click="fecharModalFechamento">Cancelar</UiButton>
+        <UiButton variant="warning" size="sm" @click="confirmarFechamento"><i class="fas fa-lock"></i>Fechar auditoria</UiButton>
+      </template>
+    </UiModal>
 
     <!-- Calendário Semanal -->
-    <div v-if="abaAtiva === 'calendario'" class="mb-8 space-y-4">
-      <div class="bg-white rounded-lg p-6">
+    <div v-if="abaAtiva === 'calendario'" class="space-y-4">
+      <div class="ui-card p-5 md:p-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-          <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 class="flex items-center gap-2 text-lg font-bold text-slate-900">
             <i class="fas fa-calendar-week text-blue-600"></i>
-            <span>Calendário Semanal</span>
+            <span>Calendário semanal</span>
           </h2>
           
-          <div class="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-xs">
+          <div class="flex items-center gap-2 rounded-xl bg-slate-50 p-1.5">
             <button 
               @click="navegarSemana(-1)"
               class="h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-xs"
@@ -799,7 +759,7 @@ const classesCardDia = (d) => {
           <div
             v-for="d in semanaAtual"
             :key="d.data"
-            class="group min-w-55 md:min-w-0 md:flex-1 md:max-w-xs p-4 rounded-xl border cursor-pointer transition-all relative overflow-hidden"
+            class="group relative min-w-55 cursor-pointer overflow-hidden rounded-xl p-4 transition-all md:min-w-0 md:flex-1"
             @click="abrirDia(d)"
             :class="classesCardDia(d)"
           >
@@ -826,7 +786,7 @@ const classesCardDia = (d) => {
                   class="px-3 py-1 rounded-full text-[11px] font-semibold no-underline shadow-sm ring-1 ring-black/5 flex items-center gap-1"
                   :class="[
                     auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada'
-                      ? (auditoriasPorDiaTipo[d.data][tipo][0].metaAlcancada ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')
+                      ? (dentroDaMeta(auditoriasPorDiaTipo[d.data][tipo][0]) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')
                       : 'bg-blue-100 text-blue-800'
                   ]"
                   :title="auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada' ? 'Fechada' : 'Em andamento'"
@@ -858,16 +818,12 @@ const classesCardDia = (d) => {
               v-if="auditoriasPorDiaTipo[d.data]"
               class="mt-2 text-[11px] text-gray-700 space-y-1"
             >
-              <div
-                v-for="tipo in ['Etiqueta', 'Presença', 'Ruptura']"
-                :key="tipo + d.data"
-                v-if="auditoriasPorDiaTipo[d.data][tipo] && auditoriasPorDiaTipo[d.data][tipo].length > 0"
-                class="flex items-center gap-1"
-              >
-                <span class="font-semibold">{{ tipo }}</span>
-                <span>— {{ parcialRestante(auditoriasPorDiaTipo[d.data][tipo][0]).toFixed(2) }}% pendente —</span>
-                <span>{{ textoMeta(auditoriasPorDiaTipo[d.data][tipo][0]) }}</span>
-              </div>
+              <template v-for="tipo in ['Etiqueta', 'Presença', 'Ruptura']" :key="tipo + d.data">
+                <div v-if="auditoriasPorDiaTipo[d.data][tipo]?.length" class="flex items-center gap-1">
+                  <span class="font-semibold">{{ tipo }}</span>
+                  <span>· {{ getMetricasCard(auditoriasPorDiaTipo[d.data][tipo][0]).percentualPendente.toFixed(2) }}% pendente</span>
+                </div>
+              </template>
             </div>
             <div class="mt-3 flex items-center justify-between text-[11px] text-gray-500">
               <span v-if="auditoriasPorDiaTipo[d.data]">Dia com auditoria</span>
@@ -886,9 +842,9 @@ const classesCardDia = (d) => {
 
       <div
         v-if="diaSelecionado"
-        class="bg-white rounded-lg shadow-lg p-6"
+        class="ui-card ui-fade-in p-5 md:p-6"
       >
-        <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center justify-between">
+        <h2 class="mb-4 flex flex-wrap items-center justify-between gap-2 text-lg font-bold text-slate-900">
           <span class="flex items-center gap-2">
             <i class="fas fa-play-circle text-green-600"></i>
             <span>Iniciar acompanhamento</span>
@@ -932,16 +888,16 @@ const classesCardDia = (d) => {
                 </div>
               </label>
             </div>
-            <div v-if="carregandoPrevia" class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
+            <div v-if="carregandoPrevia" class="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">
               <i class="fas fa-spinner fa-spin mr-2"></i>Analisando estrutura da planilha…
             </div>
-            <div v-else-if="previaArquivo" class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div v-else-if="previaArquivo" class="mt-3 rounded-xl bg-slate-50 p-4">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-sm font-semibold text-slate-800">Pré-visualização validada</p>
                 <span class="text-xs font-medium text-slate-500">{{ previaArquivo.totalLinhas }} linhas · {{ previaArquivo.totalColunas }} colunas</span>
               </div>
               <div class="mt-2 flex flex-wrap gap-1.5">
-                <span v-for="coluna in previaArquivo.colunas.slice(0, 8)" :key="coluna" class="rounded-md bg-white px-2 py-1 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                <span v-for="coluna in previaArquivo.colunas.slice(0, 8)" :key="coluna" class="rounded-md bg-white px-2 py-1 text-[11px] text-slate-600 shadow-sm">
                   {{ coluna }}
                 </span>
                 <span v-if="previaArquivo.colunas.length > 8" class="px-2 py-1 text-[11px] text-slate-500">+{{ previaArquivo.colunas.length - 8 }}</span>
@@ -951,7 +907,7 @@ const classesCardDia = (d) => {
             <p v-if="erroUpload" class="text-xs text-red-600 mt-1">{{ erroUpload }}</p>
             <div
               v-if="formulario.arquivo"
-              class="mt-2 bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2"
+              class="mt-2 flex items-center gap-2 rounded-xl bg-green-50 p-3"
             >
               <i class="fas fa-check-circle text-green-600"></i>
               <span class="text-sm text-green-800 truncate max-w-xs">{{ formulario.arquivo.name }}</span>
@@ -976,7 +932,7 @@ const classesCardDia = (d) => {
               <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Auditoria</label>
               <select
                 v-model="formulario.tipo"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="ui-input"
               >
                 <option>Etiqueta</option>
                 <option>Presença</option>
@@ -992,7 +948,7 @@ const classesCardDia = (d) => {
                 type="text"
                 placeholder="DD/MM/AAAA"
                 maxlength="10"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="ui-input"
               />
             </div>
 
@@ -1003,7 +959,7 @@ const classesCardDia = (d) => {
                 type="number"
                 min="1"
                 placeholder="Total de itens a auditar"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="ui-input"
               />
               <p class="text-xs text-gray-500 mt-1">Quantidade total de itens do inventário</p>
             </div>
@@ -1024,286 +980,241 @@ const classesCardDia = (d) => {
     </div>
 
     <!-- Lista de Auditorias -->
-    <div class="bg-white rounded-lg shadow-lg">
-      <div class="bg-blue-600 text-white px-6 py-4 rounded-t-lg flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-20">
-        <h2 class="text-xl font-bold flex items-center gap-2">
-          <i class="fas fa-list"></i>
-          {{ abaAtiva === 'calendario' ? 'Auditorias Ativas' : `Auditorias de ${abaAtiva}` }}
-        </h2>
-        <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto items-center">
-          
-          <!-- Busca Melhorada -->
-          <div class="relative w-full md:w-auto group">
-            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-600 transition-colors"></i>
-            <input
-              v-model="filtroTexto"
-              type="text"
-              placeholder="Buscar SKU ou ID..."
-              class="w-full md:w-64 pl-10 pr-4 py-2 rounded-lg bg-white border border-blue-400/30 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white transition-all shadow-sm"
-            />
+    <section class="space-y-4">
+      <!-- Barra de ferramentas -->
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">
+            {{ abaAtiva === 'calendario' ? 'Auditorias em andamento' : `Histórico de ${abaAtiva}` }}
+          </h2>
+          <p class="text-xs text-slate-500">
+            <template v-if="abaAtiva === 'calendario'">{{ auditoriasFiltradas.length }} aberta(s). Feche quando a contagem terminar.</template>
+            <template v-else>{{ historicoFiltrado.length }} de {{ resumoTipo?.total || 0 }} auditorias</template>
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative min-w-0 flex-1 sm:w-60 sm:flex-none">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+            <input v-model="filtroTexto" type="search" placeholder="ID, data ou SKU..." class="ui-input py-2 pl-8 text-sm">
           </div>
 
-          <!-- Botão Filtro Data -->
           <div class="relative">
-            <button 
+            <button
+              type="button"
+              class="ui-btn-secondary py-2"
+              :class="filtroDataTipo !== 'todas' ? '!border-blue-300 !bg-blue-50 !text-blue-700' : ''"
               @click="mostrarFiltroData = !mostrarFiltroData"
-              class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-blue-400/30 hover:bg-gray-50 transition-all text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-white/50"
-              :class="{'bg-blue-50 border-blue-200 text-blue-700': mostrarFiltroData || filtroDataTipo !== 'todas'}"
             >
-              <i class="fas fa-filter text-sm" :class="filtroDataTipo !== 'todas' ? 'text-blue-600' : 'text-gray-400'"></i>
-              <span :class="filtroDataTipo !== 'todas' ? 'font-semibold' : ''">{{ filtroDataTipo !== 'todas' ? 'Filtro Ativo' : 'Filtrar Data' }}</span>
-              <i class="fas fa-chevron-down text-xs ml-1 opacity-70"></i>
+              <i class="fas fa-calendar-alt text-xs"></i>
+              {{ filtroDataTipo !== 'todas' ? 'Data filtrada' : 'Data' }}
+              <i class="fas fa-chevron-down text-[10px] opacity-60"></i>
             </button>
-            
-            <!-- Overlay transparente para fechar ao clicar fora -->
-            <div v-if="mostrarFiltroData" class="fixed inset-0 z-40 cursor-default" @click="mostrarFiltroData = false"></div>
-
-            <!-- Dropdown do Filtro -->
-            <div 
-              v-if="mostrarFiltroData" 
-              class="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-2xl p-4 text-gray-800 z-50 border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
-            >
-              <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
-                <h3 class="font-bold text-gray-700 flex items-center gap-2">
-                  <i class="fas fa-calendar-alt text-blue-600"></i> Filtrar por Data
-                </h3>
-                <button @click="mostrarFiltroData = false" class="text-gray-400 hover:text-gray-600">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-
+            <div v-if="mostrarFiltroData" class="fixed inset-0 z-40" @click="mostrarFiltroData = false"></div>
+            <div v-if="mostrarFiltroData" class="ui-pop-in absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-900/5">
+              <p class="mb-3 text-sm font-bold text-slate-800">Filtrar por data</p>
               <div class="space-y-3">
-                <div>
-                  <label class="block text-xs font-semibold text-gray-500 mb-1">Tipo de Filtro</label>
-                  <select 
-                    v-model="filtroDataTipo" 
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                  >
-                    <option value="todas">Todas as datas</option>
-                    <option value="especifica">Data Específica</option>
-                    <option value="periodo">Período (Entre)</option>
-                    <option value="apartir">A partir de</option>
-                    <option value="antes">Antes de</option>
-                  </select>
-                </div>
-
-                <div v-if="filtroDataTipo !== 'todas'" class="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">
-                      {{ filtroDataTipo === 'periodo' ? 'Data Inicial' : 'Data' }}
-                    </label>
-                    <input 
-                      :value="filtroDataInicioExibicao"
-                      @input="(e) => handleFiltroDataInput(e, 'inicio')"
-                      type="text"
-                      placeholder="DD/MM/AAAA"
-                      maxlength="10"
-                      class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                  </div>
-                  
-                  <div v-if="filtroDataTipo === 'periodo'">
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Data Final</label>
-                    <input 
-                      :value="filtroDataFimExibicao"
-                      @input="(e) => handleFiltroDataInput(e, 'fim')"
-                      type="text"
-                      placeholder="DD/MM/AAAA"
-                      maxlength="10"
-                      class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                  </div>
-                </div>
-
-                <div class="pt-2 flex justify-end gap-2">
-                  <button 
-                    @click="filtroDataTipo = 'todas'; mostrarFiltroData = false"
-                    class="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition"
-                  >
-                    Limpar
-                  </button>
-                  <button 
-                    @click="mostrarFiltroData = false"
-                    class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition shadow-sm"
-                  >
-                    Aplicar
-                  </button>
+                <select v-model="filtroDataTipo" class="ui-input py-2 text-sm">
+                  <option value="todas">Todas as datas</option>
+                  <option value="especifica">Data específica</option>
+                  <option value="periodo">Período (entre)</option>
+                  <option value="apartir">A partir de</option>
+                  <option value="antes">Antes de</option>
+                </select>
+                <template v-if="filtroDataTipo !== 'todas'">
+                  <input :value="filtroDataInicioExibicao" type="text" placeholder="DD/MM/AAAA" maxlength="10" class="ui-input py-2 text-sm" @input="(e) => handleFiltroDataInput(e, 'inicio')">
+                  <input v-if="filtroDataTipo === 'periodo'" :value="filtroDataFimExibicao" type="text" placeholder="Data final DD/MM/AAAA" maxlength="10" class="ui-input py-2 text-sm" @input="(e) => handleFiltroDataInput(e, 'fim')">
+                </template>
+                <div class="flex justify-end gap-2 pt-1">
+                  <UiButton variant="ghost" size="sm" @click="filtroDataTipo = 'todas'; mostrarFiltroData = false">Limpar</UiButton>
+                  <UiButton size="sm" @click="mostrarFiltroData = false">Aplicar</UiButton>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Ordenação Melhorada -->
-          <div class="relative group">
-             <i class="fas fa-sort absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-blue-600 transition-colors"></i>
-             <select
-              v-model="ordenacao"
-              class="appearance-none pl-9 pr-8 py-2 rounded-lg bg-white border border-blue-400/30 text-gray-700 focus:outline-none focus:ring-2 focus:ring-white/50 cursor-pointer hover:bg-gray-50 transition-all shadow-sm text-sm"
-            >
-              <option value="data_desc" class="text-gray-800">Mais Recentes</option>
-              <option value="data_asc" class="text-gray-800">Mais Antigas</option>
-              <option value="progresso_desc" class="text-gray-800">Maior Progresso</option>
-              <option value="progresso_asc" class="text-gray-800">Menor Progresso</option>
-            </select>
-            <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"></i>
-          </div>
+          <select v-model="ordenacao" class="ui-input w-auto py-2 text-sm" aria-label="Ordenação">
+            <option value="data_desc">Mais recentes</option>
+            <option value="data_asc">Mais antigas</option>
+            <option value="progresso_desc">Maior progresso</option>
+            <option value="progresso_asc">Menor progresso</option>
+          </select>
         </div>
       </div>
 
-      <div v-if="auditoriasFiltradas.length === 0" class="p-12 text-center">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-          <i class="fas fa-search text-gray-400 text-2xl"></i>
+      <!-- ===== Ativas (calendário) ===== -->
+      <template v-if="abaAtiva === 'calendario'">
+        <div v-if="auditoriasFiltradas.length === 0" class="rounded-2xl bg-white px-6 py-12 text-center shadow-sm">
+          <span class="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><i class="fas fa-check-double text-lg"></i></span>
+          <p class="mt-3 font-semibold text-slate-800">Nenhuma auditoria em andamento</p>
+          <p class="mt-1 text-sm text-slate-500">Use o calendário acima para iniciar a próxima.</p>
         </div>
-        <h3 class="text-lg font-medium text-gray-900">Nenhuma auditoria encontrada</h3>
-        <p class="text-gray-500 mt-1">Tente ajustar seus filtros ou crie uma nova auditoria.</p>
-      </div>
 
-      <div v-else class="flex flex-col h-full">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
-          <div
-            v-for="auditoria in auditoriasPaginadas"
-          :key="auditoria.id"
-          class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 group relative flex flex-col overflow-hidden border border-gray-100 hover:border-blue-200"
-        >
-          <!-- Indicador de Tipo Lateral -->
-          <div 
-            class="absolute left-0 top-0 bottom-0 w-1.5"
-            :class="auditoria.tipo === 'Etiqueta' ? 'bg-blue-500' : auditoria.tipo === 'Presença' ? 'bg-emerald-500' : 'bg-orange-500'"
-          ></div>
-
-          <div class="p-5 flex-1 flex flex-col pl-7">
-            <!-- Botões de Ação (Hover) -->
-            <div class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0 z-10">
-              <button
-                v-if="auditoria.status !== 'fechada'"
-                @click.stop="fecharAuditoria(auditoria.id)"
-                class="w-8 h-8 flex items-center justify-center bg-white border border-yellow-200 text-yellow-600 rounded-lg hover:bg-yellow-50 transition shadow-sm"
-                title="Fechar Auditoria"
-              >
-                <i class="fas fa-lock text-xs"></i>
-              </button>
-              <button
-                @click.stop="excluirAuditoria(auditoria.id)"
-                class="w-8 h-8 flex items-center justify-center bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition shadow-sm"
-                title="Excluir Auditoria"
-              >
-                <i class="fas fa-trash text-xs"></i>
-              </button>
-            </div>
-
-            <router-link
-              :to="`/auditoria/${auditoria.id}`"
-              class="block no-underline text-inherit flex flex-col h-full"
-            >
-              <!-- Header -->
-              <div class="flex flex-col mb-4">
-                <div class="flex items-center gap-2 mb-1">
-                  <span
-                    :class="[
-                      'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
-                      auditoria.tipo === 'Etiqueta' ? 'bg-blue-50 text-blue-700' :
-                      auditoria.tipo === 'Presença' ? 'bg-emerald-50 text-emerald-700' :
-                      'bg-orange-50 text-orange-700'
-                    ]"
-                  >
-                    {{ auditoria.tipo }}
+        <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <article
+            v-for="auditoria in auditoriasFiltradas"
+            :key="auditoria.id"
+            class="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-900/5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <router-link :to="`/auditoria/${auditoria.id}`" class="flex flex-1 flex-col p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold" :class="corTipo(auditoria.tipo).chip">
+                    <i :class="[corTipo(auditoria.tipo).icone, 'text-[9px]']"></i>{{ auditoria.tipo }}
                   </span>
-                  <span class="text-[10px] text-gray-400 font-medium">• #{{ auditoria.id }}</span>
+                  <p class="mt-2 text-lg font-bold text-slate-900">{{ formatarDataISO(String(auditoria.data).slice(0, 10)) }}</p>
+                  <p class="text-xs text-slate-500">#{{ auditoria.id }} · SKU {{ Number(auditoria.sku || 0).toLocaleString('pt-BR') }}</p>
                 </div>
-                <h3 class="text-2xl font-bold text-gray-800 leading-tight truncate" :title="auditoria.sku">
-                  {{ auditoria.sku }}
-                </h3>
-                <span class="text-xs text-gray-400 mt-0.5">Criado em {{ formatarDataISO(auditoria.data) }}</span>
-              </div>
-
-              <!-- Progress Section -->
-              <div v-if="getMetricasCard(auditoria).total > 0" class="space-y-4 flex-1">
-                <div>
-                  <div class="flex justify-between items-end mb-1.5">
-                    <span class="text-xs font-semibold text-gray-500">Progresso</span>
-                    <span class="text-sm font-bold text-gray-900">{{ getMetricasCard(auditoria).percentualConclusao.toFixed(1) }}%</span>
-                  </div>
-                  <div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      :style="{ width: getMetricasCard(auditoria).percentualConclusao + '%' }"
-                      :class="[
-                        'h-full transition-all duration-500 ease-out relative rounded-full',
-                        getMetricasCard(auditoria).percentualConclusao >= 100 ? 'bg-green-500' : 'bg-blue-600'
-                      ]"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- Stats Grid -->
-                <div class="grid grid-cols-3 gap-2">
-                  <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
-                    <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Lidos</p>
-                    <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ getMetricasCard(auditoria).lidos }}
-                    </p>
-                  </div>
-                  <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
-                    <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Pendentes</p>
-                    <p class="text-base font-bold text-gray-800 leading-none">
-                      {{ getMetricasCard(auditoria).pendentes }}
-                    </p>
-                  </div>
-                  <div class="bg-gray-50 rounded-lg p-2 text-center border border-gray-100">
-                    <p class="text-[9px] font-bold text-gray-400 uppercase mb-0.5">Restante</p>
-                    <p class="text-base font-bold text-orange-600 leading-none">
-                      {{
-                        (
-                          auditoria.tipo === 'Ruptura' || auditoria.tipo === 'Presença' || auditoria.tipo === 'Etiqueta'
-                            ? getMetricasCard(auditoria).percentualPendente
-                            : (100 - getMetricasCard(auditoria).percentualConclusao)
-                        ).toFixed(1)
-                      }}%
-                    </p>
-                  </div>
+                <!-- Anel de conclusão -->
+                <div class="relative size-16 shrink-0">
+                  <svg viewBox="0 0 64 64" class="size-16 -rotate-90">
+                    <circle cx="32" cy="32" r="26" fill="none" stroke="#f1f5f9" stroke-width="6" />
+                    <circle cx="32" cy="32" r="26" fill="none" stroke-width="6" stroke-linecap="round"
+                      :stroke="getMetricasCard(auditoria).percentualPendente <= META ? '#059669' : '#2563eb'"
+                      :stroke-dasharray="tracoAnel(getMetricasCard(auditoria).percentualConclusao)" class="transition-all duration-700" />
+                  </svg>
+                  <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-slate-800">{{ getMetricasCard(auditoria).percentualConclusao.toFixed(0) }}%</span>
                 </div>
               </div>
 
-              <!-- Empty State -->
-              <div v-else class="text-center py-6 border border-dashed border-gray-200 rounded-lg bg-gray-50/50 flex-1">
-                <i class="fas fa-inbox text-gray-300 text-2xl mb-2"></i>
-                <p class="text-xs font-medium text-gray-500">Sem dados</p>
+              <div v-if="getMetricasCard(auditoria).total > 0" class="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-xl bg-slate-50 py-2">
+                  <p class="text-base font-bold text-slate-900">{{ getMetricasCard(auditoria).lidos.toLocaleString('pt-BR') }}</p>
+                  <p class="text-[10px] font-semibold uppercase text-slate-400">Lidos</p>
+                </div>
+                <div class="rounded-xl bg-slate-50 py-2">
+                  <p class="text-base font-bold text-slate-900">{{ getMetricasCard(auditoria).pendentes.toLocaleString('pt-BR') }}</p>
+                  <p class="text-[10px] font-semibold uppercase text-slate-400">Pendentes</p>
+                </div>
+                <div class="rounded-xl py-2" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'bg-emerald-50' : 'bg-red-50'">
+                  <p class="text-base font-bold" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ getMetricasCard(auditoria).percentualPendente.toFixed(1) }}%</p>
+                  <p class="text-[10px] font-semibold uppercase text-slate-400">Pendente</p>
+                </div>
               </div>
+              <p v-else class="mt-4 rounded-xl bg-slate-50 py-4 text-center text-xs text-slate-500"><i class="fas fa-inbox mr-1"></i>Sem dados importados</p>
 
-              <!-- Footer Action -->
-              <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between group-hover:text-blue-600 transition-colors">
-                <span class="text-xs font-semibold text-gray-500 group-hover:text-blue-600 transition-colors">Acessar Painel</span>
-                <i class="fas fa-arrow-right text-xs text-gray-300 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-all"></i>
-              </div>
+              <p v-if="faltamParaMeta(auditoria) !== null" class="mt-3 text-xs font-medium" :class="faltamParaMeta(auditoria) > 0 ? 'text-amber-700' : 'text-emerald-700'">
+                <i :class="faltamParaMeta(auditoria) > 0 ? 'fas fa-flag-checkered' : 'fas fa-circle-check'" class="mr-1"></i>
+                {{ faltamParaMeta(auditoria) > 0 ? `Faltam ${faltamParaMeta(auditoria).toLocaleString('pt-BR')} itens para a meta` : 'Dentro da meta' }}
+              </p>
             </router-link>
+            <div class="flex items-center gap-1 bg-slate-50/80 px-3 py-2">
+              <router-link :to="`/auditoria/${auditoria.id}`" class="mr-auto rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50">
+                Abrir painel <i class="fas fa-arrow-right text-[10px]"></i>
+              </router-link>
+              <button type="button" class="rounded-lg px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50" title="Fechar auditoria" @click="fecharAuditoria(auditoria.id)">
+                <i class="fas fa-lock mr-1"></i>Fechar
+              </button>
+              <button type="button" class="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(auditoria.id)">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </article>
+        </div>
+      </template>
+
+      <!-- ===== Histórico por tipo ===== -->
+      <template v-else>
+        <!-- Resumo do tipo -->
+        <div v-if="resumoTipo?.total" class="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,2fr)]">
+          <div class="rounded-2xl bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Auditorias</p>
+            <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumoTipo.total }}</p>
+            <p class="text-xs text-slate-500">{{ resumoTipo.fechadas }} fechadas</p>
+          </div>
+          <div class="rounded-2xl bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Na meta</p>
+            <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.taxaMeta ?? 100) < 70 ? 'text-amber-700' : 'text-emerald-700'">{{ resumoTipo.taxaMeta === null ? '—' : resumoTipo.taxaMeta.toFixed(0) + '%' }}</p>
+            <p class="text-xs text-slate-500">{{ resumoTipo.dentroMeta }} de {{ resumoTipo.fechadas }} fechadas</p>
+          </div>
+          <div class="rounded-2xl bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pendente médio</p>
+            <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ resumoTipo.mediaPendente === null ? '—' : resumoTipo.mediaPendente.toFixed(2) + '%' }}</p>
+            <p class="text-xs text-slate-500">Meta: até {{ META }}%</p>
+          </div>
+          <div class="col-span-2 rounded-2xl bg-white p-4 shadow-sm lg:col-span-1">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Últimas {{ resumoTipo.serie.length }} · % pendente</p>
+            <SparklineMeta v-if="resumoTipo.serie.length > 1" class="mt-2" altura-classe="h-12" :pontos="resumoTipo.serie" :meta="META" @selecionar="p => router.push(`/auditoria/${p.id}`)" />
+            <p v-else class="mt-4 text-xs text-slate-400">Poucos dados para o gráfico.</p>
           </div>
         </div>
-      </div>
 
-      <!-- Paginação -->
-      <div v-if="totalPaginas > 1" class="p-6 border-t border-gray-100 flex justify-center">
-        <nav class="flex items-center gap-2">
+        <!-- Filtro de situação -->
+        <div class="flex flex-wrap gap-1.5">
           <button
-            @click="paginaAtual--"
-            :disabled="paginaAtual === 1"
-            class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            <i class="fas fa-chevron-left"></i>
-          </button>
-          
-          <span class="text-sm text-gray-600 font-medium px-4">
-            Página {{ paginaAtual }} de {{ totalPaginas }}
-          </span>
+            v-for="s in situacoes"
+            :key="s.valor"
+            type="button"
+            class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
+            :class="filtroSituacao === s.valor ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-sm hover:text-slate-900'"
+            @click="filtroSituacao = s.valor"
+          >{{ s.rotulo }}</button>
+        </div>
 
-          <button
-            @click="paginaAtual++"
-            :disabled="paginaAtual === totalPaginas"
-            class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            <i class="fas fa-chevron-right"></i>
-          </button>
-        </nav>
-      </div>
-    </div>
+        <div v-if="historicoFiltrado.length === 0" class="rounded-2xl bg-white px-6 py-12 text-center shadow-sm">
+          <i class="fas fa-search text-2xl text-slate-300"></i>
+          <p class="mt-3 font-semibold text-slate-800">Nenhuma auditoria encontrada</p>
+          <p class="mt-1 text-sm text-slate-500">Ajuste a busca ou os filtros.</p>
+        </div>
+
+        <div v-else class="space-y-5">
+          <section v-for="grupo in gruposHistorico" :key="grupo.chave" class="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <header class="flex flex-wrap items-center justify-between gap-2 bg-slate-50/80 px-5 py-3">
+              <h3 class="text-sm font-bold text-slate-800">{{ grupo.rotulo }}</h3>
+              <p class="text-xs text-slate-500">
+                {{ grupo.itens.length }} auditoria(s)
+                <template v-if="grupo.resumo.mediaPendente !== null"> · média <b :class="grupo.resumo.mediaPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ grupo.resumo.mediaPendente.toFixed(2) }}%</b></template>
+                <template v-if="grupo.resumo.taxaMeta !== null"> · {{ grupo.resumo.dentroMeta }}/{{ grupo.resumo.fechadas }} na meta</template>
+              </p>
+            </header>
+            <ul class="divide-y divide-slate-100">
+              <li v-for="auditoria in grupo.itens" :key="auditoria.id" class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition hover:bg-blue-50/40 sm:flex-nowrap">
+                <router-link :to="`/auditoria/${auditoria.id}`" class="flex min-w-0 flex-1 items-center gap-4">
+                  <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" :class="auditoria.status === 'fechada' ? 'bg-slate-100 text-slate-500' : 'bg-blue-50 text-blue-600'">
+                    <i :class="auditoria.status === 'fechada' ? 'fas fa-lock' : 'fas fa-spinner'" class="text-xs"></i>
+                  </span>
+                  <div class="w-28 shrink-0">
+                    <p class="text-sm font-bold text-slate-900">{{ formatarDataISO(String(auditoria.data).slice(0, 10)) }}</p>
+                    <p class="text-[11px] text-slate-500">#{{ auditoria.id }} · {{ auditoria.status === 'fechada' ? 'Fechada' : 'Em andamento' }}</p>
+                  </div>
+                  <!-- % pendente com barra relativa à meta (escala até 3x a meta) -->
+                  <div class="hidden min-w-0 flex-1 md:block">
+                    <div class="relative h-2 max-w-2xl rounded-full bg-slate-100">
+                      <span class="absolute inset-y-0 left-0 rounded-full" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'bg-emerald-500' : 'bg-red-500'" :style="{ width: `${Math.min(100, (getMetricasCard(auditoria).percentualPendente / (META * 3)) * 100)}%` }"></span>
+                      <span class="absolute -top-1 bottom-[-4px] w-px bg-slate-400" style="left: 33.33%" title="Meta"></span>
+                    </div>
+                  </div>
+                  <div class="w-20 shrink-0 text-right">
+                    <p class="text-sm font-bold" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ getMetricasCard(auditoria).percentualPendente.toFixed(2) }}%</p>
+                    <p class="text-[11px] text-slate-500">pendente</p>
+                  </div>
+                  <div class="hidden w-28 shrink-0 text-right lg:block">
+                    <p class="text-sm font-semibold text-slate-700">{{ getMetricasCard(auditoria).pendentes.toLocaleString('pt-BR') }} / {{ getMetricasCard(auditoria).total.toLocaleString('pt-BR') }}</p>
+                    <p class="text-[11px] text-slate-500">pendentes / SKU</p>
+                  </div>
+                </router-link>
+                <div class="flex w-32 shrink-0 items-center justify-end gap-1">
+                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="dentroDaMeta(auditoria) ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                    <i :class="dentroDaMeta(auditoria) ? 'fas fa-check' : 'fas fa-times'" class="text-[9px]"></i>{{ dentroDaMeta(auditoria) ? 'Meta' : 'Fora' }}
+                  </span>
+                  <button type="button" class="rounded-lg p-2 text-amber-600 hover:bg-amber-50" :class="auditoria.status === 'fechada' ? 'invisible' : ''" title="Fechar auditoria" aria-label="Fechar auditoria" @click="fecharAuditoria(auditoria.id)">
+                    <i class="fas fa-lock text-xs"></i>
+                  </button>
+                  <button type="button" class="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(auditoria.id)">
+                    <i class="fas fa-trash text-xs"></i>
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </section>
+
+          <div v-if="historicoFiltrado.length > limiteHistorico" class="text-center">
+            <UiButton variant="secondary" @click="limiteHistorico += 30">
+              Mostrar mais ({{ historicoFiltrado.length - limiteHistorico }} restantes)
+            </UiButton>
+          </div>
+        </div>
+      </template>
+    </section>
   </div>
-</div>
 </template>
+

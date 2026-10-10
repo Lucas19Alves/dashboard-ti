@@ -49,8 +49,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav class="sticky top-0 z-40 border-b border-white/10 bg-gradient-to-r from-blue-800 via-blue-700 to-indigo-700 text-white shadow-lg shadow-blue-950/10 print:hidden">
-    <div class="mx-auto max-w-7xl px-4">
+  <nav class="sticky top-0 z-40 border-b border-white/10 bg-blue-700 text-white shadow-lg shadow-blue-950/10 print:hidden">
+    <div class="ui-container">
       <div class="flex h-16 items-center justify-between gap-3">
         <router-link to="/" class="flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight">
           <span class="inline-flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
