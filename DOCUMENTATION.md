@@ -108,7 +108,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 ### 4.8 Detalhe da auditoria: navegação e mapa da loja
 - **Navegação**: barra de abas fixa (Visão geral, Mapa da loja, Usuários, Dados, Estatísticas e Atenção quando houver alertas), com contadores, setas do teclado e resumo compacto (% pendente) ao rolar. A aba fica na URL (`?aba=mapa`).
 - **Mapa da loja** (`components/MapaLoja.vue`, `utils/mapaLoja.js`): monta a planta a partir dos locais da auditoria.
-  - `G05A` = gôndola do corredor 05, face A (A de frente para B, C de frente para D); corredores numerados da direita para a esquerda.
+  - `G05A` = gôndola do corredor 05, face A (A de frente para B, C de frente para D; C/D em cima e A/B embaixo); corredores numerados da direita para a esquerda.
   - `PL01` paredão de líquida (extrema direita), `F01..` freezers (esquerda), `PF01` paredão de frios, `EMP01` empório de frios, `ACG` açougue, `FLV`.
   - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
   - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; o layout fica salvo neste navegador e vale para todas as auditorias.
