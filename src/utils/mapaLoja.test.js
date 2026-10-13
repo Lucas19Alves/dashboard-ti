@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agregarPorArea, encontrarEspacoLivre, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente } from './mapaLoja'
+import { agregarPorArea, encontrarEspacoLivre, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente, redimensionarLayout } from './mapaLoja'
 
 describe('interpretarLocal', () => {
   it('reconhece gôndola, corredor e face', () => {
@@ -76,5 +76,25 @@ describe('layout', () => {
     expect(mesclado.posicoes.find(p => p.id === 'FLV')).toMatchObject({ x: 40, y: 2 })
     expect(mesclado.posicoes.some(p => p.id === 'EXTRA')).toBe(true)
     expect(mesclado.colunas).toBeGreaterThanOrEqual(48)
+  })
+
+  it('aumenta e diminui o mapa em qualquer borda sem cortar áreas', () => {
+    const base = { colunas: 10, linhas: 6, posicoes: [{ id: 'A', x: 2, y: 1, w: 3, h: 2 }] }
+    const esquerda = redimensionarLayout(base, 'esquerda', 2)
+    expect(esquerda).toMatchObject({ colunas: 12, deslocamento: { x: 2, y: 0 } })
+    expect(esquerda.posicoes[0]).toMatchObject({ x: 4, y: 1 })
+    expect(redimensionarLayout(base, 'esquerda', -5)).toMatchObject({ colunas: 8, posicoes: [{ x: 0 }] })
+    expect(redimensionarLayout(base, 'direita', -9).colunas).toBe(5)
+    expect(redimensionarLayout(base, 'topo', -1)).toMatchObject({ linhas: 5, posicoes: [{ y: 0 }] })
+    expect(redimensionarLayout(base, 'base', 3).linhas).toBe(9)
+    expect(redimensionarLayout({ ...base, posicoes: [{ id: 'A', x: 0, y: 0, w: 10, h: 6 }] }, 'direita', -2)).toBeNull()
+  })
+
+  it('respeita tamanho salvo e desloca áreas novas junto com o mapa', () => {
+    const padrao = gerarLayoutPadrao(areas)
+    const flv = padrao.posicoes.find(p => p.id === 'FLV')
+    const mesclado = mesclarLayout(padrao, { colunas: padrao.colunas + 4, linhas: padrao.linhas, deslocamento: { x: 4, y: 0 }, posicoes: [] })
+    expect(mesclado.colunas).toBe(padrao.colunas + 4)
+    expect(mesclado.posicoes.find(p => p.id === 'FLV')).toMatchObject({ x: flv.x + 4, y: flv.y })
   })
 })

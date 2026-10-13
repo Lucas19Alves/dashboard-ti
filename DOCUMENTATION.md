@@ -115,7 +115,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
   - `PL01` paredão de líquida (extrema direita), `F01..` freezers (esquerda), `PF01` paredão de frios, `EMP01` empório de frios, `ACG` açougue, `FLV`.
   - Locais fora do padrão ficam numa lista abaixo do mapa. Por padrão, `PA01` vai à direita dos `PF`, `PAO` acima do FLV e `GELO` abaixo dos corredores. No modo edição, clicar em um local da lista o adiciona ao mapa (no primeiro espaço livre) e "Remover do mapa" o tira de volta.
   - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
-  - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; o layout fica salvo neste navegador, vale para todas as auditorias e vai junto no backup (`configuracoes.mapaLoja`).
+  - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; aumentar ou diminuir o mapa em cada borda (esquerda, direita, topo, base), sendo que aumentar à esquerda/topo empurra as áreas e diminuir só remove espaço vazio; o layout fica salvo neste navegador, vale para todas as auditorias e vai junto no backup (`configuracoes.mapaLoja`).
 
 ---
 

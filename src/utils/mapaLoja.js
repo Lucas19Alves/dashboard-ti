@@ -141,13 +141,41 @@ export const gerarLayoutPadrao = (areas) => {
 }
 
 // Junta o layout salvo pelo usuário com as áreas encontradas na auditoria.
+// Áreas sem posição salva seguem o padrão, deslocadas junto com o mapa (bordas aumentadas à esquerda/topo).
+// O tamanho salvo vale enquanto couber todo o conteúdo.
 export const mesclarLayout = (padrao, salvo) => {
   const salvas = new Map((salvo?.posicoes || []).map(p => [p.id, p]))
-  const posicoes = padrao.posicoes.map(p => ({ ...p, ...(salvas.get(p.id) || {}) }))
+  const dx = salvo?.deslocamento?.x || 0
+  const dy = salvo?.deslocamento?.y || 0
+  const posicoes = padrao.posicoes.map(p => salvas.get(p.id) ? { ...p, ...salvas.get(p.id) } : { ...p, x: p.x + dx, y: p.y + dy })
   for (const p of salvo?.posicoes || []) if (!posicoes.some(x => x.id === p.id)) posicoes.push({ ...p })
-  const colunas = Math.max(padrao.colunas, salvo?.colunas || 0, ...posicoes.map(p => p.x + p.w))
-  const linhas = Math.max(padrao.linhas, salvo?.linhas || 0, ...posicoes.map(p => p.y + p.h))
+  const visiveis = posicoes.filter(p => !p.oculto)
+  const colunas = Math.max(1, salvo?.colunas || padrao.colunas + dx, ...visiveis.map(p => p.x + p.w))
+  const linhas = Math.max(1, salvo?.linhas || padrao.linhas + dy, ...visiveis.map(p => p.y + p.h))
   return { colunas, linhas, posicoes }
+}
+
+// Aumenta (passo > 0) ou diminui (passo < 0) o mapa em uma borda. Na esquerda/topo as áreas se deslocam.
+// Diminuir nunca corta áreas: o passo é limitado ao espaço vazio daquela borda.
+export const redimensionarLayout = (layout, lado, passo) => {
+  const horizontal = lado === 'esquerda' || lado === 'direita'
+  const inicio = lado === 'esquerda' || lado === 'topo'
+  const eixo = horizontal ? 'x' : 'y'
+  const medida = horizontal ? 'w' : 'h'
+  const total = horizontal ? 'colunas' : 'linhas'
+  const visiveis = layout.posicoes.filter(p => !p.oculto)
+  const folga = inicio
+    ? Math.min(layout[total], ...visiveis.map(p => p[eixo]))
+    : layout[total] - Math.max(0, ...visiveis.map(p => p[eixo] + p[medida]))
+  const delta = passo < 0 ? -Math.min(-passo, Math.max(0, folga), layout[total] - 1) : passo
+  if (!delta) return null
+  const desloca = inicio ? delta : 0
+  return {
+    ...layout,
+    [total]: layout[total] + delta,
+    deslocamento: { x: (layout.deslocamento?.x || 0) + (horizontal ? desloca : 0), y: (layout.deslocamento?.y || 0) + (horizontal ? 0 : desloca) },
+    posicoes: layout.posicoes.map(p => (desloca ? { ...p, [eixo]: Math.max(0, p[eixo] + desloca) } : p))
+  }
 }
 
 // Primeiro espaço livre (de cima para baixo, da esquerda para a direita) para uma área w×h.
