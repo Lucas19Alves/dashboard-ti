@@ -15,6 +15,7 @@ import {
   salvarLayout
 } from '../utils/mapaLoja'
 import { META_PENDENTE_PERCENTUAL } from '../utils/metricasAuditoria'
+import { correspondeBusca } from '../utils/busca'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 
 // Mapa visual da loja: cada área (corredor, freezer, açougue...) colorida pelos dados da auditoria.
@@ -133,6 +134,14 @@ const usuarios = computed(() => {
   // `nome` é a chave original da planilha (usada nos mapas de leitura); `exibicao`/`matricula` são para a tela.
   return [...total].sort((a, b) => b[1] - a[1]).map(([nome, leituras]) => ({ nome, leituras, exibicao: separarUsuario(nome).nome || nome, matricula: separarUsuario(nome).matricula }))
 })
+// Lista lateral de usuários: busca por nome ou matrícula e paginação.
+const buscaUsuario = ref('')
+const paginaUsuarios = ref(1)
+const POR_PAGINA_USUARIOS = 8
+const usuariosFiltrados = computed(() => usuarios.value.filter(u => correspondeBusca(buscaUsuario.value, [u.exibicao, u.matricula, u.nome])))
+const totalPaginasUsuarios = computed(() => Math.max(1, Math.ceil(usuariosFiltrados.value.length / POR_PAGINA_USUARIOS)))
+const usuariosPagina = computed(() => usuariosFiltrados.value.slice((paginaUsuarios.value - 1) * POR_PAGINA_USUARIOS, paginaUsuarios.value * POR_PAGINA_USUARIOS))
+watch([buscaUsuario, usuarios], () => { paginaUsuarios.value = 1 })
 const leiturasDe = d => (modo.value === 'usuario' ? d?.usuarios?.get(usuarioFoco.value) || 0 : (d?.lidos || 0) + (d?.comProblema || 0))
 // Escala das cores: corredores contam por face, demais áreas pelo total.
 const maiorLeitura = computed(() => Math.max(1, ...[...areas.value.values()].flatMap(a => (a.tipo === 'gondola' ? Object.values(a.faces).map(leiturasDe) : [leiturasDe(a)]))))
@@ -421,14 +430,27 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         <section class="rounded-2xl bg-white p-5 shadow-sm">
           <p class="text-sm font-bold text-slate-900">Usuários no mapa</p>
           <p class="text-xs text-slate-500">Escolha um para ver onde leu.</p>
-          <ul class="mt-3 space-y-1">
-            <li v-for="u in usuarios" :key="u.nome">
+          <div v-if="usuarios.length" class="relative mt-3">
+            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+            <input v-model="buscaUsuario" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Buscar nome ou matrícula..." aria-label="Buscar usuário">
+          </div>
+          <p v-if="!usuarios.length" class="mt-3 text-sm text-slate-500">Nenhuma leitura com usuário.</p>
+          <p v-else-if="!usuariosFiltrados.length" class="mt-3 text-sm text-slate-500">Nenhum usuário encontrado.</p>
+          <ul class="mt-2 space-y-1">
+            <li v-for="u in usuariosPagina" :key="u.nome">
               <button type="button" class="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50" :class="modo === 'usuario' && usuarioFoco === u.nome ? 'bg-blue-50 text-blue-800' : ''" @click="modo = 'usuario'; usuarioFoco = u.nome">
                 <span class="min-w-0"><span class="block truncate font-semibold">{{ u.exibicao }}</span><span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span></span>
                 <span class="shrink-0 font-bold">{{ u.leituras }}</span>
               </button>
             </li>
           </ul>
+          <div v-if="totalPaginasUsuarios > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+            <span>{{ usuariosFiltrados.length }} usuários · {{ paginaUsuarios }}/{{ totalPaginasUsuarios }}</span>
+            <div class="flex gap-1">
+              <button type="button" class="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40" :disabled="paginaUsuarios === 1" aria-label="Página anterior" @click="paginaUsuarios--"><i class="fas fa-angle-left"></i></button>
+              <button type="button" class="inline-flex size-7 items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40" :disabled="paginaUsuarios === totalPaginasUsuarios" aria-label="Próxima página" @click="paginaUsuarios++"><i class="fas fa-angle-right"></i></button>
+            </div>
+          </div>
         </section>
       </aside>
     </div>
