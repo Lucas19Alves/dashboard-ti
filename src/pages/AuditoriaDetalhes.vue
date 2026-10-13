@@ -12,6 +12,7 @@ import MapaLoja from '../components/MapaLoja.vue'
 import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
+import { isItemLido } from '../utils/itemLido'
 import { printTableInNewWindow, blocoBarras, blocoTabela, imprimirRelatorioVisual } from '../utils/print'
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
 import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
@@ -631,28 +632,6 @@ const getItemDateISO = (item) => {
   return serialToDateISO(horaValor)
 }
 
-const isItemLido = (item) => {
-  if (!item) return false
-  if (item._temPresenca === true || item._lidoNaoPertence === true) return true
-
-  const lidoNaoPertence = item['Lido não pertence'] ?? item['Lido nao pertence']
-  if (lidoNaoPertence === true) return true
-  if (typeof lidoNaoPertence === 'string' && normalizar(lidoNaoPertence).includes('sim')) return true
-
-  // Etiqueta registra a leitura pelo status, mesmo quando não há presença confirmada.
-  // Os estados de "não lido" são descartados antes dos estados positivos para evitar
-  // que "não lido atualizado" seja interpretado como leitura.
-  const situacao = normalizar(item._situacao || item['Situação'] || item['Situação atual da auditoria'] || '')
-  if (situacao.includes('nao lido') || situacao.includes('sem leitura')) return false
-  if (
-    situacao.includes('atualizado') ||
-    situacao.includes('desatualizado') ||
-    situacao.includes('lido sem estoque') ||
-    situacao.includes('lido nao pertence')
-  ) return true
-
-  return false
-}
 
 const leituraPorHoraFiltrada = computed(() => {
   if (!auditoria.value?.dados) return null

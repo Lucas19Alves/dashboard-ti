@@ -5,6 +5,8 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { blocoCapitulo, blocoColunas, blocoDestaques, blocoTabela, escapeHtml, grade, imprimirRelatorioVisual, selo, sparkline } from '../utils/print'
 import { baixarCsv } from '../utils/csv'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
+import { consolidarParaMapa } from '../utils/mapaLoja'
+import { isItemLido } from '../utils/itemLido'
 import { separarUsuario } from '../utils/usuario'
 import { META_PENDENTE_PERCENTUAL, dentroDaMeta, metricasAuditoria } from '../utils/metricasAuditoria'
 import {
@@ -26,6 +28,7 @@ import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 import GraficoColunasMeta from '../components/ui/GraficoColunasMeta.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
+import MapaLoja from '../components/MapaLoja.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -146,8 +149,17 @@ const abas = computed(() => [
   { value: 'visao', label: 'Visão geral', icon: 'fas fa-chart-pie' },
   { value: 'setores', label: `Setores (${setores.value.length})`, icon: 'fas fa-store-alt' },
   { value: 'usuarios', label: `Usuários (${usuarios.value.length})`, icon: 'fas fa-users' },
+  { value: 'mapa', label: 'Mapa da loja', icon: 'fas fa-map-location-dot' },
   { value: 'auditorias', label: `Auditorias (${auditoriasFiltradas.value.length})`, icon: 'fas fa-table' }
 ])
+
+// ---------- Mapa do período ----------
+// Ruptura repete os pendentes da presença da semana; só entra quando o filtro é Ruptura.
+const auditoriasMapa = computed(() => (filtros.tipo === 'Ruptura'
+  ? auditoriasFiltradas.value
+  : auditoriasFiltradas.value.filter(a => a.tipo !== 'Ruptura')))
+const mapaPeriodo = computed(() => (aba.value === 'mapa' ? consolidarParaMapa(auditoriasMapa.value, isItemLido) : null))
+const leituraConsolidada = () => true
 const mostrarTabelaMeses = ref(false)
 
 // Clique em uma coluna: filtra o mês e abre a lista de auditorias.
@@ -707,6 +719,16 @@ const gerarRelatorioPDF = () => {
         </div>
       </div>
     </section>
+
+    <!-- ===== MAPA DA LOJA ===== -->
+    <template v-else-if="aba === 'mapa'">
+      <p class="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+        <i class="fas fa-circle-info text-indigo-500"></i>
+        Soma de <b class="text-slate-700">{{ auditoriasMapa.length }}</b> auditoria(s) do período ({{ descricaoPeriodo }}). Cores pelo % pendente acumulado e leituras de todo o período.
+        <span v-if="auditoriasMapa.length < auditoriasFiltradas.length">Rupturas ficam de fora (repetem os pendentes da presença); filtre por Ruptura para vê-las.</span>
+      </p>
+      <MapaLoja v-if="mapaPeriodo" :auditoria="mapaPeriodo" :is-item-lido="leituraConsolidada" :itens-disponiveis="false" />
+    </template>
 
     <!-- ===== AUDITORIAS ===== -->
     <template v-else-if="aba === 'auditorias'">

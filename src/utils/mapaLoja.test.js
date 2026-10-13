@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agregarPorArea, encontrarEspacoLivre, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente, redimensionarLayout } from './mapaLoja'
+import { agregarPorArea, consolidarParaMapa, encontrarEspacoLivre, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente, redimensionarLayout } from './mapaLoja'
 
 describe('interpretarLocal', () => {
   it('reconhece gôndola, corredor e face', () => {
@@ -110,5 +110,18 @@ describe('layout', () => {
     const mesclado = mesclarLayout(padrao, { colunas: padrao.colunas + 4, linhas: padrao.linhas, deslocamento: { x: 4, y: 0 }, posicoes: [] })
     expect(mesclado.colunas).toBe(padrao.colunas + 4)
     expect(mesclado.posicoes.find(p => p.id === 'FLV')).toMatchObject({ x: flv.x + 4, y: flv.y })
+  })
+})
+
+describe('consolidarParaMapa', () => {
+  it('soma locais e leituras de várias auditorias', () => {
+    const a1 = { analise: { porLocal: { 'G01A - G01A': { lidos: 5, pendentes: 1 } } }, dados: [{ 'Usuário': 'Ana', Local: 'G01A - G01A', lido: true }, { 'Usuário': 'Ana', Local: 'G01A - G01A', lido: false }] }
+    const a2 = { analise: { porLocal: { 'G01A - G01A': { lidos: 3, pendentes: 3 }, 'F01': { pendentes: 2 } } }, dados: [{ 'Usuário': 'Ana', Local: 'G01A - G01A', lido: true }] }
+    const consolidado = consolidarParaMapa([a1, a2], i => i.lido)
+    expect(consolidado.analise.porLocal['G01A - G01A']).toEqual({ lidos: 8, pendentes: 4, comProblema: 0 })
+    expect(consolidado.dados).toEqual([{ 'Usuário': 'Ana', Local: 'G01A - G01A', _peso: 2 }])
+    const g1 = agregarPorArea(consolidado, () => true).get('G01')
+    expect(g1.usuarios.get('Ana')).toBe(2)
+    expect(g1.faces.A.usuarios.get('Ana')).toBe(2)
   })
 })
