@@ -52,6 +52,7 @@ O sistema possui uma inteligência de processamento de planilhas Excel (comument
 #### Algoritmos de Detecção e Processamento:
 - **Detecção Automática de Tipo**: O sistema analisa as primeiras 100 linhas da planilha. Se encontrar termos como "atualizado/desatualizado", classifica como **Etiqueta**. Se encontrar "com/sem presença" em massa, classifica como **Presença**. Se detectar "sem presença + com estoque", prioriza **Ruptura**.
 - **Correção de Cabeçalho Agrupado**: Possui um algoritmo robusto para identificar a linha correta do cabeçalho caso a planilha venha com linhas de título ou agrupamentos no topo.
+- **Ruptura como continuação da Presença** (`utils/rupturaPresenca.js`): a planilha de ruptura traz só os itens que ficaram pendentes e vem sem local. O % por setor parte do resultado final da Presença anterior (mesma semana) e desconta a evolução: pendentes lidos ou fora da lista deixam de ser pendentes; itens que voltaram a faltar ou novos entram como pendentes. O local de cada item vem da Presença. O % geral (sobre o SKU) não muda. Rupturas antigas são recalculadas ao abrir o sistema e quando a Presença base é importada ou atualizada.
 - **Deduplicação Inteligente**: Ao importar dados de Ruptura, o sistema prioriza itens auditados no dia atual da auditoria, evitando duplicatas de contagens anteriores.
 
 #### Classificação de Itens:
