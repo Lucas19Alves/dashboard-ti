@@ -189,10 +189,30 @@ const resumo = computed(() => {
 })
 
 const faces = ['A', 'B', 'C', 'D']
-const posicaoDica = (p) => [
-  p.y < 3 ? 'top-full mt-1' : 'bottom-full mb-1',
-  p.x < 4 ? 'left-0' : p.x + p.w > layout.value.colunas - 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'
-]
+
+// Dica ao passar o mouse: fora do mapa (no body, posição fixa) para nunca ficar atrás de outras
+// áreas nem ser cortada pela rolagem; abre abaixo quando não há espaço acima e não sai da tela.
+const dica = ref(null)
+const MEIA_LARGURA_DICA = 120
+const ALTURA_BARRAS_FIXAS = 140 // navbar + abas da auditoria
+const mostrarDica = (evento, p) => {
+  hover.value = p.id
+  const r = evento.currentTarget.getBoundingClientRect()
+  const abaixo = r.top < ALTURA_BARRAS_FIXAS + 50
+  dica.value = {
+    id: p.id,
+    left: Math.min(Math.max(r.left + r.width / 2, MEIA_LARGURA_DICA), window.innerWidth - MEIA_LARGURA_DICA),
+    top: abaixo ? r.bottom + 6 : r.top - 6,
+    abaixo
+  }
+}
+const esconderDica = () => {
+  hover.value = null
+  dica.value = null
+}
+const areaDica = computed(() => (dica.value && !editando.value ? areas.value.get(dica.value.id) : null))
+onMounted(() => window.addEventListener('scroll', esconderDica, { passive: true, capture: true }))
+onBeforeUnmount(() => window.removeEventListener('scroll', esconderDica, { capture: true }))
 const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)))
 </script>
 
@@ -257,8 +277,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               :style="{ left: `${p.x * celula}px`, top: `${p.y * celula}px`, width: `${p.w * celula}px`, height: `${p.h * celula}px`, padding: `${Math.max(1, celula * 0.08)}px` }"
               @pointerdown="iniciarArraste($event, p)"
               @click="selecionado = p.id"
-              @mouseenter="hover = p.id"
-              @mouseleave="hover = null"
+              @mouseenter="mostrarDica($event, p)"
+              @mouseleave="esconderDica"
             >
               <!-- Corredor: o número é o corredor (onde se anda); em volta, 4 faces de gôndola.
                    C/D no fundo e A/B na frente; A de frente para B, C de frente para D. -->
@@ -284,12 +304,6 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 
               <span v-if="editando" class="absolute -bottom-1 -right-1 size-3.5 cursor-se-resize rounded-sm bg-blue-600 ring-2 ring-white" @pointerdown="iniciarArraste($event, p, 'tamanho')"></span>
 
-              <!-- Dica ao passar o mouse -->
-              <!-- Acima da área (abaixo quando ela encosta no topo), sem sair pelas laterais do mapa. -->
-              <div v-if="hover === p.id && !editando && areas.get(p.id)" class="pointer-events-none absolute z-40 w-max max-w-56 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] leading-snug text-white shadow-lg" :class="posicaoDica(p)">
-                <b>{{ titulo(areas.get(p.id)) }}</b><br>
-                {{ percentualPendente(areas.get(p.id)).toFixed(1) }}% pendente · {{ areas.get(p.id).pendentes }} pend. · {{ areas.get(p.id).lidos }} lidos
-              </div>
             </div>
           </div>
         </div>
@@ -417,5 +431,16 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         </section>
       </aside>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="areaDica"
+        class="pointer-events-none fixed z-[100] w-max max-w-56 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] leading-snug text-white shadow-lg"
+        :style="{ left: `${dica.left}px`, top: `${dica.top}px`, transform: dica.abaixo ? 'translateX(-50%)' : 'translate(-50%, -100%)' }"
+      >
+        <b>{{ titulo(areaDica) }}</b><br>
+        {{ percentualPendente(areaDica).toFixed(1) }}% pendente · {{ areaDica.pendentes }} pend. · {{ areaDica.lidos }} lidos
+      </div>
+    </Teleport>
   </div>
 </template>
