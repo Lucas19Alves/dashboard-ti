@@ -52,15 +52,29 @@ describe('layout', () => {
     expect(pos('F01').x).toBeLessThan(pos('G02').x)
   })
 
-  it('posiciona PA à direita do PF, PAO acima do FLV e GELO abaixo dos corredores', () => {
-    const extras = [...areas, { bloco: 'PF01', tipo: 'paredaoFrios', numero: 1 }, ...['PA01', 'PAO', 'GELO', 'DEPOSITO'].map(bloco => ({ bloco, tipo: 'outro', numero: 0 }))]
-    const { posicoes } = gerarLayoutPadrao(extras)
+  it('segue a planta padrão da loja', () => {
+    const blocos = ['PF01', 'PF02', 'ACG', 'IF01', 'I02', 'F01', 'F02', 'F03', 'F04', 'EMP01', 'PAO', 'IF02', 'I01', 'SORVETE', 'GELO', 'PA01', 'CS01', 'DEPOSITO']
+    const extras = [...areas.filter(a => a.tipo === 'gondola' || a.tipo === 'liquida' || a.tipo === 'flv'), ...blocos.map(b => ({ bloco: b, ...interpretarLocal(b) }))]
+    const { colunas, posicoes } = gerarLayoutPadrao(extras)
     const pos = id => posicoes.find(p => p.id === id)
-    expect(pos('PA01')).toMatchObject({ y: pos('PF01').y, x: pos('PF01').x + 7 })
-    expect(pos('PAO').y + pos('PAO').h).toBeLessThanOrEqual(pos('FLV').y)
-    expect(pos('PAO').x).toBe(pos('FLV').x)
-    expect(pos('GELO').y).toBeGreaterThanOrEqual(pos('G01').y + pos('G01').h)
-    expect(pos('GELO').x).toBeLessThanOrEqual(pos('G01').x)
+    expect(pos('PF01')).toMatchObject({ x: 1, y: 1, w: 5, h: 2 })
+    expect(pos('ACG')).toMatchObject({ x: 6, y: 0 })
+    expect(pos('F03').x).toBeLessThan(pos('F02').x)
+    expect(pos('F02').x).toBeLessThan(pos('F01').x)
+    expect(pos('FLV')).toMatchObject({ x: 5, y: 13, w: 7, h: 8 })
+    expect(pos('PAO')).toMatchObject({ x: 13, y: 13 })
+    expect(pos('SORVETE')).toMatchObject({ x: 16, y: 18 })
+    expect(pos('GELO')).toMatchObject({ x: 16, y: 22 })
+    // Corredores entre o bloco esquerdo e a líquida; PA01 em cima e CS01 embaixo.
+    expect(pos('G02')).toMatchObject({ x: 20, y: 5 })
+    expect(pos('G01')).toMatchObject({ x: 24, y: 5 })
+    expect(pos('PL01')).toMatchObject({ x: 30, y: 1, h: 20 })
+    expect(colunas).toBe(32)
+    expect(pos('PA01')).toMatchObject({ x: 20, y: 1, w: 10 })
+    expect(pos('CS01')).toMatchObject({ x: 20, y: 22, w: 8 })
+    // Área conhecida fora da planta vai para um espaço livre; local fora do padrão fica fora do mapa.
+    const f4 = pos('F04')
+    expect(posicoes.filter(p => p.id !== 'F04').every(p => f4.x + f4.w <= p.x || p.x + p.w <= f4.x || f4.y + f4.h <= p.y || p.y + p.h <= f4.y)).toBe(true)
     expect(pos('DEPOSITO')).toBeUndefined()
   })
 

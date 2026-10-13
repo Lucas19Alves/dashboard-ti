@@ -189,6 +189,10 @@ const resumo = computed(() => {
 })
 
 const faces = ['A', 'B', 'C', 'D']
+const posicaoDica = (p) => [
+  p.y < 3 ? 'top-full mt-1' : 'bottom-full mb-1',
+  p.x < 4 ? 'left-0' : p.x + p.w > layout.value.colunas - 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+]
 const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)))
 </script>
 
@@ -249,7 +253,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               v-for="p in posicoesVisiveis"
               :key="p.id"
               class="group absolute select-none"
-              :class="[editando ? 'cursor-move' : 'cursor-pointer', selecionado === p.id ? 'z-20' : 'z-10']"
+              :class="[editando ? 'cursor-move' : 'cursor-pointer', hover === p.id ? 'z-30' : selecionado === p.id ? 'z-20' : 'z-10']"
               :style="{ left: `${p.x * celula}px`, top: `${p.y * celula}px`, width: `${p.w * celula}px`, height: `${p.h * celula}px`, padding: `${Math.max(1, celula * 0.08)}px` }"
               @pointerdown="iniciarArraste($event, p)"
               @click="selecionado = p.id"
@@ -281,7 +285,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               <span v-if="editando" class="absolute -bottom-1 -right-1 size-3.5 cursor-se-resize rounded-sm bg-blue-600 ring-2 ring-white" @pointerdown="iniciarArraste($event, p, 'tamanho')"></span>
 
               <!-- Dica ao passar o mouse -->
-              <div v-if="hover === p.id && !editando && areas.get(p.id)" class="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1 w-max max-w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] leading-snug text-white shadow-lg">
+              <!-- Acima da área (abaixo quando ela encosta no topo), sem sair pelas laterais do mapa. -->
+              <div v-if="hover === p.id && !editando && areas.get(p.id)" class="pointer-events-none absolute z-40 w-max max-w-56 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] leading-snug text-white shadow-lg" :class="posicaoDica(p)">
                 <b>{{ titulo(areas.get(p.id)) }}</b><br>
                 {{ percentualPendente(areas.get(p.id)).toFixed(1) }}% pendente · {{ areas.get(p.id).pendentes }} pend. · {{ areas.get(p.id).lidos }} lidos
               </div>
