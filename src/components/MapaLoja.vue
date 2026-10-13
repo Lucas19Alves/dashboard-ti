@@ -4,6 +4,7 @@ import {
   TIPOS_AREA,
   agregarPorArea,
   carregarLayoutSalvo,
+  encontrarEspacoLivre,
   gerarLayoutPadrao,
   interpretarLocal,
   limparLayoutSalvo,
@@ -25,12 +26,15 @@ const emit = defineEmits(['ver-itens'])
 const META = META_PENDENTE_PERCENTUAL
 
 const areas = computed(() => agregarPorArea(props.auditoria, props.isItemLido))
-const areasMapeaveis = computed(() => [...areas.value.values()].filter(a => a.tipo !== 'outro'))
-const outros = computed(() => [...areas.value.values()].filter(a => a.tipo === 'outro').sort((a, b) => b.pendentes - a.pendentes))
 
 // ---------- Layout ----------
 const salvo = ref(carregarLayoutSalvo())
-const layout = computed(() => mesclarLayout(gerarLayoutPadrao(areasMapeaveis.value), salvo.value))
+const layout = computed(() => mesclarLayout(gerarLayoutPadrao(areas.value.values()), salvo.value))
+// Áreas removidas do mapa continuam no layout com `oculto` para não voltarem pelo padrão.
+const posicoesVisiveis = computed(() => layout.value.posicoes.filter(p => !p.oculto))
+const noMapa = computed(() => new Set(posicoesVisiveis.value.map(p => p.id)))
+const areasMapeaveis = computed(() => [...areas.value.values()].filter(a => noMapa.value.has(a.bloco)))
+const outros = computed(() => [...areas.value.values()].filter(a => a.tipo === 'outro' && !noMapa.value.has(a.bloco)).sort((a, b) => b.pendentes - a.pendentes))
 const editando = ref(false)
 const persistir = (posicoes) => {
   salvo.value = { colunas: layout.value.colunas, linhas: layout.value.linhas, posicoes }
@@ -38,6 +42,15 @@ const persistir = (posicoes) => {
 }
 const atualizarPosicao = (id, mudanca) => {
   persistir(layout.value.posicoes.map(p => (p.id === id ? { ...p, ...mudanca } : p)))
+}
+const adicionarAoMapa = (id) => {
+  const existente = layout.value.posicoes.find(p => p.id === id)
+  if (existente) atualizarPosicao(id, { oculto: undefined })
+  else persistir([...layout.value.posicoes, { id, ...encontrarEspacoLivre(layout.value) }])
+  selecionado.value = id
+}
+const removerDoMapa = (id) => {
+  atualizarPosicao(id, { oculto: true })
 }
 const restaurarPadrao = () => {
   limparLayoutSalvo()
@@ -133,7 +146,7 @@ watch(modo, v => { if (v === 'usuario' && !usuarioFoco.value) usuarioFoco.value 
 // ---------- Seleção ----------
 const selecionado = ref(null)
 const hover = ref(null)
-const posicaoSelecionada = computed(() => layout.value.posicoes.find(p => p.id === selecionado.value) || null)
+const posicaoSelecionada = computed(() => posicoesVisiveis.value.find(p => p.id === selecionado.value) || null)
 const areaSelecionada = computed(() => (selecionado.value ? areas.value.get(selecionado.value) || { bloco: selecionado.value, tipo: interpretarLocal(selecionado.value).tipo, numero: interpretarLocal(selecionado.value).numero, lidos: 0, pendentes: 0, comProblema: 0, total: 0, faces: {}, usuarios: new Map(), locais: new Set() } : null))
 const usuariosDaArea = computed(() => [...(areaSelecionada.value?.usuarios || new Map())].sort((a, b) => b[1] - a[1]).map(([nome, n]) => ({ nome, n, exibicao: separarUsuario(nome).nome || nome, matricula: separarUsuario(nome).matricula })))
 const maiorUsuarioArea = computed(() => Math.max(1, ...usuariosDaArea.value.map(u => u.n)))
@@ -210,7 +223,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             @click.self="selecionado = null"
           >
             <div
-              v-for="p in layout.posicoes"
+              v-for="p in posicoesVisiveis"
               :key="p.id"
               class="group absolute select-none"
               :class="[editando ? 'cursor-move' : 'cursor-pointer', selecionado === p.id ? 'z-20' : 'z-10']"
@@ -267,11 +280,15 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <span><i class="mr-1 inline-block size-3 rounded bg-slate-100 ring-1 ring-slate-200 align-[-2px]"></i>Sem itens nesta auditoria</span>
         </div>
 
-        <div v-if="outros.length" class="mt-4 rounded-xl bg-slate-50 p-3">
-          <p class="text-xs font-bold text-slate-600">Locais fora do padrão do mapa ({{ outros.length }})</p>
+        <div v-if="outros.length" class="mt-4 rounded-xl p-3" :class="editando ? 'bg-blue-50' : 'bg-slate-50'">
+          <p class="text-xs font-bold text-slate-600">
+            Locais fora do padrão do mapa ({{ outros.length }})
+            <span v-if="editando" class="font-normal text-blue-700">· clique para adicionar ao mapa</span>
+            <span v-else class="font-normal text-slate-500">· use "Editar layout" para colocá-los no mapa</span>
+          </p>
           <div class="mt-2 flex flex-wrap gap-1.5">
-            <button v-for="o in outros" :key="o.bloco" type="button" class="rounded-lg bg-white px-2 py-1 text-xs font-semibold shadow-sm hover:ring-2 hover:ring-blue-300" @click="selecionado = o.bloco">
-              {{ o.bloco }} <span :class="percentualPendente(o) > META ? 'text-red-700' : 'text-slate-500'">{{ percentualPendente(o).toFixed(1) }}%</span>
+            <button v-for="o in outros" :key="o.bloco" type="button" class="rounded-lg bg-white px-2 py-1 text-xs font-semibold shadow-sm hover:ring-2 hover:ring-blue-300" :title="editando ? 'Adicionar ao mapa' : ''" @click="editando ? adicionarAoMapa(o.bloco) : (selecionado = o.bloco)">
+              <i v-if="editando" class="fas fa-plus mr-1 text-[10px] text-blue-600"></i>{{ o.bloco }} <span :class="percentualPendente(o) > META ? 'text-red-700' : 'text-slate-500'">{{ percentualPendente(o).toFixed(1) }}%</span>
             </button>
           </div>
         </div>
@@ -335,7 +352,9 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
               <label class="block"><span class="ui-label">Altura</span><input type="number" min="1" max="60" :value="posicaoSelecionada.h" class="ui-input py-1.5 text-sm" @change="e => atualizarPosicao(posicaoSelecionada.id, { h: Math.max(1, Number(e.target.value) || 1) })"></label>
             </div>
             <button type="button" class="ui-btn-secondary w-full py-1.5 text-xs" @click="atualizarPosicao(posicaoSelecionada.id, { w: posicaoSelecionada.h, h: posicaoSelecionada.w })"><i class="fas fa-rotate"></i>Girar</button>
+            <button v-if="areaSelecionada.tipo === 'outro'" type="button" class="w-full rounded-lg py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50" @click="removerDoMapa(posicaoSelecionada.id)"><i class="fas fa-eye-slash mr-1"></i>Remover do mapa</button>
           </div>
+          <button v-else-if="editando && areaSelecionada.tipo === 'outro'" type="button" class="ui-btn-primary mt-4 w-full py-2" @click="adicionarAoMapa(areaSelecionada.bloco)"><i class="fas fa-plus"></i>Adicionar ao mapa</button>
         </section>
 
         <section v-else class="rounded-2xl bg-white p-5 shadow-sm">

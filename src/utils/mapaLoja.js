@@ -7,6 +7,8 @@
 // - PL01: paredão de líquida (primeira gôndola à direita).
 // - F01..: freezers, à esquerda.  PF01: paredão de frios.  EMP01: empório de frios.
 // - ACG: açougue.  FLV: frutas, legumes e verduras.
+// - Locais fora do padrão ficam fora do mapa, exceto PA01 (à direita do paredão de frios), PAO (acima do FLV)
+//   e GELO (abaixo dos corredores); no modo edição qualquer um pode ser adicionado ou removido.
 
 export const TIPOS_AREA = {
   gondola: { nome: 'Corredor', icone: 'fas fa-road' },
@@ -97,12 +99,19 @@ const TAMANHOS = {
   flv: { w: 8, h: 4 }
 }
 const LINHAS_PADRAO = 27
+const TAMANHO_OUTRO = { w: 4, h: 2 }
+const especial = (regex) => a => a.tipo === 'outro' && regex.test(a.bloco)
+const ehPA = especial(/^PA\d+$/)
+const ehPao = especial(/^PAO\d*$/)
+const ehGelo = especial(/^GELO\d*$/)
 
 // Posições iniciais: freezers à esquerda, corredores numerados da direita para a esquerda,
 // paredão de líquida na extrema direita, açougue/empório/paredão de frios no fundo (topo do mapa).
 export const gerarLayoutPadrao = (areas) => {
-  const lista = [...areas].filter(a => a.tipo !== 'outro')
+  const lista = [...areas]
   const porTipo = tipo => lista.filter(a => a.tipo === tipo).sort((a, b) => a.numero - b.numero)
+  const especiais = filtro => lista.filter(filtro).sort((a, b) => a.bloco.localeCompare(b.bloco, 'pt-BR', { numeric: true }))
+  const pas = especiais(ehPA)
   const freezers = porTipo('freezer')
   const gondolas = porTipo('gondola')
   const liquidas = porTipo('liquida')
@@ -111,19 +120,23 @@ export const gerarLayoutPadrao = (areas) => {
   const larguraEsquerda = Math.max(9, colunasFreezer * 4 + 1)
   // Posição pelo número do corredor: corredores sem itens na auditoria deixam o espaço vazio.
   const maiorCorredor = Math.max(0, ...gondolas.map(g => g.numero))
-  const colunas = Math.max(larguraEsquerda + maiorCorredor * 4 + 3, 14 + paredoes.length * 7, 30)
+  const colunas = Math.max(larguraEsquerda + maiorCorredor * 4 + 3, 14 + (paredoes.length + pas.length) * 7, 30)
   const posicoes = []
   const colocar = (area, x, y, tamanho = TAMANHOS[area.tipo]) => posicoes.push({ id: area.bloco, x, y, w: tamanho.w, h: tamanho.h })
 
   porTipo('acougue').forEach((a, i) => colocar(a, i * 7, 0))
   porTipo('emporio').forEach((a, i) => colocar(a, 7 + i * 7, 0))
   paredoes.forEach((a, i) => colocar(a, 14 + i * 7, 0))
+  pas.forEach((a, i) => colocar(a, 14 + (paredoes.length + i) * 7, 0, TAMANHOS.paredaoFrios))
   freezers.forEach((a, i) => colocar(a, Math.floor(i / 4) * 4, 5 + (i % 4) * 4))
   porTipo('flv').forEach((a, i) => colocar(a, i * 9, LINHAS_PADRAO - 4))
+  especiais(ehPao).forEach((a, i) => colocar(a, i * 9, LINHAS_PADRAO - 7, { w: 8, h: 2 }))
   const alturaLiquida = liquidas.length ? Math.max(3, Math.floor(18 / liquidas.length)) : 0
   liquidas.forEach((a, i) => colocar(a, colunas - 2, 5 + i * alturaLiquida, { w: 2, h: alturaLiquida - (liquidas.length > 1 ? 1 : 0) }))
   // Corredores encostados: a face esquerda de um e a direita do vizinho formam a mesma gôndola.
   gondolas.forEach(a => colocar(a, colunas - 7 - (a.numero - 1) * 4, 5))
+  // Gelo abaixo dos corredores, a partir do primeiro (direita).
+  especiais(ehGelo).forEach((a, i) => colocar(a, colunas - 9 - i * 7, 5 + TAMANHOS.gondola.h + 1, { w: 6, h: 2 }))
   return { colunas, linhas: LINHAS_PADRAO, posicoes }
 }
 
@@ -135,6 +148,17 @@ export const mesclarLayout = (padrao, salvo) => {
   const colunas = Math.max(padrao.colunas, salvo?.colunas || 0, ...posicoes.map(p => p.x + p.w))
   const linhas = Math.max(padrao.linhas, salvo?.linhas || 0, ...posicoes.map(p => p.y + p.h))
   return { colunas, linhas, posicoes }
+}
+
+// Primeiro espaço livre (de cima para baixo, da esquerda para a direita) para uma área w×h.
+export const encontrarEspacoLivre = (layout, { w, h } = TAMANHO_OUTRO) => {
+  const ocupadas = (layout?.posicoes || []).filter(p => !p.oculto)
+  const livre = (x, y) => ocupadas.every(p => x + w <= p.x || p.x + p.w <= x || y + h <= p.y || p.y + p.h <= y)
+  const colunas = Math.max(w, layout?.colunas || 0)
+  for (let y = 0; y + h <= (layout?.linhas || 0); y++) {
+    for (let x = 0; x + w <= colunas; x++) if (livre(x, y)) return { x, y, w, h }
+  }
+  return { x: 0, y: Math.max(layout?.linhas || 0, ...ocupadas.map(p => p.y + p.h)), w, h }
 }
 
 // Layout válido: lista de áreas com id e posição/tamanho numéricos.
