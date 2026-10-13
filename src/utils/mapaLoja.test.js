@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agregarPorArea, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente } from './mapaLoja'
+import { agregarPorArea, encontrarEspacoLivre, gerarLayoutPadrao, interpretarLocal, mesclarLayout, percentualPendente } from './mapaLoja'
 
 describe('interpretarLocal', () => {
   it('reconhece gôndola, corredor e face', () => {
@@ -50,6 +50,24 @@ describe('layout', () => {
     expect(pos('G01').x).toBeGreaterThan(pos('G02').x)
     expect(pos('G02').x + pos('G02').w).toBe(pos('G01').x) // vizinhos encostados
     expect(pos('F01').x).toBeLessThan(pos('G02').x)
+  })
+
+  it('posiciona PA à direita do PF, PAO acima do FLV e GELO abaixo dos corredores', () => {
+    const extras = [...areas, { bloco: 'PF01', tipo: 'paredaoFrios', numero: 1 }, ...['PA01', 'PAO', 'GELO', 'DEPOSITO'].map(bloco => ({ bloco, tipo: 'outro', numero: 0 }))]
+    const { posicoes } = gerarLayoutPadrao(extras)
+    const pos = id => posicoes.find(p => p.id === id)
+    expect(pos('PA01')).toMatchObject({ y: pos('PF01').y, x: pos('PF01').x + 7 })
+    expect(pos('PAO').y + pos('PAO').h).toBeLessThanOrEqual(pos('FLV').y)
+    expect(pos('PAO').x).toBe(pos('FLV').x)
+    expect(pos('GELO').y).toBeGreaterThanOrEqual(pos('G01').y + pos('G01').h)
+    expect(pos('GELO').x).toBeLessThanOrEqual(pos('G01').x)
+    expect(pos('DEPOSITO')).toBeUndefined()
+  })
+
+  it('encontra espaço livre sem sobrepor áreas visíveis', () => {
+    const layout = { colunas: 10, linhas: 4, posicoes: [{ id: 'A', x: 0, y: 0, w: 6, h: 2 }, { id: 'B', x: 6, y: 0, w: 4, h: 4, oculto: true }] }
+    expect(encontrarEspacoLivre(layout)).toEqual({ x: 6, y: 0, w: 4, h: 2 })
+    expect(encontrarEspacoLivre({ colunas: 4, linhas: 2, posicoes: [{ id: 'A', x: 0, y: 0, w: 4, h: 2 }] })).toEqual({ x: 0, y: 2, w: 4, h: 2 })
   })
 
   it('mantém posições salvas e acrescenta áreas novas', () => {
