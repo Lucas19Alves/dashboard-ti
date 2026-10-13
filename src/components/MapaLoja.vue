@@ -9,6 +9,7 @@ import {
   interpretarLocal,
   limparLayoutSalvo,
   mesclarLayout,
+  redimensionarLayout,
   nomeArea,
   percentualPendente,
   salvarLayout
@@ -37,7 +38,7 @@ const areasMapeaveis = computed(() => [...areas.value.values()].filter(a => noMa
 const outros = computed(() => [...areas.value.values()].filter(a => a.tipo === 'outro' && !noMapa.value.has(a.bloco)).sort((a, b) => b.pendentes - a.pendentes))
 const editando = ref(false)
 const persistir = (posicoes) => {
-  salvo.value = { colunas: layout.value.colunas, linhas: layout.value.linhas, posicoes }
+  salvo.value = { colunas: layout.value.colunas, linhas: layout.value.linhas, deslocamento: salvo.value?.deslocamento, posicoes }
   salvarLayout(salvo.value)
 }
 const atualizarPosicao = (id, mudanca) => {
@@ -56,8 +57,18 @@ const restaurarPadrao = () => {
   limparLayoutSalvo()
   salvo.value = null
 }
-const colunasVisiveis = computed(() => layout.value.colunas + (editando.value ? 4 : 0))
-const linhasVisiveis = computed(() => layout.value.linhas + (editando.value ? 4 : 0))
+// Bordas do mapa: aumentar à esquerda/topo empurra as áreas; diminuir só remove espaço vazio.
+const PASSO_BORDA = 2
+const redimensionar = (lado, sinal) => {
+  const novo = redimensionarLayout({ ...layout.value, deslocamento: salvo.value?.deslocamento }, lado, sinal * PASSO_BORDA)
+  if (!novo) return
+  salvo.value = novo
+  salvarLayout(novo)
+}
+const podeDiminuir = lado => Boolean(redimensionarLayout(layout.value, lado, -1))
+const LADOS = [['esquerda', 'Esquerda', 'fa-arrow-left'], ['direita', 'Direita', 'fa-arrow-right'], ['topo', 'Topo', 'fa-arrow-up'], ['base', 'Base', 'fa-arrow-down']]
+const colunasVisiveis = computed(() => layout.value.colunas)
+const linhasVisiveis = computed(() => layout.value.linhas)
 
 // Tamanho da célula acompanha a largura disponível.
 const palco = ref(null)
@@ -86,9 +97,12 @@ const moverArraste = (evento) => {
   const dx = Math.round((evento.clientX - arraste.x0) / celula.value)
   const dy = Math.round((evento.clientY - arraste.y0) / celula.value)
   const i = arraste.inicial
+  // Dentro dos limites do mapa; para ganhar espaço, use as bordas do mapa.
+  const { colunas, linhas } = layout.value
+  const limitar = (v, max) => Math.max(0, Math.min(max, v))
   const mudanca = arraste.modo === 'mover'
-    ? { x: Math.max(0, i.x + dx), y: Math.max(0, i.y + dy) }
-    : { w: Math.max(1, i.w + dx), h: Math.max(1, i.h + dy) }
+    ? { x: limitar(i.x + dx, colunas - i.w), y: limitar(i.y + dy, linhas - i.h) }
+    : { w: Math.max(1, Math.min(colunas - i.x, i.w + dx)), h: Math.max(1, Math.min(linhas - i.y, i.h + dy)) }
   const atual = layout.value.posicoes.find(p => p.id === arraste.id)
   if (atual && Object.keys(mudanca).some(k => atual[k] !== mudanca[k])) atualizarPosicao(arraste.id, mudanca)
 }
@@ -105,7 +119,8 @@ const aoTeclar = (evento) => {
   if (!passos) return
   evento.preventDefault()
   const p = posicaoSelecionada.value
-  atualizarPosicao(p.id, { x: Math.max(0, p.x + passos[0]), y: Math.max(0, p.y + passos[1]) })
+  const { colunas, linhas } = layout.value
+  atualizarPosicao(p.id, { x: Math.max(0, Math.min(colunas - p.w, p.x + passos[0])), y: Math.max(0, Math.min(linhas - p.h, p.y + passos[1])) })
 }
 
 // ---------- Cores ----------
@@ -194,7 +209,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <template v-if="editando">
-          <span class="text-xs text-slate-500"><i class="fas fa-hand-pointer mr-1"></i>Arraste para mover · canto para redimensionar · setas ajustam</span>
+          <span class="text-xs text-slate-500"><i class="fas fa-hand-pointer mr-1"></i>Arraste para mover · canto para redimensionar · setas ajustam · bordas do mapa abaixo</span>
           <button type="button" class="ui-btn-secondary py-2" @click="restaurarPadrao"><i class="fas fa-rotate-left"></i>Layout padrão</button>
           <button type="button" class="ui-btn-primary py-2" @click="editando = false"><i class="fas fa-check"></i>Concluir</button>
         </template>
@@ -205,6 +220,14 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
       <!-- Mapa -->
       <section class="overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
+        <div v-if="editando" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <span class="font-bold"><i class="fas fa-expand mr-1"></i>Tamanho do mapa <span class="font-normal text-blue-700">{{ layout.colunas }} × {{ layout.linhas }}</span></span>
+          <span v-for="[lado, rotulo, icone] in LADOS" :key="lado" class="inline-flex items-center gap-1">
+            <i :class="['fas', icone, 'text-[10px] text-blue-500']"></i>{{ rotulo }}
+            <button type="button" class="inline-flex size-6 items-center justify-center rounded-md bg-white font-bold shadow-sm hover:bg-blue-100 disabled:opacity-40" :disabled="!podeDiminuir(lado)" :aria-label="`Diminuir ${rotulo.toLowerCase()}`" :title="podeDiminuir(lado) ? 'Diminuir' : 'Há áreas encostadas nesta borda'" @click="redimensionar(lado, -1)">−</button>
+            <button type="button" class="inline-flex size-6 items-center justify-center rounded-md bg-white font-bold shadow-sm hover:bg-blue-100" :aria-label="`Aumentar ${rotulo.toLowerCase()}`" title="Aumentar" @click="redimensionar(lado, 1)">+</button>
+          </span>
+        </div>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</span>
           <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores (número no meio, faces C/D no fundo e A/B na frente) da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
