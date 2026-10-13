@@ -96,6 +96,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Gráfico mensal** do % pendente com linha da meta; clicar em um mês filtra e abre a lista daquele mês. Alternativa em tabela.
 - **Setores**: consolidado do período, quantas vezes cada setor passou da meta (reincidência), último valor, tendência e mini gráfico das últimas 12 auditorias.
 - **Usuários**: ranking por leituras, média por auditoria, % de leituras com problema e última participação.
+- **Mapa da loja**: o mesmo mapa do detalhe da auditoria, somando todas as auditorias filtradas (% pendente acumulado, leituras e usuários por área). Rupturas só entram com o filtro de tipo Ruptura, pois repetem os pendentes da presença.
 - **Auditorias**: busca, paginação, CSV e **comparação de duas auditorias** (variação geral e por setor).
 - **Relatório PDF** em folhas A4 numeradas ("Página X de Y"): 1 resumo do período (indicadores, conclusões, gráfico mensal, tabela por tipo e comparação com o período anterior), 2 setores (reincidentes, % pendente, tendência e evolução), 3 usuários (matrícula, nome, leituras, % problema) e 4 auditorias do período com resumo por mês. Tabelas longas continuam na folha seguinte repetindo o cabeçalho.
 - **Detalhe da auditoria**: card "Caminho até a meta" (quantos itens faltam ler ou a folga) e comparação com a auditoria anterior do mesmo tipo (setores que melhoraram/pioraram).

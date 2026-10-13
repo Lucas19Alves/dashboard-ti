@@ -78,14 +78,42 @@ export const agregarPorArea = (auditoria, isItemLido = () => false) => {
     if (!usuario || !isItemLido(item)) continue
     const info = interpretarLocal(item?.['Local'])
     const area = obter(info)
-    area.usuarios.set(usuario, (area.usuarios.get(usuario) || 0) + 1)
+    const n = item._peso || 1 // itens consolidados de várias auditorias trazem a contagem
+    area.usuarios.set(usuario, (area.usuarios.get(usuario) || 0) + n)
     if (info.face) {
       area.faces[info.face] ??= { ...vazio(), usuarios: new Map() }
       const face = area.faces[info.face].usuarios
-      face.set(usuario, (face.get(usuario) || 0) + 1)
+      face.set(usuario, (face.get(usuario) || 0) + n)
     }
   }
   return areas
+}
+
+// Junta várias auditorias em uma só para o mapa do período: soma as contagens por local e
+// resume as leituras em uma linha por usuário+local (com `_peso`), sem copiar os itens.
+export const consolidarParaMapa = (auditorias = [], isItemLido = () => false) => {
+  const porLocal = {}
+  const leituras = new Map()
+  for (const auditoria of auditorias) {
+    for (const [local, d] of Object.entries(auditoria?.analise?.porLocal || {})) {
+      const destino = (porLocal[local] ??= { lidos: 0, pendentes: 0, comProblema: 0 })
+      destino.lidos += d?.lidos || 0
+      destino.pendentes += d?.pendentes || 0
+      destino.comProblema += d?.comProblema || 0
+    }
+    for (const item of Array.isArray(auditoria?.dados) ? auditoria.dados : []) {
+      const usuario = (item?.['Usuário'] || '').toString().trim()
+      if (!usuario || !isItemLido(item)) continue
+      const local = (item?.['Local'] || '').toString().trim()
+      const chave = `${usuario}\u0000${local}`
+      leituras.set(chave, (leituras.get(chave) || 0) + 1)
+    }
+  }
+  const dados = [...leituras].map(([chave, n]) => {
+    const [usuario, local] = chave.split('\u0000')
+    return { 'Usuário': usuario, Local: local, _peso: n }
+  })
+  return { analise: { porLocal }, dados }
 }
 
 // ---------- Layout ----------

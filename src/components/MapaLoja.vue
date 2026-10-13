@@ -21,7 +21,8 @@ import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 // O layout pode ser rearranjado pelo usuário e fica salvo neste navegador.
 const props = defineProps({
   auditoria: { type: Object, required: true },
-  isItemLido: { type: Function, required: true }
+  isItemLido: { type: Function, required: true },
+  itensDisponiveis: { type: Boolean, default: true } // false no mapa consolidado (sem lista de itens)
 })
 const emit = defineEmits(['ver-itens'])
 const META = META_PENDENTE_PERCENTUAL
@@ -380,7 +381,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </ul>
           </div>
 
-          <button v-if="areaSelecionada.total" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i class="fas fa-list"></i>Ver itens</button>
+          <button v-if="areaSelecionada.total && itensDisponiveis" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i class="fas fa-list"></i>Ver itens</button>
 
           <!-- Ajustes da área (modo edição) -->
           <div v-if="editando && posicaoSelecionada" class="mt-4 space-y-3 rounded-xl bg-blue-50 p-3">
