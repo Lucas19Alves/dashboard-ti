@@ -170,7 +170,7 @@ const submeterAuditoria = async () => {
     const analise = tipoEfetivo === 'Presença'
       ? store.analisarDadosPresenca(dados, skuValor)
       : tipoEfetivo === 'Ruptura'
-        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
+        ? (temAnaliseRuptura ? store.analisarDadosRuptura(dados, skuValor, { dataReferencia: formulario.value.data }) : store.analisarDadosPresenca(dados, skuValor))
       : tipoEfetivo === 'Etiqueta'
         ? (temAnaliseEtiqueta ? store.analisarDadosEtiqueta(dados, skuValor) : store.analisarDadosPresenca(dados, skuValor))
         : store.analisarDadosPresenca(dados, skuValor)

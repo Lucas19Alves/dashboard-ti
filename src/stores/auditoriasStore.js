@@ -3,6 +3,7 @@ import { ref, computed, toRaw, markRaw } from 'vue'
 import { db } from '../db/appDb'
 import { lerPlanilha } from '../utils/planilha'
 import { deduplicarPorCodigo } from '../utils/deduplicar'
+import { VERSAO_RUPTURA_PRESENCA, completarLocaisPelaPresenca, presencaBaseDaRuptura, setoresPelaPresenca } from '../utils/rupturaPresenca'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 
@@ -735,11 +736,14 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     }
   }
 
+  // A planilha de ruptura vem sem local: usa o local do item na presença anterior.
   const processarExcelRuptura = async (file, opts = {}) => {
-    return processarExcelPresenca(file, {
+    const dados = await processarExcelPresenca(file, {
       ...opts,
       tipoAuditoria: 'Ruptura'
     })
+    const base = presencaBaseDaRuptura(opts?.dataAuditoria, auditorias.value)
+    return base ? completarLocaisPelaPresenca(dados, base.dados) : dados
   }
 
   const analisarDadosPresenca = (dados, sku = 0) => {
@@ -955,10 +959,21 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     return analise
   }
 
+  // % por setor da ruptura parte da presença anterior (ver utils/rupturaPresenca.js); o restante não muda.
+  const aplicarBasePresenca = (analise, dadosRuptura, dataAuditoria) => {
+    const base = presencaBaseDaRuptura(dataAuditoria, auditorias.value)
+    if (!base) return analise
+    analise.porSetor = setoresPelaPresenca(dadosRuptura, base.dados)
+    analise.setoresParados = Object.entries(analise.porSetor).filter(([, d]) => d.lidos === 0).map(([setor]) => setor)
+    analise.basePresenca = { id: base.id, data: base.data, versao: VERSAO_RUPTURA_PRESENCA }
+    return analise
+  }
+
   const analisarDadosRuptura = (dados, sku = 0, opts = {}) => {
+    // `dataReferencia`: só localiza a presença anterior, sem aplicar a regra de data do item.
     const auditoriaDiaISO = paraDataISO(opts?.dataAuditoria)
     if (!auditoriaDiaISO) {
-      return analisarDadosPresenca(dados, sku)
+      return aplicarBasePresenca(analisarDadosPresenca(dados, sku), dados, paraDataISO(opts?.dataReferencia))
     }
 
     // Em Ruptura, só conta pendência quando for "Sem Presença e Com Estoque"
@@ -981,7 +996,43 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       }
     })
 
-    return analisarDadosPresenca(dadosAjustados, sku)
+    return aplicarBasePresenca(analisarDadosPresenca(dadosAjustados, sku), dadosAjustados, auditoriaDiaISO)
+  }
+
+  // Recalcula setores e locais das rupturas a partir da presença anterior, sem mexer no % geral.
+  // Roda ao carregar (rupturas antigas) e quando uma presença é criada ou atualizada.
+  const recalcularRupturas = async ({ presencaId = null } = {}) => {
+    const alteradas = []
+    for (const auditoria of auditorias.value) {
+      if (auditoria.tipo !== 'Ruptura' || !auditoria.analise || !Array.isArray(auditoria.dados)) continue
+      const base = presencaBaseDaRuptura(auditoria.data, auditorias.value)
+      if (!base) continue
+      const atual = auditoria.analise.basePresenca
+      const pendente = presencaId ? base.id === presencaId : (atual?.versao !== VERSAO_RUPTURA_PRESENCA || atual?.id !== base.id)
+      if (!pendente) continue
+      const dados = completarLocaisPelaPresenca(auditoria.dados, base.dados)
+      // Usa a mesma regra com que o % geral foi calculado (com ou sem a data do item), para os setores somarem igual.
+      const comData = analisarDadosRuptura(dados, auditoria.sku || 0, { dataAuditoria: auditoria.data })
+      const nova = comData.itensPendentes === auditoria.analise.itensPendentes
+        ? comData
+        : analisarDadosRuptura(dados, auditoria.sku || 0, { dataReferencia: auditoria.data })
+      auditoria.dados = semReatividade(dados)
+      auditoria.analise = semReatividade({
+        ...auditoria.analise,
+        porSetor: nova.porSetor,
+        setoresParados: nova.setoresParados,
+        porLocal: nova.porLocal,
+        locaisSemLeitura: nova.locaisSemLeitura,
+        basePresenca: nova.basePresenca
+      })
+      alteradas.push(auditoria)
+    }
+    if (!alteradas.length) return
+    try {
+      await db.auditorias.bulkPut(alteradas.map(a => JSON.parse(JSON.stringify({ ...a, dados: toRaw(a.dados), analise: toRaw(a.analise) }))))
+    } catch (e) {
+      console.error('Erro ao salvar rupturas recalculadas', e)
+    }
   }
 
   const analisarDadosEtiqueta = (dados, sku = 0) => {
@@ -1163,6 +1214,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       })
       if (migrouStatus) await db.auditorias.bulkPut(registros)
       if (Object.keys(statusMap).length) limparStatusLocal()
+      await recalcularRupturas()
     } catch (e) {
       console.error('Erro ao carregar auditorias do IndexedDB', e)
     }
@@ -1196,6 +1248,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       analise: semReatividade(novaAuditoria.analise)
     }
     auditorias.value.push(completa)
+    if (completa.tipo === 'Presença') await recalcularRupturas({ presencaId: completa.id })
     return completa
   }
 
@@ -1236,6 +1289,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     } catch (e) {
       console.error('Erro ao atualizar auditoria no IndexedDB', e)
     }
+    if (auditoria.tipo === 'Presença' && 'dados' in dados) await recalcularRupturas({ presencaId: auditoria.id })
   }
 
   const deleteAuditoria = async (id) => {
