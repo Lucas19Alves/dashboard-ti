@@ -7,8 +7,8 @@
 // - PL01: paredão de líquida (primeira gôndola à direita).
 // - F01..: freezers, à esquerda.  PF01: paredão de frios.  EMP01: empório de frios.
 // - ACG: açougue.  FLV: frutas, legumes e verduras.
-// - Locais fora do padrão ficam fora do mapa, exceto PA01 (à direita do paredão de frios), PAO (acima do FLV)
-//   e GELO (abaixo dos corredores); no modo edição qualquer um pode ser adicionado ou removido.
+// - Outros locais com lugar na planta padrão: PA01 (acima dos corredores), CS01 (abaixo), PAO, IF01/IF02,
+//   I01/I02, SORV e GELO. Os demais ficam fora do mapa; no modo edição podem ser adicionados ou removidos.
 
 export const TIPOS_AREA = {
   gondola: { nome: 'Corredor', icone: 'fas fa-road' },
@@ -91,53 +91,79 @@ export const agregarPorArea = (auditoria, isItemLido = () => false) => {
 // ---------- Layout ----------
 const TAMANHOS = {
   gondola: { w: 4, h: 16 },
-  liquida: { w: 2, h: 18 },
-  freezer: { w: 3, h: 3 },
-  paredaoFrios: { w: 6, h: 2 },
-  emporio: { w: 6, h: 3 },
-  acougue: { w: 6, h: 3 },
-  flv: { w: 8, h: 4 }
+  liquida: { w: 2, h: 20 },
+  freezer: { w: 2, h: 7 },
+  paredaoFrios: { w: 3, h: 6 },
+  emporio: { w: 3, h: 7 },
+  acougue: { w: 5, h: 3 },
+  flv: { w: 7, h: 8 },
+  outro: { w: 3, h: 2 }
 }
-const LINHAS_PADRAO = 27
 const TAMANHO_OUTRO = { w: 4, h: 2 }
-const especial = (regex) => a => a.tipo === 'outro' && regex.test(a.bloco)
-const ehPA = especial(/^PA\d+$/)
-const ehPao = especial(/^PAO\d*$/)
-const ehGelo = especial(/^GELO\d*$/)
+const LARGURA_ESQUERDA = 20 // colunas do bloco à esquerda dos corredores
+const TOPO_CORREDORES = 5
 
-// Posições iniciais: freezers à esquerda, corredores numerados da direita para a esquerda,
-// paredão de líquida na extrema direita, açougue/empório/paredão de frios no fundo (topo do mapa).
+// Planta padrão do bloco esquerdo (colunas 0–19), pelo código do local: [regex, x, y, w, h].
+const PLANTA_ESQUERDA = [
+  [/^PF0?1$/, 1, 1, 5, 2],
+  [/^PF0?2$/, 1, 3, 3, 6],
+  [/^PF0?3$/, 1, 9, 3, 6],
+  [/^PF0?4$/, 1, 15, 3, 6],
+  [/^ACG(0?1)?$/, 6, 0, 5, 3],
+  [/^IF0?1$/, 11, 1, 4, 2],
+  [/^I0?2$/, 15, 1, 3, 2],
+  [/^F0?3$/, 5, 5, 2, 7],
+  [/^F0?2$/, 8, 5, 2, 7],
+  [/^F0?1$/, 11, 5, 2, 7],
+  [/^EMP(0?1)?$/, 15, 5, 3, 7],
+  [/^FLV(0?1)?$/, 5, 13, 7, 8],
+  [/^PAO\d*$/, 13, 13, 2, 8],
+  [/^IF0?2$/, 16, 13, 3, 2],
+  [/^I0?1$/, 16, 15, 3, 3],
+  [/^SORV/, 16, 18, 3, 3],
+  [/^GELO\d*$/, 16, 22, 3, 2]
+]
+
+// Posições iniciais (planta padrão da loja):
+// - bloco esquerdo fixo: paredões de frios, açougue, freezers, empório, FLV, pão, ilhas e gelo;
+// - corredores numerados da direita para a esquerda, encostados, com PA01 acima e CS01 abaixo;
+// - paredão de líquida na extrema direita.
+// Áreas conhecidas fora da planta (ex.: F04, PF05) vão para o primeiro espaço livre;
+// locais fora do padrão sem posição na planta ficam fora do mapa.
 export const gerarLayoutPadrao = (areas) => {
   const lista = [...areas]
-  const porTipo = tipo => lista.filter(a => a.tipo === tipo).sort((a, b) => a.numero - b.numero)
-  const especiais = filtro => lista.filter(filtro).sort((a, b) => a.bloco.localeCompare(b.bloco, 'pt-BR', { numeric: true }))
-  const pas = especiais(ehPA)
-  const freezers = porTipo('freezer')
-  const gondolas = porTipo('gondola')
-  const liquidas = porTipo('liquida')
-  const paredoes = porTipo('paredaoFrios')
-  const colunasFreezer = Math.max(1, Math.ceil(freezers.length / 4))
-  const larguraEsquerda = Math.max(9, colunasFreezer * 4 + 1)
-  // Posição pelo número do corredor: corredores sem itens na auditoria deixam o espaço vazio.
+  const gondolas = lista.filter(a => a.tipo === 'gondola')
+  const liquidas = lista.filter(a => a.tipo === 'liquida').sort((a, b) => a.numero - b.numero)
   const maiorCorredor = Math.max(0, ...gondolas.map(g => g.numero))
-  const colunas = Math.max(larguraEsquerda + maiorCorredor * 4 + 3, 14 + (paredoes.length + pas.length) * 7, 30)
+  const fimCorredores = LARGURA_ESQUERDA + maiorCorredor * 4
+  const xLiquida = fimCorredores + 2
+  const colunas = xLiquida + 2
   const posicoes = []
-  const colocar = (area, x, y, tamanho = TAMANHOS[area.tipo]) => posicoes.push({ id: area.bloco, x, y, w: tamanho.w, h: tamanho.h })
+  const usados = new Set()
+  const colocar = (area, x, y, w, h) => {
+    posicoes.push({ id: area.bloco, x, y, w, h })
+    usados.add(area.bloco)
+  }
 
-  porTipo('acougue').forEach((a, i) => colocar(a, i * 7, 0))
-  porTipo('emporio').forEach((a, i) => colocar(a, 7 + i * 7, 0))
-  paredoes.forEach((a, i) => colocar(a, 14 + i * 7, 0))
-  pas.forEach((a, i) => colocar(a, 14 + (paredoes.length + i) * 7, 0, TAMANHOS.paredaoFrios))
-  freezers.forEach((a, i) => colocar(a, Math.floor(i / 4) * 4, 5 + (i % 4) * 4))
-  porTipo('flv').forEach((a, i) => colocar(a, i * 9, LINHAS_PADRAO - 4))
-  especiais(ehPao).forEach((a, i) => colocar(a, i * 9, LINHAS_PADRAO - 7, { w: 8, h: 2 }))
-  const alturaLiquida = liquidas.length ? Math.max(3, Math.floor(18 / liquidas.length)) : 0
-  liquidas.forEach((a, i) => colocar(a, colunas - 2, 5 + i * alturaLiquida, { w: 2, h: alturaLiquida - (liquidas.length > 1 ? 1 : 0) }))
+  for (const area of lista) {
+    const planta = PLANTA_ESQUERDA.find(([regex]) => regex.test(area.bloco))
+    if (planta) colocar(area, ...planta.slice(1))
+  }
   // Corredores encostados: a face esquerda de um e a direita do vizinho formam a mesma gôndola.
-  gondolas.forEach(a => colocar(a, colunas - 7 - (a.numero - 1) * 4, 5))
-  // Gelo abaixo dos corredores, a partir do primeiro (direita).
-  especiais(ehGelo).forEach((a, i) => colocar(a, colunas - 9 - i * 7, 5 + TAMANHOS.gondola.h + 1, { w: 6, h: 2 }))
-  return { colunas, linhas: LINHAS_PADRAO, posicoes }
+  gondolas.forEach(a => colocar(a, LARGURA_ESQUERDA + (maiorCorredor - a.numero) * 4, TOPO_CORREDORES, 4, 16))
+  const alturaLiquida = liquidas.length ? Math.max(3, Math.floor(20 / liquidas.length)) : 0
+  liquidas.forEach((a, i) => colocar(a, xLiquida, 1 + i * alturaLiquida, 2, alturaLiquida - (liquidas.length > 1 ? 1 : 0)))
+  const largura = Math.max(4, fimCorredores - LARGURA_ESQUERDA)
+  lista.filter(a => /^PA0?1$/.test(a.bloco)).forEach(a => colocar(a, LARGURA_ESQUERDA, 1, xLiquida - LARGURA_ESQUERDA, 2))
+  lista.filter(a => /^CS0?1$/.test(a.bloco)).forEach(a => colocar(a, LARGURA_ESQUERDA, TOPO_CORREDORES + 17, largura, 2))
+
+  const layout = { colunas, linhas: TOPO_CORREDORES + 20, posicoes }
+  for (const area of lista) {
+    if (usados.has(area.bloco) || area.tipo === 'outro') continue
+    colocar(area, ...Object.values(encontrarEspacoLivre(layout, TAMANHOS[area.tipo] || TAMANHO_OUTRO)))
+  }
+  layout.linhas = Math.max(layout.linhas, ...posicoes.map(p => p.y + p.h + 1))
+  return layout
 }
 
 // Junta o layout salvo pelo usuário com as áreas encontradas na auditoria.
