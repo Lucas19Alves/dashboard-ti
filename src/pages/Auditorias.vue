@@ -281,24 +281,11 @@ const abrirSeletorUpload = () => {
   if (input) input.click()
 }
 
-const obterHorarioFim = (tipo) => {
-  return tipo === 'Etiqueta' ? '20:00' : '18:00'
-}
+// Todas as auditorias vão até as 20h.
+const obterHorarioFim = () => '20:00'
 
-const obterHorarioMaximoDia = (data) => {
-  const mapa = auditoriasPorDiaTipo.value || {}
-  const porData = mapa[data]
-  if (!porData) {
-    // Se não há auditorias, verificar tipos planejados
-    const tiposDodia = tiposPlanejados.value[semanaAtual.value.find(d => d.data === data)?.dayIndex] || []
-    if (tiposDodia.includes('Etiqueta')) return '20:00'
-    return '18:00'
-  }
-  // Se há auditorias, retornar o horário máximo entre seus tipos
-  const tipos = Object.keys(porData)
-  if (tipos.includes('Etiqueta')) return '20:00'
-  return '18:00'
-}
+// Todas as auditorias vão até as 20h, qualquer que seja o tipo.
+const obterHorarioMaximoDia = () => '20:00'
 
 // Computed
 const auditoriasFiltradas = computed(() => {

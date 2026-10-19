@@ -6,7 +6,7 @@ import { horaDe } from '../utils/trajetoUsuario'
 // Previsão de fechamento: com o ritmo da última hora, a que horas a auditoria bate a meta.
 const props = defineProps({
   auditoria: { type: Object, required: true },
-  fim: { type: String, default: '18:00' }
+  fim: { type: String, default: '20:00' }
 })
 
 const p = computed(() => previsaoAuditoria(props.auditoria, { fim: props.fim }))

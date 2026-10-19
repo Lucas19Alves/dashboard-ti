@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { previsaoAuditoria } from './previsao'
 import { evolucaoUsuarios, mapaReincidencia, reincidenciaLocais, reincidenciaProdutos, rupturaEmValor, tempoAtivoMs } from './historicoAuditorias'
-import { dividirAreas, escalaSugerida, gerarAcoes, mediana } from './planoAcao'
+import { gerarAcoes, mediana } from './planoAcao'
 import { numeroBR } from './itemAuditoria'
 
 const lido = (usuario, local, hora, extra = {}) => ({ 'Usuário': usuario, Local: local, 'Auditado em': `2026-10-14 ${hora}`, _temPresenca: true, _estoque: 2, 'Código': extra.codigo || Math.random().toString(36).slice(2), ...extra })
@@ -84,15 +84,30 @@ describe('plano e escala', () => {
     expect(acoes[0]).toMatchObject({ responsavelSugerido: 'Ana', setor: 'MERCEARIA' })
   })
 
-  it('divide áreas em grupos contíguos equilibrados', () => {
-    const areas = [1, 2, 3, 4].map(n => ({ bloco: `G0${n}`, tipo: 'gondola', numero: n, itens: 100 }))
-    expect(dividirAreas(areas, 2).map(g => g.areas.map(a => a.bloco))).toEqual([['G01', 'G02'], ['G03', 'G04']])
-    const escala = escalaSugerida({ areas, pessoas: 2, horas: 1, ritmoPorPessoa: 100 })
-    expect(escala).toMatchObject({ totalItens: 400, pessoasNecessarias: 4, cabeNoHorario: false })
-  })
-
   it('mediana', () => {
     expect(mediana([3, 1, 2])).toBe(2)
     expect(mediana([])).toBeNull()
+  })
+})
+
+describe('escala por afinidade', () => {
+  it('mantém cada colaborador nas áreas e setores em que costuma ler', async () => {
+    const { historicoLeitores, escalaPorAfinidade } = await import('./planoAcao')
+    const item = (usuario, local, setor) => ({ 'Usuário': usuario, Local: local, 'Classe de Produto Raiz': setor, _temPresenca: true })
+    const passado = [{ dados: [
+      ...Array(30).fill(0).map(() => item('Ana', 'G01A', 'BEBIDAS')), ...Array(30).fill(0).map(() => item('Ana', 'G02A', 'BEBIDAS')),
+      ...Array(30).fill(0).map(() => item('Bia', 'F01', 'FRIOS')), ...Array(10).fill(0).map(() => item('Bia', 'G03A', 'FRIOS'))
+    ] }]
+    const historico = historicoLeitores(passado)
+    const setores = new Map([['G01', 'BEBIDAS'], ['G02', 'BEBIDAS'], ['G03', 'FRIOS'], ['F01', 'FRIOS']])
+    const areas = [
+      { bloco: 'G01', tipo: 'gondola', numero: 1, itens: 100 }, { bloco: 'G02', tipo: 'gondola', numero: 2, itens: 100 },
+      { bloco: 'G03', tipo: 'gondola', numero: 3, itens: 100 }, { bloco: 'F01', tipo: 'freezer', numero: 1, itens: 100 }
+    ]
+    const escala = escalaPorAfinidade({ areas, pessoas: [{ usuario: 'Ana', ritmo: 100 }, { usuario: 'Bia', ritmo: 100 }], historico, setores, horas: 2 })
+    const de = u => escala.grupos.find(g => g.usuario === u).areas.map(a => a.bloco).sort()
+    expect(de('Ana')).toEqual(['G01', 'G02'])
+    expect(de('Bia')).toEqual(['F01', 'G03'])
+    expect(escala.aderencia).toBe(100)
   })
 })

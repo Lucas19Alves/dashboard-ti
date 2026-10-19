@@ -82,40 +82,87 @@ const ORDEM_TIPOS = ['liquida', 'gondola', 'emporio', 'paredaoFrios', 'freezer',
 export const ordenarAreas = areas => [...areas].sort((a, b) =>
   ORDEM_TIPOS.indexOf(a.tipo) - ORDEM_TIPOS.indexOf(b.tipo) || (a.numero || 0) - (b.numero || 0) || String(a.bloco).localeCompare(String(b.bloco)))
 
-// Divide as áreas (em ordem de caminhada) em grupos contíguos com carga parecida.
-export const dividirAreas = (areas, pessoas) => {
-  const lista = ordenarAreas(areas).filter(a => a.itens > 0)
-  const n = Math.max(1, Math.min(pessoas, lista.length || 1))
-  const grupos = Array.from({ length: n }, () => ({ areas: [], itens: 0 }))
-  let restante = lista.reduce((s, a) => s + a.itens, 0)
-  let g = 0
-  lista.forEach((area, i) => {
-    const gruposRestantes = n - g
-    const alvo = restante / gruposRestantes
-    const grupo = grupos[g]
-    const areasRestantes = lista.length - i
-    // Fecha o grupo se a área estoura o alvo (e o grupo já tem carga), ou se faltam áreas para os demais.
-    const estoura = grupo.itens > 0 && grupo.itens + area.itens - alvo > alvo - grupo.itens
-    if (g < n - 1 && grupo.areas.length && (estoura || areasRestantes < gruposRestantes)) {
-      restante -= grupo.itens
-      g++
+// ---------- Escala por afinidade ----------
+// Histórico de leitura de cada colaborador em todas as auditorias: por área do mapa e por setor.
+export const historicoLeitores = (auditorias) => {
+  const mapa = new Map()
+  for (const auditoria of auditorias || []) {
+    for (const item of Array.isArray(auditoria?.dados) ? auditoria.dados : []) {
+      const usuario = usuarioDoItem(item)
+      if (!usuario || !isItemLido(item)) continue
+      const h = mapa.get(usuario) || { usuario, total: 0, porArea: new Map(), porSetor: new Map() }
+      h.total++
+      contar(h.porArea, interpretarLocal(localDoItem(item)).bloco)
+      contar(h.porSetor, setorDoItem(item))
+      mapa.set(usuario, h)
     }
-    grupos[g].areas.push(area)
-    grupos[g].itens += area.itens
-  })
-  return grupos.filter(x => x.areas.length)
+  }
+  return mapa
 }
 
-// Escala: pessoas necessárias para terminar no horário e divisão das áreas entre elas.
-export const escalaSugerida = ({ areas = [], pessoas = 1, horas = 8, ritmoPorPessoa = 120 }) => {
-  const totalItens = areas.reduce((s, a) => s + (a.itens || 0), 0)
-  const capacidade = Math.max(1, ritmoPorPessoa * horas)
-  const pessoasNecessarias = Math.max(1, Math.ceil(totalItens / capacidade))
-  const grupos = dividirAreas(areas, pessoas).map((grupo, i) => ({
-    ...grupo,
-    pessoa: i + 1,
-    horas: ritmoPorPessoa > 0 ? grupo.itens / ritmoPorPessoa : null
-  }))
-  const horasNecessarias = Math.max(0, ...grupos.map(gr => gr.horas || 0))
-  return { totalItens, pessoasNecessarias, grupos, horasNecessarias, cabeNoHorario: horasNecessarias <= horas }
+// Setor predominante de cada área (pelos itens da auditoria).
+export const setorPorArea = (auditoria) => {
+  const porArea = new Map()
+  for (const item of Array.isArray(auditoria?.dados) ? auditoria.dados : []) {
+    const bloco = interpretarLocal(localDoItem(item)).bloco
+    const m = porArea.get(bloco) || new Map()
+    contar(m, setorDoItem(item))
+    porArea.set(bloco, m)
+  }
+  return new Map([...porArea].map(([bloco, m]) => [bloco, maisFrequente(m)]))
+}
+
+// Afinidade 0–1: parcela das leituras da pessoa naquela área (60%) e no setor da área (40%).
+export const afinidade = (historico, area, setor) => {
+  if (!historico?.total) return 0
+  const naArea = (historico.porArea.get(area) || 0) / historico.total
+  const noSetor = setor ? (historico.porSetor.get(setor) || 0) / historico.total : 0
+  return 0.6 * naArea + 0.4 * noSetor
+}
+
+// Distribui as áreas entre as pessoas escolhidas priorizando onde cada uma costuma ler,
+// respeitando a capacidade de cada uma (ritmo próprio × horas disponíveis).
+export const escalaPorAfinidade = ({ areas = [], pessoas = [], historico = new Map(), setores = new Map(), horas = 8, ritmoPadrao = 120 }) => {
+  const lista = areas.filter(a => a.itens > 0)
+  const totalItens = lista.reduce((s, a) => s + a.itens, 0)
+  const pessoasNecessarias = Math.max(1, Math.ceil(totalItens / Math.max(1, ritmoPadrao * horas)))
+  if (!pessoas.length) return { totalItens, pessoasNecessarias, grupos: [], horasNecessarias: 0, cabeNoHorario: false, aderencia: 0 }
+
+  const ritmos = pessoas.map(p => p.ritmo > 0 ? p.ritmo : ritmoPadrao)
+  const somaRitmos = ritmos.reduce((s, r) => s + r, 0)
+  const grupos = pessoas.map((p, i) => ({ pessoa: i + 1, usuario: p.usuario, ritmo: ritmos[i], alvo: (totalItens * ritmos[i]) / somaRitmos, areas: [], itens: 0, itensHabituais: 0 }))
+  const pontuar = area => grupos.map(g => ({ g, af: afinidade(historico.get(g.usuario), area.bloco, setores.get(area.bloco)) }))
+
+  // Áreas com "dono" mais claro primeiro; entre elas, as maiores.
+  const ordenadas = lista.map(area => {
+    const notas = pontuar(area).sort((a, b) => b.af - a.af)
+    return { area, notas, clareza: (notas[0]?.af || 0) - (notas[1]?.af || 0) }
+  }).sort((a, b) => b.clareza - a.clareza || b.area.itens - a.area.itens)
+
+  for (const { area, notas } of ordenadas) {
+    const ocupacao = g => (g.itens + area.itens) / Math.max(1, g.alvo)
+    let escolhido = notas.find(n => n.af > 0 && ocupacao(n.g) <= 1.1)?.g
+    if (!escolhido) {
+      const comHistorico = notas.filter(n => n.af > 0).sort((a, b) => ocupacao(a.g) - ocupacao(b.g))
+      escolhido = comHistorico.length && ocupacao(comHistorico[0].g) <= 1.3 ? comHistorico[0].g : [...grupos].sort((a, b) => ocupacao(a) - ocupacao(b))[0]
+    }
+    const af = notas.find(n => n.g === escolhido)?.af || 0
+    escolhido.areas.push({ ...area, setor: setores.get(area.bloco) || '', habitual: af > 0 })
+    escolhido.itens += area.itens
+    if (af > 0) escolhido.itensHabituais += area.itens
+  }
+
+  const resultado = grupos.map(g => {
+    const h = historico.get(g.usuario)
+    return {
+      ...g,
+      areas: ordenarAreas(g.areas),
+      horas: g.itens / g.ritmo,
+      aderencia: g.itens ? (g.itensHabituais / g.itens) * 100 : 0,
+      setoresHabituais: h ? [...h.porSetor].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([s]) => s) : []
+    }
+  })
+  const horasNecessarias = Math.max(0, ...resultado.map(g => g.horas))
+  const itensHabituais = resultado.reduce((s, g) => s + g.itensHabituais, 0)
+  return { totalItens, pessoasNecessarias, grupos: resultado, horasNecessarias, cabeNoHorario: horasNecessarias <= horas, aderencia: totalItens ? (itensHabituais / totalItens) * 100 : 0 }
 }
