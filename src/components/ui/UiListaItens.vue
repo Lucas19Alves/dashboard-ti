@@ -8,7 +8,7 @@ import { imprimirListaVisual } from '../../utils/print'
 // ordenação, carregamento incremental, exportação CSV e impressão.
 const props = defineProps({
   itens: { type: Array, default: () => [] },
-  // [{ chave, titulo, alinhamento?, valor?: item => any, largura?, badge?: valor => classes }]
+  // [{ chave, titulo, alinhamento?, valor?: item => any, formato?: valor => texto, largura?, badge?: valor => classes }]
   colunas: { type: Array, required: true },
   // [{ chave, titulo, valor?: item => string }] — viram filtros e opções de agrupamento.
   facetas: { type: Array, default: () => [] },
@@ -25,6 +25,8 @@ const limite = ref(props.passo)
 const recolhidos = ref(new Set())
 
 const valorColuna = (item, col) => (col.valor ? col.valor(item) : item?.[col.chave])
+// `formato` muda só a exibição; ordenação e exportação usam o valor.
+const textoColuna = (item, col) => (col.formato ? col.formato(valorColuna(item, col)) : valorColuna(item, col))
 const valorFaceta = (item, f) => String((f.valor ? f.valor(item) : item?.[f.chave]) ?? '').trim() || 'Não informado'
 
 const filtrados = computed(() => {
@@ -205,7 +207,7 @@ const copiar = async (texto) => {
                       {{ valorColuna(item, col) }}
                       <i class="text-[10px]" :class="copiado === String(valorColuna(item, col)) ? 'fas fa-check text-emerald-600' : 'far fa-copy opacity-0 group-hover/c:opacity-60'"></i>
                     </button>
-                    <span v-else class="block truncate" :title="String(valorColuna(item, col) ?? '')">{{ valorColuna(item, col) ?? '—' }}</span>
+                    <span v-else class="block truncate" :title="String(textoColuna(item, col) ?? '')">{{ textoColuna(item, col) ?? '—' }}</span>
                   </td>
                 </tr>
               </template>

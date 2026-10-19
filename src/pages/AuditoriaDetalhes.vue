@@ -9,6 +9,9 @@ import ComparativoAnterior from '../components/ComparativoAnterior.vue'
 import AbaUsuariosAuditoria from '../components/AbaUsuariosAuditoria.vue'
 import RelatorioAuditoria from '../components/RelatorioAuditoria.vue'
 import MapaLoja from '../components/MapaLoja.vue'
+import PrevisaoAuditoria from '../components/PrevisaoAuditoria.vue'
+import PlanoAcaoAuditoria from '../components/PlanoAcaoAuditoria.vue'
+import EscalaSugerida from '../components/EscalaSugerida.vue'
 import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
@@ -129,7 +132,7 @@ const colunasDados = computed(() => {
 })
 
 // A aba fica na URL (?aba=mapa): recarregar ou compartilhar o link mantém a seção.
-const ABAS_VALIDAS = ['dashboard', 'mapa', 'usuarios', 'dados', 'estatisticas', 'atencao']
+const ABAS_VALIDAS = ['dashboard', 'mapa', 'usuarios', 'plano', 'dados', 'estatisticas', 'atencao']
 const abaAtiva = computed({
   get: () => (ABAS_VALIDAS.includes(route.query.aba) ? route.query.aba : 'dashboard'),
   set: valor => {
@@ -245,6 +248,7 @@ const abasDetalhes = computed(() => {
     { value: 'dashboard', label: 'Visão geral', icon: 'fas fa-chart-line' },
     { value: 'mapa', label: 'Mapa da loja', icon: 'fas fa-map-location-dot' },
     { value: 'usuarios', label: 'Usuários', icon: 'fas fa-users', badge: usuarios || null },
+    { value: 'plano', label: 'Plano e escala', icon: 'fas fa-list-check' },
     { value: 'dados', label: 'Dados', icon: 'fas fa-database' },
     { value: 'estatisticas', label: 'Estatísticas', icon: 'fas fa-chart-bar' },
     // Aba de uso restrito: só aparece quando aberta pelo endereço (?aba=atencao).
@@ -2311,6 +2315,8 @@ const fecharRelatorio = () => {
 
         <!-- Métricas Gerais -->
         <template v-else>
+          <!-- Previsão de fechamento (auditoria em andamento) -->
+          <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '18:00'" />
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div
               @click="abrirModalMetrica('total')"
@@ -2749,6 +2755,11 @@ const fecharRelatorio = () => {
         :is-item-lido="isItemLido"
         @ver-itens="abrirItensDoLocal"
       />
+
+      <div v-if="abaAtiva === 'plano'" class="space-y-6">
+        <PlanoAcaoAuditoria :auditoria="auditoria" />
+        <EscalaSugerida :auditoria="auditoria" :inicio="store.horariosAuditoria?.inicio || '08:00'" :fim="store.horariosAuditoria?.fim || '18:00'" />
+      </div>
 
       <AbaUsuariosAuditoria
         v-if="abaAtiva === 'usuarios'"

@@ -29,6 +29,9 @@ import UiTabs from '../components/ui/UiTabs.vue'
 import GraficoColunasMeta from '../components/ui/GraficoColunasMeta.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
 import MapaLoja from '../components/MapaLoja.vue'
+import AnaliseReincidencia from '../components/AnaliseReincidencia.vue'
+import AnaliseRupturaValor from '../components/AnaliseRupturaValor.vue'
+import EvolucaoUsuarios from '../components/EvolucaoUsuarios.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -150,6 +153,8 @@ const abas = computed(() => [
   { value: 'setores', label: `Setores (${setores.value.length})`, icon: 'fas fa-store-alt' },
   { value: 'usuarios', label: `Usuários (${usuarios.value.length})`, icon: 'fas fa-users' },
   { value: 'mapa', label: 'Mapa da loja', icon: 'fas fa-map-location-dot' },
+  { value: 'reincidencia', label: 'Reincidência', icon: 'fas fa-fire' },
+  { value: 'ruptura', label: 'Ruptura em valor', icon: 'fas fa-sack-dollar' },
   { value: 'auditorias', label: `Auditorias (${auditoriasFiltradas.value.length})`, icon: 'fas fa-table' }
 ])
 
@@ -661,7 +666,8 @@ const gerarRelatorioPDF = () => {
     </section>
 
     <!-- ===== USUÁRIOS ===== -->
-    <section v-else-if="aba === 'usuarios'" class="ui-card p-5 md:p-6">
+    <template v-else-if="aba === 'usuarios'">
+    <section class="ui-card p-5 md:p-6">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-base font-bold text-slate-900">Produtividade por usuário</h2>
@@ -719,6 +725,22 @@ const gerarRelatorioPDF = () => {
         </div>
       </div>
     </section>
+
+    <EvolucaoUsuarios :auditorias="auditoriasFiltradas" />
+    </template>
+
+    <!-- ===== REINCIDÊNCIA ===== -->
+    <template v-else-if="aba === 'reincidencia'">
+      <p class="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+        <i class="fas fa-circle-info text-indigo-500"></i>
+        Base: <b class="text-slate-700">{{ auditoriasMapa.length }}</b> auditoria(s) do período ({{ descricaoPeriodo }}).
+        <span v-if="auditoriasMapa.length < auditoriasFiltradas.length">Rupturas ficam de fora (repetem os pendentes da presença); filtre por Ruptura para vê-las.</span>
+      </p>
+      <AnaliseReincidencia :auditorias="auditoriasMapa" />
+    </template>
+
+    <!-- ===== RUPTURA EM VALOR ===== -->
+    <AnaliseRupturaValor v-else-if="aba === 'ruptura'" :auditorias="auditoriasFiltradas" />
 
     <!-- ===== MAPA DA LOJA ===== -->
     <template v-else-if="aba === 'mapa'">

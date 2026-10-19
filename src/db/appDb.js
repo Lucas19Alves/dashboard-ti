@@ -13,3 +13,10 @@ db.version(2).stores({
   vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo'
 })
 
+
+// Plano de ação por auditoria (ações geradas dos pendentes, editadas localmente).
+db.version(3).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status'
+})
