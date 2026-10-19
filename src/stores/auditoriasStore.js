@@ -1298,6 +1298,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       const [removida] = auditorias.value.splice(index, 1)
       try {
         await db.auditorias.delete(removida.id)
+        await db.planosAcao.where('auditoriaId').equals(removida.id).delete()
       } catch (e) {
         console.error('Erro ao remover auditoria do IndexedDB', e)
       }

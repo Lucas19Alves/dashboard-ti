@@ -23,10 +23,13 @@ import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 const props = defineProps({
   auditoria: { type: Object, required: true },
   isItemLido: { type: Function, required: true },
-  itensDisponiveis: { type: Boolean, default: true } // false no mapa consolidado (sem lista de itens)
+  itensDisponiveis: { type: Boolean, default: true }, // false no mapa consolidado (sem lista de itens)
+  // Outra leitura do percentual (ex.: reincidência): limite das cores e nomes exibidos.
+  metrica: { type: Object, default: null } // { meta, rotulo, curto, pendentes, lidos }
 })
 const emit = defineEmits(['ver-itens'])
-const META = META_PENDENTE_PERCENTUAL
+const META = props.metrica?.meta ?? META_PENDENTE_PERCENTUAL
+const textos = { rotulo: '% pendente', curto: 'pendente', pendentes: 'pendentes', lidos: 'lidos', ...(props.metrica || {}) }
 
 const areas = computed(() => agregarPorArea(props.auditoria, props.isItemLido))
 
@@ -150,7 +153,7 @@ const TONS_AZUL = ['bg-blue-100 text-blue-900', 'bg-blue-200 text-blue-900', 'bg
 const classeDados = (d) => {
   if (!d || !d.total) return 'bg-slate-100 text-slate-400'
   if (modo.value === 'pendente') {
-    if (!d.lidos && !d.comProblema) return 'bg-slate-700 text-white'
+    if (!props.metrica && !d.lidos && !d.comProblema) return 'bg-slate-700 text-white'
     const p = percentualPendente(d)
     if (p <= META) return 'bg-emerald-500 text-white'
     if (p <= META * 2) return 'bg-amber-400 text-amber-950'
@@ -232,7 +235,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex rounded-xl bg-slate-100 p-1 text-sm">
-          <button v-for="[v, r, i] in [['pendente', '% pendente', 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']]" :key="v" type="button"
+          <button v-for="[v, r, i] in [['pendente', textos.rotulo, 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']]" :key="v" type="button"
             class="rounded-lg px-3 py-1.5 font-semibold transition" :class="modo === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'" @click="modo = v">
             <i :class="[i, 'mr-1 text-xs']"></i>{{ r }}
           </button>
@@ -324,7 +327,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             <span><i class="mr-1 inline-block size-3 rounded bg-emerald-500 align-[-2px]"></i>Até {{ META }}%</span>
             <span><i class="mr-1 inline-block size-3 rounded bg-amber-400 align-[-2px]"></i>Até {{ META * 2 }}%</span>
             <span><i class="mr-1 inline-block size-3 rounded bg-red-500 align-[-2px]"></i>Acima de {{ META * 2 }}%</span>
-            <span><i class="mr-1 inline-block size-3 rounded bg-slate-700 align-[-2px]"></i>Sem leitura</span>
+            <span v-if="!metrica"><i class="mr-1 inline-block size-3 rounded bg-slate-700 align-[-2px]"></i>Sem leitura</span>
           </template>
           <template v-else>
             <span>Menos</span><span v-for="t in TONS_AZUL" :key="t" class="inline-block size-3 rounded" :class="t.split(' ')[0]"></span><span>Mais leituras{{ modo === 'usuario' ? ' do usuário' : '' }}</span>
@@ -359,11 +362,11 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </div>
 
           <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[10px] text-slate-500">lidos</p></div>
-            <div class="rounded-xl bg-amber-50 py-2"><p class="text-lg font-black text-amber-800">{{ areaSelecionada.pendentes }}</p><p class="text-[10px] text-amber-700">pendentes</p></div>
+            <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[10px] text-slate-500">{{ textos.lidos }}</p></div>
+            <div class="rounded-xl bg-amber-50 py-2"><p class="text-lg font-black text-amber-800">{{ areaSelecionada.pendentes }}</p><p class="text-[10px] text-amber-700">{{ textos.pendentes }}</p></div>
             <div class="rounded-xl py-2" :class="percentualPendente(areaSelecionada) > META ? 'bg-red-50' : 'bg-emerald-50'">
               <p class="text-lg font-black" :class="percentualPendente(areaSelecionada) > META ? 'text-red-700' : 'text-emerald-700'">{{ percentualPendente(areaSelecionada).toFixed(1) }}%</p>
-              <p class="text-[10px] text-slate-500">pendente</p>
+              <p class="text-[10px] text-slate-500">{{ textos.curto }}</p>
             </div>
           </div>
 
@@ -462,7 +465,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         :style="{ left: `${dica.left}px`, top: `${dica.top}px`, transform: dica.abaixo ? 'translateX(-50%)' : 'translate(-50%, -100%)' }"
       >
         <b>{{ titulo(areaDica) }}</b><br>
-        {{ percentualPendente(areaDica).toFixed(1) }}% pendente · {{ areaDica.pendentes }} pend. · {{ areaDica.lidos }} lidos
+        {{ percentualPendente(areaDica).toFixed(1) }}% {{ textos.curto }} · {{ areaDica.pendentes }} {{ textos.pendentes }} · {{ areaDica.lidos }} {{ textos.lidos }}
       </div>
     </Teleport>
   </div>

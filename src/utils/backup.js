@@ -198,12 +198,14 @@ export const normalizarFormatoBackup = dados => {
 export const exportarBackupJson = async () => {
   const auditorias = await db.auditorias.toArray()
   const vencimentos = await db.vencimentos.toArray()
+  const planosAcao = await db.planosAcao.toArray()
   const auditoriasComStatus = auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' }))
   const payload = {
     versao: BACKUP_VERSION,
     geradoEm: new Date().toISOString(),
     auditorias: auditoriasComStatus,
     vencimentos,
+    planosAcao,
     configuracoes: { mapaLoja: carregarLayoutSalvo() }
   }
 
@@ -244,11 +246,17 @@ export const importarBackupJson = async (file) => {
 
   // A validação acontece antes desta transação para nunca apagar a base atual
   // por causa de um arquivo incompleto ou de formato incorreto.
-  await db.transaction('rw', db.auditorias, db.vencimentos, async () => {
+  // Planos de ação só são substituídos quando o backup os traz (backups antigos não têm).
+  const planosAcao = Array.isArray(dados.planosAcao) ? dados.planosAcao.filter(p => p && typeof p === 'object') : null
+  await db.transaction('rw', db.auditorias, db.vencimentos, db.planosAcao, async () => {
     await db.auditorias.clear()
     await db.vencimentos.clear()
     if (auditorias.length) await db.auditorias.bulkAdd(auditorias)
     if (vencimentos.length) await db.vencimentos.bulkAdd(vencimentos)
+    if (planosAcao) {
+      await db.planosAcao.clear()
+      if (planosAcao.length) await db.planosAcao.bulkAdd(planosAcao)
+    }
   })
 
   limparStatusLocalLegado()
