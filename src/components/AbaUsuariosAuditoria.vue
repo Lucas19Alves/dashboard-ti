@@ -3,12 +3,14 @@ import { computed, ref } from 'vue'
 import { correspondeBusca } from '../utils/busca'
 import { baixarCsv } from '../utils/csv'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
+import TrajetoUsuario from './TrajetoUsuario.vue'
 
 // Aba "Usuários" do detalhe da auditoria: produtividade, ritmo por hora e cobertura por setor.
 const props = defineProps({
   auditoria: { type: Object, required: true },
   isItemLido: { type: Function, required: true },
-  getItemHour: { type: Function, required: true }
+  getItemHour: { type: Function, required: true },
+  usuarioTrajeto: { type: String, default: '' } // usuário aberto no mapa histórico
 })
 const emit = defineEmits(['detalhes', 'imprimir'])
 
@@ -100,6 +102,8 @@ const resumo = computed(() => {
     porHora
   }
 })
+
+const usuariosTrajeto = computed(() => [...usuarios.value].sort((a, b) => b.leituras - a.leituras))
 
 const podio = computed(() => [...usuarios.value].sort((a, b) => b.leituras - a.leituras).slice(0, 3).filter(u => u.leituras > 0))
 
@@ -232,6 +236,9 @@ const exportarCsv = () => {
           </div>
         </section>
       </div>
+
+      <!-- Mapa histórico: leituras ao longo do dia e caminho pela loja -->
+      <TrajetoUsuario id="trajeto-usuario" class="scroll-mt-24" :auditoria="auditoria" :is-item-lido="isItemLido" :usuarios="usuariosTrajeto" :usuario-inicial="usuarioTrajeto" />
 
       <!-- Barra de ferramentas -->
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

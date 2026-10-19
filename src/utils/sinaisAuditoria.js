@@ -38,7 +38,7 @@ const horaSegundos = valor => {
   return horas < 24 && minutos < 60 && segundos < 60 ? horas * 3600 + minutos * 60 + segundos : null
 }
 
-const momentoLeitura = item => {
+export const momentoLeitura = item => {
   const chaves = Object.keys(item).filter(chave => /^auditado[ _]em/i.test(chave))
   const valores = [
     ...chaves.map(chave => ({ chave, valor: item[chave] })),

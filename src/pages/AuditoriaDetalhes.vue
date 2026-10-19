@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UploadAnaliseAuditoria from '../components/UploadAnaliseAuditoria.vue'
@@ -1371,6 +1371,16 @@ const facetasListaItens = [
   { chave: 'setor', titulo: 'Setor', valor: setorDoItem },
   { chave: 'Usuário', titulo: 'Usuário' }
 ]
+
+// Abre o mapa histórico (aba Usuários) no usuário do modal.
+const usuarioTrajeto = ref('')
+const verTrajetoUsuario = async (nome) => {
+  usuarioTrajeto.value = nome
+  fecharModalUsuario()
+  abaAtiva.value = 'usuarios'
+  await nextTick()
+  document.getElementById('trajeto-usuario')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const fecharModalUsuario = () => {
   modalUsuarioAberto.value = false
@@ -2745,6 +2755,7 @@ const fecharRelatorio = () => {
         :auditoria="auditoria"
         :is-item-lido="isItemLido"
         :get-item-hour="getItemHour"
+        :usuario-trajeto="usuarioTrajeto"
         @detalhes="abrirModalUsuario"
         @imprimir="handlePrintUsuarios"
       />
@@ -3531,6 +3542,7 @@ const fecharRelatorio = () => {
 
     <UiModal v-if="modalUsuarioAberto && usuarioDetalhes" :title="separarUsuario(usuarioDetalhes.nome).nome || usuarioDetalhes.nome" :subtitle="separarUsuario(usuarioDetalhes.nome).matricula ? `Matrícula: ${separarUsuario(usuarioDetalhes.nome).matricula} · desempenho nesta auditoria` : 'Desempenho do usuário nesta auditoria'" width="max-w-4xl" @close="fecharModalUsuario">
       <div class="space-y-5">
+        <button type="button" class="ui-btn-primary py-2" @click="verTrajetoUsuario(usuarioDetalhes.nome)"><i class="fas fa-route"></i>Ver trajeto no mapa</button>
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="rounded-2xl bg-slate-50 p-3">
             <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lidos</p>
