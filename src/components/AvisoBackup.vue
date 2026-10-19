@@ -44,23 +44,38 @@ const fazerBackup = async () => {
 </script>
 
 <template>
-  <div v-if="visivel" class="ui-container pt-4 print:hidden">
-    <div class="ui-fade-in flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center" role="status" aria-live="polite">
-      <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
-        <i class="fas fa-shield-halved"></i>
-      </span>
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-bold text-amber-900" :title="titulo">{{ titulo }}</p>
-        <p class="text-xs text-amber-800">
-          {{ mudancas ? descreverUltimoBackup(estadoBackup.ultimo) + '. ' : '' }}Os dados ficam apenas neste navegador: exporte um backup para não perder o histórico.
-        </p>
+  <!-- Flutuante no canto: não empurra o conteúdo nem separa a barra dos cabeçalhos das páginas. -->
+  <Transition name="aviso-backup">
+    <aside v-if="visivel" class="fixed inset-x-3 bottom-3 z-40 print:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[26rem]" aria-label="Lembrete de backup">
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-xl shadow-slate-900/10" role="status" aria-live="polite">
+        <div class="flex items-start gap-3">
+          <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
+            <i class="fas fa-shield-halved"></i>
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-amber-900">{{ titulo }}</p>
+            <p class="mt-0.5 text-xs text-amber-800">
+              {{ mudancas ? descreverUltimoBackup(estadoBackup.ultimo) + '. ' : '' }}Os dados ficam apenas neste navegador: exporte um backup para não perder o histórico.
+            </p>
+          </div>
+          <button type="button" class="-mr-1 -mt-1 rounded-lg p-1.5 text-amber-700 hover:bg-amber-100" aria-label="Lembrar depois" title="Lembrar depois" @click="adiar">
+            <i class="fas fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="mt-3 flex justify-end gap-2">
+          <button type="button" class="rounded-xl px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100" @click="adiar">Depois</button>
+          <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-3.5 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600 disabled:opacity-60" :disabled="exportando" @click="fazerBackup">
+            <i :class="exportando ? 'fas fa-spinner fa-spin' : 'fas fa-download'" aria-hidden="true"></i>Fazer backup agora
+          </button>
+        </div>
       </div>
-      <div class="flex shrink-0 gap-2">
-        <button type="button" class="rounded-xl px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100" @click="adiar">Depois</button>
-        <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-3.5 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600 disabled:opacity-60" :disabled="exportando" @click="fazerBackup">
-          <i :class="exportando ? 'fas fa-spinner fa-spin' : 'fas fa-download'" aria-hidden="true"></i>Fazer backup agora
-        </button>
-      </div>
-    </div>
-  </div>
+    </aside>
+  </Transition>
 </template>
+
+<style scoped>
+.aviso-backup-enter-active,
+.aviso-backup-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.aviso-backup-enter-from,
+.aviso-backup-leave-to { opacity: 0; transform: translateY(12px); }
+</style>
