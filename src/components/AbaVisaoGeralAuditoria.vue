@@ -1,0 +1,1066 @@
+<script setup>
+import { ref, computed } from 'vue'
+import UploadAnaliseAuditoria from './UploadAnaliseAuditoria.vue'
+import ComparativoAnterior from './ComparativoAnterior.vue'
+import PrevisaoAuditoria from './PrevisaoAuditoria.vue'
+import { isItemLido } from '../utils/itemLido'
+import { extrairDataISOPlanilha } from '../utils/auditoriaHorario'
+import { getSetorItem } from '../utils/detalheAuditoria'
+import { useAuditoriasStore } from '../stores/auditoriasStore'
+
+// Aba "Visão geral" do detalhe da auditoria: previsão, métricas, andamento por hora e insights.
+const props = defineProps({
+  auditoria: { type: Object, required: true },
+  metricas: { type: Object, default: () => ({}) },
+  itensComEstoqueZero: { type: Array, default: () => [] },
+  itensLidoNaoPertence: { type: Array, default: () => [] },
+  somenteLeitura: { type: Boolean, default: false },
+  horaDoItem: { type: Function, default: null },
+  valorHora: { type: Function, default: null },
+  normalizar: { type: Function, default: null },
+})
+const emit = defineEmits(['abrir-metrica', 'upload-completo'])
+const store = useAuditoriasStore()
+const auditoria = computed(() => props.auditoria)
+const metricasGerais = computed(() => props.metricas)
+const itensComEstoqueZero = computed(() => props.itensComEstoqueZero)
+const itensLidoNaoPertence = computed(() => props.itensLidoNaoPertence)
+const readOnly = computed(() => props.somenteLeitura)
+const abrirModalMetrica = (...args) => emit('abrir-metrica', ...args)
+const handleUploadCompleto = (...args) => emit('upload-completo', ...args)
+const getItemHour = (...args) => props.horaDoItem?.(...args)
+const getHoraValor = (...args) => props.valorHora?.(...args)
+const normalizar = (...args) => props.normalizar?.(...args)
+
+const filtroHorarioUsuario = ref('todos')
+const filtroHorarioSetor = ref('todos')
+
+const filtroAndamentoSetor = ref('todos')
+
+const insights = computed(() => {
+  if (!auditoria.value?.dados || !auditoria.value?.analise) return []
+  
+  const insights = []
+  const a = auditoria.value.analise
+  const dados = auditoria.value.dados
+  const metricas = metricasGerais.value
+  const totalLidos = metricas?.totalLidos ?? 0
+  const totalAuditaveis = metricas?.totalItens ?? 0
+  const percentualConclusao = metricas?.percentualConclusao ?? 0
+  const percentualPendente = metricas?.percentualPendente ?? 0
+
+  // Insight 1: Status da Meta
+  if (percentualPendente <= 3.0) {
+    insights.push({
+      tipo: 'sucesso',
+      titulo: '🎯 Meta Atingida!',
+      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
+      detalhes: [`✅ Auditoria dentro da meta estabelecida`]
+    })
+  } else {
+    const falta = percentualPendente - 3.0
+    const itensFaltam = Math.ceil((falta / 100) * totalAuditaveis)
+    insights.push({
+      tipo: 'critico',
+      titulo: '⚠️ Meta Não Atingida',
+      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
+      detalhes: [
+        `Faltam ${falta.toFixed(2)}% para atingir a meta`,
+        `Aproximadamente ${itensFaltam} itens precisam ser lidos`
+      ]
+    })
+  }
+
+  // Insight 2: Setores críticos
+  if (a.setoresParados?.length > 0) {
+    insights.push({
+      tipo: 'critico',
+      titulo: '🚨 Setores Parados',
+      mensagem: `${a.setoresParados.length} setor(es) sem nenhuma leitura`,
+      detalhes: a.setoresParados.slice(0, 5)
+    })
+  }
+
+  // Insight 3: Itens com Problema
+  if (a.itensLidosComProblema > 0) {
+    const detalhes = []
+    if (a.itensComEstoqueZero > 0) detalhes.push(`${a.itensComEstoqueZero} com estoque zerado`)
+    if (a.itensLidoNaoPertence > 0) detalhes.push(`${a.itensLidoNaoPertence} em local errado`)
+    insights.push({
+      tipo: 'aviso',
+      titulo: '⚠️ Ítens Requerem Atenção',
+      mensagem: `${a.itensLidosComProblema} itens lidos mas com problemas`,
+      detalhes: detalhes
+    })
+  }
+
+  // Insight 4: Progresso Geral
+  if (percentualConclusao >= 95) {
+    insights.push({
+      tipo: 'sucesso',
+      titulo: '🎯 Excelente Progresso!',
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`${totalLidos} de ${totalAuditaveis} itens lidos`]
+    })
+  } else if (percentualConclusao >= 80) {
+    insights.push({
+      tipo: 'info',
+      titulo: '⚡ Bom Progresso',
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`Ainda restam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens pendentes`]
+    })
+  } else {
+    insights.push({
+      tipo: 'aviso',
+      titulo: '📊 Progresso em Andamento',
+      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
+      detalhes: [`Faltam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens para completar`]
+    })
+  }
+
+  // Insight 5: Usuário mais produtivo
+  if (Object.keys(a.porUsuario).length > 0) {
+    const usuarioTopProdutivo = Object.entries(a.porUsuario)
+      .map(([nome, dados]) => ({
+        nome,
+        total: (dados.lidos || 0) + (dados.comProblema || 0)
+      }))
+      .sort((a, b) => b.total - a.total)[0]
+    if (usuarioTopProdutivo && usuarioTopProdutivo.total > 0) {
+      insights.push({
+        tipo: 'info',
+        titulo: '⭐ Melhor Desempenho',
+        mensagem: `${usuarioTopProdutivo.nome} leu ${usuarioTopProdutivo.total} itens`,
+        detalhes: []
+      })
+    }
+  }
+
+  // Insight 6: Locais críticos
+  if (a.locaisSemLeitura?.length > 0) {
+    insights.push({
+      tipo: 'aviso',
+      titulo: '📍 Locais Sem Leitura',
+      mensagem: `${a.locaisSemLeitura.length} local(is) ainda precisam de atenção`,
+      detalhes: a.locaisSemLeitura.slice(0, 5)
+    })
+  }
+
+  // Insight 7: Distribuição de leituras
+  const usuariosAtivos = Object.keys(a.porUsuario).length
+  if (usuariosAtivos > 0) {
+    const mediaPorUsuario = Math.round(totalLidos / usuariosAtivos)
+    insights.push({
+      tipo: 'info',
+      titulo: '👥 Equipe em Ação',
+      mensagem: `${usuariosAtivos} usuário(s) ativo(s)`,
+      detalhes: [`Média de ${mediaPorUsuario} itens lidos por usuário`]
+    })
+  }
+
+  // Onde focar: top 3 setores por % pendente
+  const setoresOrdenados = Object.entries(a.porSetor || {}).map(([nome, v]) => {
+    const total = (v.lidos || 0) + (v.pendentes || 0) + (v.comProblema || 0)
+    const perc = total > 0 ? (v.pendentes / total) * 100 : 0
+    return { nome, pend: v.pendentes || 0, perc }
+  }).sort((x, y) => (y.perc - x.perc) || (y.pend - x.pend)).slice(0, 3)
+  if (setoresOrdenados.length > 0) {
+    insights.push({
+      tipo: 'critico',
+      titulo: '🎯 Onde Focar',
+      mensagem: 'Setores com maior % pendente',
+      detalhes: setoresOrdenados.map(s => `${s.nome}: ${s.perc.toFixed(1)}% (${s.pend})`)
+    })
+  }
+
+  // Ritmo mais lento: usuário com menor volume de leitura
+  const usuariosLista = Object.entries(a.porUsuario || {}).map(([nome, v]) => ({
+    nome, total: (v.lidos || 0) + (v.comProblema || 0)
+  })).sort((x, y) => x.total - y.total)
+  if (usuariosLista.length > 0) {
+    const lento = usuariosLista[0]
+    insights.push({
+      tipo: 'aviso',
+      titulo: '🐢 Ritmo Mais Lento',
+      mensagem: `${lento.nome} com ${lento.total} leituras`,
+      detalhes: []
+    })
+  }
+
+  // Locais há muito tempo sem ler
+  const qtdMuitoTempo = (itensMuitoTempoNaoLidos?.value || []).length
+  if (qtdMuitoTempo > 0) {
+    insights.push({
+      tipo: 'aviso',
+      titulo: '⏳ Muito Tempo Sem Leitura',
+      mensagem: `${qtdMuitoTempo} item(ns) lidos há muito tempo`,
+      detalhes: []
+    })
+  }
+
+  return insights
+})
+
+// =========== ANÁLISES INTELIGENTES ===========
+
+// =========== ANÁLISES INTELIGENTES ===========
+const horarioInicio = computed(() => {
+  const tipo = auditoria.value?.tipo
+  return tipo === 'Etiqueta' ? '08:00' : '08:00'
+})
+
+const horarioFim = computed(() => {
+  const tipo = auditoria.value?.tipo
+  return tipo === 'Etiqueta' ? '20:00' : '18:00'
+})
+
+const parseHoraHoje = (hhmm) => {
+  try {
+    const [h, m] = String(hhmm).split(':').map(n => parseInt(n, 10))
+    const d = new Date()
+    d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0)
+    return d
+  } catch {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+}
+
+const horasEntre = (inicio, fim) => {
+  const ms = Math.max(0, fim.getTime() - inicio.getTime())
+  return ms / 36e5
+}
+
+const projecoes = computed(() => {
+  if (!auditoria.value?.analise) return null
+  const a = auditoria.value.analise
+  const sku = auditoria.value.sku || a.totalItens || 0
+  const totalLidos = Math.max(0, sku - (a.itensPendentes || 0))
+  const totalAuditaveis = sku
+
+  const agora = new Date()
+  const ini = parseHoraHoje(horarioInicio.value)
+  const fim = parseHoraHoje(horarioFim.value)
+
+  const horasDecorridas = Math.max(0, Math.min(horasEntre(ini, agora), horasEntre(ini, fim)))
+  const horasRestantes = Math.max(0, horasEntre(agora, fim))
+  const ritmoHora = totalLidos / Math.max(0.25, horasDecorridas || 0) // evita divisão por zero
+  const projItens = Math.floor(ritmoHora * horasRestantes)
+  const projPercentualFinal = totalAuditaveis > 0
+    ? Math.min(100, ((totalLidos + projItens) / totalAuditaveis) * 100)
+    : 0
+
+  return {
+    horasDecorridas,
+    horasRestantes,
+    ritmoHora,
+    projItens,
+    projPercentualFinal,
+    totalLidos,
+    totalAuditaveis
+  }
+})
+
+const formatHoras = (valor) => {
+  if (valor == null || isNaN(valor)) return '00:00'
+  const totalMinutos = Math.round(Math.max(0, valor) * 60)
+  const horas = Math.floor(totalMinutos / 60)
+  const minutos = totalMinutos % 60
+  const hStr = String(horas).padStart(2, '0')
+  const mStr = String(minutos).padStart(2, '0')
+  return `${hStr}:${mStr}`
+}
+
+// Converte serial Excel ou valor para data ISO YYYY-MM-DD (seguro para timezone)
+const serialToDateISO = extrairDataISOPlanilha
+
+// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
+
+// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
+const getItemDateISO = (item) => {
+  // Tentar todas as variações "Auditado em" (incluindo _1, _2 do XLSX)
+  const chaves = Object.keys(item).filter(k => {
+    const n = k.toLowerCase()
+    return n.startsWith('auditado em') || n.startsWith('auditado_em')
+  })
+  for (const chave of chaves) {
+    const resultado = serialToDateISO(item[chave])
+    if (resultado) return resultado
+  }
+  // Fallback: tentar getHoraValor
+  const horaValor = getHoraValor(item)
+  return serialToDateISO(horaValor)
+}
+
+const leituraPorHoraFiltrada = computed(() => {
+  if (!auditoria.value?.dados) return null
+  const dados = auditoria.value.dados
+  const auditoriaDia = String(auditoria.value.data || '').slice(0, 10)
+
+  const contagem = {}
+  for (let h = 6; h <= 22; h++) contagem[h] = 0
+
+  let totalLeituras = 0
+
+  dados.forEach(item => {
+    if (!isItemLido(item)) return
+
+    // Filtro de data: somente itens auditados no dia da auditoria
+    if (auditoriaDia) {
+      const dataItemISO = getItemDateISO(item)
+      if (dataItemISO && dataItemISO !== auditoriaDia) return
+    }
+
+    // Filtro de usuário
+    if (filtroHorarioUsuario.value !== 'todos') {
+      const usuario = (item['Usuário'] || item['Usuario'] || '').toString().trim()
+      if (usuario !== filtroHorarioUsuario.value) return
+    }
+
+    // Filtro de setor
+    if (filtroHorarioSetor.value !== 'todos') {
+      const setor = getSetorItem(item)
+      if (setor !== filtroHorarioSetor.value) return
+    }
+
+    const h = getItemHour(item)
+    if (h != null && h >= 6 && h <= 22) {
+      contagem[h] = (contagem[h] || 0) + 1
+      totalLeituras++
+    }
+  })
+
+  // Construir a série do mapa de quantidade.
+  const serie = []
+  let horasComLeitura = 0
+  for (let h = 6; h <= 22; h++) {
+    const valor = contagem[h] || 0
+    if (valor > 0) horasComLeitura++
+    const label = String(h).padStart(2, '0') + ':00'
+    serie.push({ hora: label, horaNum: h, valor, variacao: 0 })
+  }
+
+  // Calcular variação % entre horas consecutivas
+  for (let i = 1; i < serie.length; i++) {
+    const anterior = serie[i - 1].valor
+    const atual = serie[i].valor
+    if (anterior > 0 && atual > 0) {
+      serie[i].variacao = Math.round(((atual - anterior) / anterior) * 100)
+    } else if (anterior === 0 && atual > 0) {
+      serie[i].variacao = 100
+    } else if (anterior > 0 && atual === 0) {
+      serie[i].variacao = -100
+    }
+  }
+
+  const max = serie.reduce((m, p) => Math.max(m, p.valor), 0)
+  const media = horasComLeitura > 0 ? Math.round(totalLeituras / horasComLeitura) : 0
+
+  // Filtrar série para exibir somente horários relevantes (com dados OU entre horários com dados)
+  let primeiroIdx = serie.findIndex(s => s.valor > 0)
+  let ultimoIdx = serie.length - 1
+  for (let i = serie.length - 1; i >= 0; i--) {
+    if (serie[i].valor > 0) { ultimoIdx = i; break }
+  }
+  const serieVisivel = primeiroIdx >= 0 ? serie.slice(Math.max(0, primeiroIdx - 1), ultimoIdx + 2) : serie
+
+  // Insights
+  const comLeitura = serie.filter(s => s.valor > 0)
+  const pico = comLeitura.length > 0 ? comLeitura.reduce((a, b) => a.valor >= b.valor ? a : b) : null
+  const baixa = comLeitura.length > 0 ? comLeitura.reduce((a, b) => a.valor <= b.valor ? a : b) : null
+
+  let maiorSubida = null
+  let maiorQueda = null
+  for (let i = 1; i < serie.length; i++) {
+    if (serie[i].valor === 0 && serie[i - 1].valor === 0) continue
+    if (serie[i].variacao > 0 && (!maiorSubida || serie[i].variacao > maiorSubida.variacao)) {
+      maiorSubida = { de: serie[i - 1].hora, para: serie[i].hora, variacao: serie[i].variacao }
+    }
+    if (serie[i].variacao < 0 && (!maiorQueda || serie[i].variacao < maiorQueda.variacao)) {
+      maiorQueda = { de: serie[i - 1].hora, para: serie[i].hora, variacao: serie[i].variacao }
+    }
+  }
+
+  return {
+    serie: serieVisivel,
+    max,
+    totalLeituras,
+    media,
+    pico,
+    baixa,
+    maiorSubida,
+    maiorQueda
+  }
+})
+
+const isItemConcluidoNaAuditoria = (item) => {
+  if (!item) return false
+  const situacao = normalizar(item._situacao || item['Situação'] || item['Situação atual da auditoria'] || '')
+  if (
+    item._lidoNaoPertence === true ||
+    situacao.includes('lido nao pertence') ||
+    situacao.includes('lido sem estoque')
+  ) return false
+
+  if (auditoria.value?.tipo === 'Etiqueta') {
+    return situacao.includes('atualizado') || situacao.includes('desatualizado')
+  }
+
+  if (item._temPresenca !== true) return false
+  if (item._temEstoqueSituacao === false) return false
+  if (item._estoque !== undefined && Number(item._estoque) <= 0) return false
+  return true
+}
+
+// Evolução acumulada da auditoria, com visão geral ou recorte por setor.
+
+// Evolução acumulada da auditoria, com visão geral ou recorte por setor.
+const andamentoAuditoriaPorHora = computed(() => {
+  if (!auditoria.value?.dados || !metricasGerais.value?.totalItens) return null
+
+  const auditoriaDia = String(auditoria.value.data || '').slice(0, 10)
+  const setorSelecionado = filtroAndamentoSetor.value
+  const dadosSetor = setorSelecionado !== 'todos'
+    ? auditoria.value.analise?.porSetor?.[setorSelecionado]
+    : null
+  const totalAuditavel = setorSelecionado === 'todos'
+    ? Number(metricasGerais.value.totalItens || 0)
+    : Number((dadosSetor?.lidos || 0) + (dadosSetor?.pendentes || 0))
+  const totalLidosAtual = setorSelecionado === 'todos'
+    ? Number(metricasGerais.value.totalLidos || 0)
+    : Number(dadosSetor?.lidos || 0)
+
+  if (totalAuditavel <= 0) return null
+
+  const contagem = {}
+  for (let h = 0; h <= 23; h++) contagem[h] = 0
+
+  auditoria.value.dados.forEach(item => {
+    if (setorSelecionado !== 'todos' && getSetorItem(item) !== setorSelecionado) return
+    if (!isItemConcluidoNaAuditoria(item)) return
+    if (auditoriaDia) {
+      const dataItemISO = getItemDateISO(item)
+      if (dataItemISO && dataItemISO !== auditoriaDia) return
+    }
+    const hora = getItemHour(item)
+    if (hora != null && hora >= 0 && hora <= 23) contagem[hora]++
+  })
+
+  let acumulado = 0
+  const serie = []
+  for (let h = 0; h <= 23; h++) {
+    const leituras = contagem[h] || 0
+    acumulado += leituras
+    serie.push({
+      hora: `${String(h).padStart(2, '0')}:00`,
+      leituras,
+      acumulado,
+      percentual: totalAuditavel > 0 ? Math.min(100, (acumulado / totalAuditavel) * 100) : 0
+    })
+  }
+
+  const primeiroIdx = serie.findIndex(ponto => ponto.leituras > 0)
+  let ultimoIdx = -1
+  for (let i = serie.length - 1; i >= 0; i--) {
+    if (serie[i].leituras > 0) { ultimoIdx = i; break }
+  }
+  if (primeiroIdx < 0 || ultimoIdx < 0) {
+    return {
+      serie: [],
+      totalAuditavel,
+      totalComHorario: 0,
+      semHorario: totalLidosAtual,
+      percentualFinal: totalAuditavel > 0 ? Math.min(100, (totalLidosAtual / totalAuditavel) * 100) : 0
+    }
+  }
+
+  const semHorario = Math.max(0, totalLidosAtual - acumulado)
+  const serieVisivel = serie.slice(Math.max(0, primeiroIdx - 1), Math.min(serie.length, ultimoIdx + 2))
+  if (semHorario > 0) {
+    serieVisivel.push({
+      hora: 'Sem horário',
+      leituras: semHorario,
+      acumulado: totalLidosAtual,
+      percentual: totalAuditavel > 0 ? Math.min(100, (totalLidosAtual / totalAuditavel) * 100) : 0
+    })
+  }
+
+  return {
+    serie: serieVisivel,
+    totalAuditavel,
+    totalComHorario: acumulado,
+    semHorario,
+    percentualFinal: totalAuditavel > 0 ? Math.min(100, (totalLidosAtual / totalAuditavel) * 100) : 0
+  }
+})
+
+const niveisGraficoAndamento = [100, 75, 50, 25, 0]
+
+const graficoAndamento = computed(() => {
+  const serie = andamentoAuditoriaPorHora.value?.serie || []
+  if (serie.length === 0) return null
+
+  const largura = 1000
+  const altura = 300
+  const margem = { esquerda: 55, direita: 25, topo: 25, base: 55 }
+  const larguraUtil = largura - margem.esquerda - margem.direita
+  const alturaUtil = altura - margem.topo - margem.base
+  const divisor = Math.max(1, serie.length - 1)
+  const pontos = serie.map((ponto, indice) => ({
+    ...ponto,
+    rotulo: ponto.hora === 'Sem horário' ? 'Atual' : ponto.hora,
+    x: margem.esquerda + (indice / divisor) * larguraUtil,
+    y: margem.topo + ((100 - Math.min(100, ponto.percentual)) / 100) * alturaUtil
+  }))
+
+  return {
+    largura,
+    altura,
+    margem,
+    alturaUtil,
+    pontos,
+    linha: pontos.map(ponto => `${ponto.x},${ponto.y}`).join(' '),
+    area: `${margem.esquerda},${margem.topo + alturaUtil} ${pontos.map(ponto => `${ponto.x},${ponto.y}`).join(' ')} ${pontos[pontos.length - 1].x},${margem.topo + alturaUtil}`
+  }
+})
+
+const improvementInsights = computed(() => {
+  if (auditoria.value?.status !== 'fechada') return null
+  
+  const insights = []
+  
+  // 1. Análise de Horários (Pico e Baixa)
+  if (leituraPorHoraFiltrada.value) {
+    const { serie } = leituraPorHoraFiltrada.value
+    const sortedHours = [...serie].sort((a, b) => b.valor - a.valor)
+    const pico = sortedHours[0]
+    const baixa = sortedHours.filter(h => h.valor > 0).pop() // Menor valor maior que zero
+    
+    if (pico && pico.valor > 0) {
+      insights.push({
+        titulo: '⏰ Picos de Produtividade',
+        valor: `${pico.hora}`,
+        descricao: `Horário com maior volume: ${pico.valor} leituras`,
+        tipo: 'sucesso',
+        icon: 'fas fa-chart-line'
+      })
+    }
+    
+    if (baixa) {
+      insights.push({
+        titulo: '📉 Horário de Baixa',
+        valor: `${baixa.hora}`,
+        descricao: `Menor fluxo registrado: ${baixa.valor} leituras`,
+        tipo: 'aviso',
+        icon: 'fas fa-level-down-alt'
+      })
+    }
+  }
+
+  // 2. Análise de Problemas
+  const a = auditoria.value?.analise
+  if (a) {
+    const totalLidos = (a.totalLidos != null)
+      ? a.totalLidos
+      : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
+    if (totalLidos > 0) {
+      const percProblema = (a.itensLidosComProblema / totalLidos) * 100
+      if (percProblema > 5) {
+        insights.push({
+          titulo: '⚠️ Índice de Problemas',
+          valor: `${percProblema.toFixed(1)}%`,
+          descricao: 'Alto índice de itens com problema. Verificar qualidade das etiquetas ou treinamento.',
+          tipo: 'critico',
+          icon: 'fas fa-exclamation-triangle'
+        })
+      } else {
+        insights.push({
+          titulo: '✅ Qualidade da Leitura',
+          valor: `${(100 - percProblema).toFixed(1)}%`,
+          descricao: 'Excelente índice de leituras corretas.',
+          tipo: 'sucesso',
+          icon: 'fas fa-check-circle'
+        })
+      }
+    }
+
+    // 3. Setores Gargalo
+    if (a.porSetor) {
+      const setoresLentos = Object.entries(a.porSetor)
+        .map(([nome, dados]) => ({
+          nome,
+          pendente: dados.pendentes,
+          total: dados.lidos + dados.pendentes + dados.comProblema
+        }))
+        .filter(s => s.pendente > 0)
+        .sort((a, b) => b.pendente - a.pendente)
+        .slice(0, 1)
+
+      if (setoresLentos.length > 0) {
+        insights.push({
+          titulo: '🐢 Maior Gargalo',
+          valor: setoresLentos[0].nome,
+          descricao: `${setoresLentos[0].pendente} itens ficaram pendentes neste setor.`,
+          tipo: 'aviso',
+          icon: 'fas fa-shipping-fast'
+        })
+      }
+    }
+  }
+
+  return insights
+})
+
+// =========== USUÁRIOS ===========
+</script>
+
+<template>
+  <div class="space-y-8">
+    <div v-if="(!auditoria.dados || auditoria.dados.length === 0) && !readOnly" class="bg-blue-50 border-2 border-blue-300 rounded-lg p-12">
+      <div class="text-center">
+        <i class="fas fa-cloud-upload-alt text-6xl text-blue-500 mb-6"></i>
+        <h3 class="text-2xl font-bold text-gray-800 mb-3">Nenhum dado carregado</h3>
+        <p class="text-gray-600 mb-8 text-lg">Faça upload de um arquivo Excel para começar a análise</p>
+        <UploadAnaliseAuditoria 
+          :auditoria="auditoria"
+          @analiseCompleta="handleUploadCompleto"
+        />
+      </div>
+    </div>
+
+    <!-- Métricas Gerais -->
+    <template v-else>
+      <!-- Previsão de fechamento (auditoria em andamento) -->
+      <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '18:00'" />
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div
+          @click="abrirModalMetrica('total')"
+          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Auditável</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
+              <i class="fas fa-clipboard-list text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-blue-700">{{ metricasGerais?.totalItens }}</p>
+          <p class="text-[11px] text-slate-400">Itens para auditar</p>
+        </div>
+        <div
+          @click="abrirModalMetrica('lidos')"
+          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Lidos</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
+              <i class="fas fa-check-circle text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.totalLidos }}</p>
+          <p class="text-[11px] text-slate-400">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído  |  Meta: {{ metricasGerais?.metaConclusao }}%</p>
+        </div>
+        <div
+          @click="abrirModalMetrica('pendentes')"
+          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Pendentes</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-amber-50 text-amber-600">
+              <i class="fas fa-hourglass-half text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-amber-700">{{ metricasGerais?.pendentes }}</p>
+          <p class="text-[11px]" :class="metricasGerais?.percentualPendente <= 3 ? 'text-emerald-500' : 'text-red-500'">
+            {{ metricasGerais?.percentualPendente?.toFixed(2) }}% pendente  |  Meta: {{ metricasGerais?.metaPendente }}%
+            <span v-if="metricasGerais?.faltaParaMeta > 0"> (+{{ metricasGerais?.faltaParaMeta.toFixed(2) }}%)</span>
+          </p>
+        </div>
+        <div
+          @click="abrirModalMetrica('problema')"
+          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Com Problema</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-50 text-red-600">
+              <i class="fas fa-exclamation-triangle text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-red-700">{{ metricasGerais?.comProblema }}</p>
+          <p class="text-[11px] text-slate-400">Requer atenção</p>
+        </div>
+      </div>
+
+      <ComparativoAnterior :auditoria="auditoria" :historico="store.auditorias" />
+
+      <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Atualizado</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
+              <i class="fas fa-sync-alt text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.atualizados || 0 }}</p>
+          <p class="text-[11px] text-slate-400">Lidos e corretos</p>
+        </div>
+        <div
+          @click="abrirModalMetrica('desatualizado')"
+          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+        >
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Desatualizado</p>
+            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-yellow-50 text-yellow-600">
+              <i class="fas fa-history text-sm"></i>
+            </span>
+          </div>
+          <p class="text-3xl font-bold text-yellow-600">{{ metricasGerais?.desatualizados || 0 }}</p>
+          <p class="text-[11px] text-slate-400">Lidos mas desatualizados</p>
+        </div>
+      </div>
+
+      <!-- Andamento acumulado da auditoria completa por horário -->
+      <div v-if="auditoria?.dados?.length" class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+          <div>
+            <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+              <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-50 text-violet-600">
+                <i class="fas fa-chart-line text-sm"></i>
+              </span>
+              Andamento da Auditoria por Horário
+            </h3>
+            <p class="text-xs text-slate-400 mt-1">Percentual acumulado ao longo do dia{{ filtroAndamentoSetor === 'todos' ? ' na auditoria completa' : ` no setor ${filtroAndamentoSetor}` }}.</p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <select
+              v-model="filtroAndamentoSetor"
+              class="px-3 py-2 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-violet-500 max-w-xs"
+              aria-label="Filtrar andamento por setor"
+            >
+              <option value="todos">Todos os setores</option>
+              <option v-for="s in Object.keys(auditoria?.analise?.porSetor || {})" :key="s" :value="s">{{ s }}</option>
+            </select>
+            <div v-if="andamentoAuditoriaPorHora" class="rounded-xl bg-violet-50 px-4 py-2 text-right shrink-0">
+              <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Progresso atual</p>
+              <p class="text-xl font-bold text-violet-700">{{ andamentoAuditoriaPorHora.percentualFinal.toFixed(2) }}%</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="graficoAndamento" class="overflow-x-auto">
+          <div class="min-w-[720px]">
+            <svg
+              class="w-full h-auto"
+              :viewBox="`0 0 ${graficoAndamento.largura} ${graficoAndamento.altura}`"
+              role="img"
+              :aria-label="`Evolução percentual por horário para ${filtroAndamentoSetor === 'todos' ? 'todos os setores' : filtroAndamentoSetor}`"
+            >
+              <defs>
+                <linearGradient id="andamento-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28" />
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02" />
+                </linearGradient>
+              </defs>
+
+              <g v-for="nivel in niveisGraficoAndamento" :key="nivel">
+                <line
+                  :x1="graficoAndamento.margem.esquerda"
+                  :x2="graficoAndamento.largura - graficoAndamento.margem.direita"
+                  :y1="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil"
+                  :y2="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil"
+                  stroke="#e2e8f0"
+                  stroke-width="1"
+                />
+                <text
+                  :x="graficoAndamento.margem.esquerda - 10"
+                  :y="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil + 4"
+                  text-anchor="end"
+                  class="fill-slate-400 text-[11px]"
+                >{{ nivel }}%</text>
+              </g>
+
+              <polygon :points="graficoAndamento.area" fill="url(#andamento-area)" />
+              <polyline
+                :points="graficoAndamento.linha"
+                fill="none"
+                stroke="#7c3aed"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+
+              <g v-for="p in graficoAndamento.pontos" :key="`ponto-${p.rotulo}`">
+                <line
+                  :x1="p.x"
+                  :x2="p.x"
+                  :y1="p.y"
+                  :y2="graficoAndamento.margem.topo + graficoAndamento.alturaUtil"
+                  stroke="#c4b5fd"
+                  stroke-width="1"
+                  stroke-dasharray="3 4"
+                />
+                <circle :cx="p.x" :cy="p.y" r="6" fill="#ffffff" stroke="#7c3aed" stroke-width="4" />
+                <text :x="p.x" :y="Math.max(14, p.y - 13)" text-anchor="middle" class="fill-violet-700 text-[11px] font-bold">
+                  {{ p.percentual.toFixed(1) }}%
+                </text>
+                <text :x="p.x" :y="graficoAndamento.altura - 22" text-anchor="middle" class="fill-slate-500 text-[11px] font-medium">
+                  {{ p.rotulo }}
+                </text>
+              </g>
+            </svg>
+
+            <div v-if="andamentoAuditoriaPorHora?.semHorario > 0" class="mt-1 text-right text-[11px] text-slate-400">
+              {{ andamentoAuditoriaPorHora.semHorario.toLocaleString() }} item(ns) sem horário foram incorporados no ponto “Atual”.
+            </div>
+          </div>
+        </div>
+        <div v-else class="py-8 text-center text-sm text-slate-400">
+          Não há leituras com horário para o setor selecionado.
+        </div>
+      </div>
+
+      <!-- Progress Geral -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+        <h3 class="font-bold text-lg text-gray-800 mb-4">Progresso Geral da Auditoria</h3>
+        <div class="space-y-3">
+          <div class="space-y-4">
+            <!-- Conclusão -->
+            <div>
+              <div class="flex justify-between text-sm mb-2">
+                <span class="text-gray-700 font-medium">Concluído (Lidos + Problemas)</span>
+                <span class="font-bold text-green-600">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}%</span>
+              </div>
+              <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  :style="{ width: Math.min(metricasGerais?.percentualConclusao || 0, 100) + '%' }"
+                  class="h-full bg-green-600 transition-all duration-500"
+                />
+              </div>
+              <p class="text-xs text-gray-600 mt-1">
+                {{ metricasGerais?.totalLidos }} de {{ metricasGerais?.totalItens }} itens lidos | Meta: {{ metricasGerais?.metaConclusao }}%
+              </p>
+            </div>
+                
+            <!-- Pendente -->
+            <div>
+              <div class="flex justify-between text-sm mb-2">
+                <span class="text-gray-700 font-medium">Pendente</span>
+                <span class="font-bold" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                  {{ metricasGerais?.percentualPendente?.toFixed(2) }}%
+                </span>
+              </div>
+              <div class="w-full h-6 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  :style="{ width: Math.min(metricasGerais?.percentualPendente || 0, 100) + '%' }"
+                  class="h-full bg-orange-600 transition-all duration-500"
+                />
+              </div>
+              <p class="text-xs mt-1" :class="metricasGerais?.percentualPendente <= 3 ? 'text-green-600' : 'text-orange-600'">
+                {{ metricasGerais?.pendentes }} itens pendentes | Meta: {{ metricasGerais?.metaPendente }}%
+                <span v-if="metricasGerais?.faltaParaMeta > 0" class="font-bold">
+                  (Faltam {{ metricasGerais?.faltaParaMeta.toFixed(2) }}% para meta)
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Análises Inteligentes -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm space-y-6">
+        <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
+          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-50 text-violet-600">
+            <i class="fas fa-brain text-sm"></i>
+          </span>
+          Análises Inteligentes
+        </h3>
+
+        <!-- Auditoria em Andamento -->
+        <template v-if="!readOnly">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="rounded-2xl bg-indigo-50/70 p-4 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-indigo-500 uppercase tracking-wide">Ritmo Atual</p>
+                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600">
+                  <i class="fas fa-tachometer-alt text-xs"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-indigo-700">{{ projecoes?.ritmoHora?.toFixed(1) || 0 }} <span class="text-sm font-medium text-indigo-400">itens/h</span></p>
+              <p class="text-[11px] text-indigo-400">Desde {{ horarioInicio }} até agora</p>
+            </div>
+            <div class="rounded-2xl bg-blue-50/70 p-4 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-blue-500 uppercase tracking-wide">Horas Restantes</p>
+                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-100 text-blue-600">
+                  <i class="fas fa-clock text-xs"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-blue-700">{{ projecoes ? formatHoras(projecoes.horasRestantes) : '00:00' }}</p>
+              <p class="text-[11px] text-blue-400">Fim programado: {{ horarioFim }}</p>
+            </div>
+            <div class="rounded-2xl bg-emerald-50/70 p-4 flex flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Projeção</p>
+                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-emerald-100 text-emerald-600">
+                  <i class="fas fa-chart-line text-xs"></i>
+                </span>
+              </div>
+              <p class="text-3xl font-bold text-emerald-700">+{{ projecoes?.projItens || 0 }} <span class="text-sm font-medium text-emerald-400">itens</span></p>
+              <p class="text-[11px] text-emerald-400">Percentual final: {{ projecoes?.projPercentualFinal?.toFixed(2) || 0 }}%</p>
+            </div>
+          </div>
+
+        </template>
+
+        <!-- Auditoria Fechada (Insights de Melhoria) -->
+        <template v-else>
+          <div v-if="improvementInsights && improvementInsights.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-for="(insight, idx) in improvementInsights"
+              :key="idx"
+              class="rounded-2xl p-4 flex items-start gap-3"
+              :class="insight.tipo === 'sucesso' ? 'bg-emerald-50/70' : insight.tipo === 'critico' ? 'bg-red-50/70' : 'bg-amber-50/70'"
+            >
+              <span
+                class="inline-flex items-center justify-center h-8 w-8 rounded-lg shrink-0"
+                :class="insight.tipo === 'sucesso' ? 'bg-emerald-100 text-emerald-600' : insight.tipo === 'critico' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'"
+              >
+                <i :class="insight.icon" class="text-sm"></i>
+              </span>
+              <div class="min-w-0">
+                <p class="text-[11px] font-semibold uppercase tracking-wide" :class="insight.tipo === 'sucesso' ? 'text-emerald-500' : insight.tipo === 'critico' ? 'text-red-500' : 'text-amber-500'">{{ insight.titulo }}</p>
+                <p class="text-xl font-bold mt-0.5" :class="insight.tipo === 'sucesso' ? 'text-emerald-700' : insight.tipo === 'critico' ? 'text-red-700' : 'text-amber-700'">
+                  {{ insight.valor }}
+                </p>
+                <p class="text-[11px] mt-1 leading-relaxed" :class="insight.tipo === 'sucesso' ? 'text-emerald-400' : insight.tipo === 'critico' ? 'text-red-400' : 'text-amber-400'">
+                  {{ insight.descricao }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center text-gray-500 py-4">
+            <p>Nenhum insight de melhoria disponível para esta auditoria.</p>
+          </div>
+        </template>
+
+        <!-- Mapa de Leituras por Horário -->
+        <div class="mt-2">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h4 class="font-semibold text-gray-800">
+              <i class="fas fa-clock text-blue-600 mr-2"></i>Mapa de Leituras por Horário
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              <select
+                v-model="filtroHorarioUsuario"
+                class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="todos">Todos os usuários</option>
+                <option v-for="u in (auditoria?.analise?.usuarios || [])" :key="u" :value="u">{{ u }}</option>
+              </select>
+              <select
+                v-model="filtroHorarioSetor"
+                class="px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="todos">Todos os setores</option>
+                <option v-for="s in Object.keys(auditoria?.analise?.porSetor || {})" :key="s" :value="s">{{ s }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="leituraPorHoraFiltrada && leituraPorHoraFiltrada.totalLeituras > 0">
+            <!-- Cards Resumo -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div class="rounded-2xl bg-blue-50/70 p-3 text-center">
+                <p class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Total Leituras</p>
+                <p class="text-2xl font-bold text-blue-700 mt-1">{{ leituraPorHoraFiltrada.totalLeituras.toLocaleString() }}</p>
+              </div>
+              <div class="rounded-2xl bg-emerald-50/70 p-3 text-center">
+                <p class="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Horário de Pico</p>
+                <p class="text-2xl font-bold text-emerald-700 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
+                <p class="text-[10px] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
+              </div>
+              <div class="rounded-2xl bg-indigo-50/70 p-3 text-center">
+                <p class="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide">Média/Hora</p>
+                <p class="text-2xl font-bold text-indigo-700 mt-1">{{ leituraPorHoraFiltrada.media }}</p>
+              </div>
+              <div class="rounded-2xl bg-amber-50/70 p-3 text-center">
+                <p class="text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Horário de Baixa</p>
+                <p class="text-2xl font-bold text-amber-700 mt-1">{{ leituraPorHoraFiltrada.baixa?.hora || '--' }}</p>
+                <p class="text-[10px] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
+              </div>
+            </div>
+
+            <!-- Quantidade de leituras em cada hora -->
+            <div class="rounded-2xl border border-slate-100 bg-white/70 p-4">
+                <div class="mb-3">
+                  <p class="text-sm font-semibold text-slate-800">Leituras por horário</p>
+                  <p class="text-[11px] text-slate-400">Quantidade registrada em cada faixa horária</p>
+                </div>
+                <div class="space-y-1.5">
+                  <div v-for="(p, idx) in leituraPorHoraFiltrada.serie" :key="`leituras-${p.hora}`" class="flex items-center gap-2">
+                    <div class="w-12 text-[11px] font-medium text-gray-600 text-right">{{ p.hora }}</div>
+                    <div class="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden relative">
+                      <div
+                        class="h-5 rounded-md transition-all duration-300"
+                        :class="[
+                          p.valor === leituraPorHoraFiltrada.max ? 'bg-green-500' :
+                          p.valor === leituraPorHoraFiltrada.baixa?.valor && p.valor > 0 ? 'bg-orange-400' :
+                          'bg-blue-500'
+                        ]"
+                        :style="{ width: leituraPorHoraFiltrada.max > 0 ? ((p.valor / leituraPorHoraFiltrada.max) * 100) + '%' : '0%' }"
+                      />
+                      <span v-if="p.valor > 0" class="absolute inset-y-0 left-2 flex items-center text-[10px] font-bold text-white drop-shadow">
+                        {{ p.valor }}
+                      </span>
+                    </div>
+                    <div class="w-14 text-right">
+                      <span
+                        v-if="idx > 0 && p.variacao !== 0 && p.valor > 0"
+                        class="text-[10px] font-semibold px-1 py-0.5 rounded"
+                        :class="p.variacao > 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'"
+                      >
+                        {{ p.variacao > 0 ? '+' : '' }}{{ p.variacao }}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            <!-- Insights de Variação -->
+            <div v-if="leituraPorHoraFiltrada.maiorSubida || leituraPorHoraFiltrada.maiorQueda" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div v-if="leituraPorHoraFiltrada.maiorSubida" class="flex items-center gap-3 rounded-2xl bg-emerald-50/70 p-3">
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
+                  <i class="fas fa-arrow-up text-sm"></i>
+                </span>
+                <div>
+                  <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Maior Subida</p>
+                  <p class="text-xs text-emerald-700 font-medium">
+                    {{ leituraPorHoraFiltrada.maiorSubida.de }} → {{ leituraPorHoraFiltrada.maiorSubida.para }}
+                    <span class="font-bold">(+{{ leituraPorHoraFiltrada.maiorSubida.variacao }}%)</span>
+                  </p>
+                </div>
+              </div>
+              <div v-if="leituraPorHoraFiltrada.maiorQueda" class="flex items-center gap-3 rounded-2xl bg-red-50/70 p-3">
+                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-100 text-red-600 shrink-0">
+                  <i class="fas fa-arrow-down text-sm"></i>
+                </span>
+                <div>
+                  <p class="text-[11px] font-semibold text-red-500 uppercase tracking-wide">Maior Queda</p>
+                  <p class="text-xs text-red-700 font-medium">
+                    {{ leituraPorHoraFiltrada.maiorQueda.de }} → {{ leituraPorHoraFiltrada.maiorQueda.para }}
+                    <span class="font-bold">({{ leituraPorHoraFiltrada.maiorQueda.variacao }}%)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-sm text-gray-500 py-4 text-center">
+            <i class="fas fa-chart-bar text-gray-300 text-2xl mb-2"></i>
+            <p>Não há dados de horário suficientes para montar o mapa.</p>
+          </div>
+        </div>
+
+      </div>
+    </template>
+  </div>
+</template>
