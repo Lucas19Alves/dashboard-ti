@@ -5,6 +5,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { usePaleta } from '../composables/usePaleta'
 import { exportarBackupJson } from '../utils/backup'
+import { useAparencia } from '../composables/useAparencia'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
 
 const router = useRouter()
@@ -41,6 +42,7 @@ const acoes = computed(() => {
     acao: () => router.push({ path: '/auditorias', query: { data: hojeISO(), tipo } })
   }))
   itens.push(
+    { id: 'a-tema', titulo: 'Alternar tema claro/escuro', detalhe: 'Aparência salva neste navegador', icone: 'fas fa-circle-half-stroke', termos: 'tema escuro claro dark modo noturno aparencia', acao: () => useAparencia().alternarTema() },
     { id: 'a-criticos', titulo: 'Ver itens vencidos', detalhe: 'Explorar filtrado por vencidos', icone: 'fas fa-triangle-exclamation', termos: 'vencidos criticos', acao: () => router.push({ path: '/vencimentos', query: { prazo: 'vencidos' } }) },
     {
       id: 'a-backup',

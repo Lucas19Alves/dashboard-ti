@@ -2,6 +2,7 @@
 import Navbar from './components/Navbar.vue'
 import Toast from './components/Toast.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import AvisoBackup from './components/AvisoBackup.vue'
 </script>
 
 <template>
@@ -12,6 +13,7 @@ import CommandPalette from './components/CommandPalette.vue'
     <Navbar />
     <Toast />
     <CommandPalette />
+    <AvisoBackup />
     <main id="conteudo">
       <router-view v-slot="{ Component, route }">
         <transition name="pagina" mode="out-in">

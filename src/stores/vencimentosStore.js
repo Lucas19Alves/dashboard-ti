@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { db } from '../db/appDb'
+import { registrarAlteracao } from '../utils/lembreteBackup'
 import { lerPlanilha } from '../utils/planilha'
 
 export const useVencimentosStore = defineStore('vencimentos', () => {
@@ -135,6 +136,7 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
       await db.vencimentos.clear()
       const ids = await db.vencimentos.bulkAdd(resultado, { allKeys: true })
       ids.forEach((id, indice) => { resultado[indice].id = id })
+      registrarAlteracao('vencimentos importados')
     } catch (e) {
       console.error('Erro ao salvar vencimentos no IndexedDB', e)
     }
@@ -190,6 +192,7 @@ export const useVencimentosStore = defineStore('vencimentos', () => {
     analise.value = null
     try {
       await db.vencimentos.clear()
+      registrarAlteracao('vencimentos apagados')
     } catch (e) {
       console.error('Erro ao limpar vencimentos do IndexedDB', e)
     }

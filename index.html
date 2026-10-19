@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Dashboard TI para acompanhamento de auditorias de loja e vencimentos." />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#1d4ed8" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/favicon.png" />
@@ -21,15 +21,30 @@
     <meta name="twitter:image" content="https://dashboard-ti-five.vercel.app/favicon.png" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Dashboard TI</title>
+    <script>
+      // Aplica tema e acessibilidade salvos antes do app montar (evita piscar o tema claro).
+      (function () {
+        try {
+          var a = JSON.parse(localStorage.getItem('dashboard_ti_aparencia') || '{}')
+          var escuro = a.tema === 'escuro' || ((!a.tema || a.tema === 'sistema') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var h = document.documentElement
+          if (escuro) h.classList.add('dark')
+          if (a.contraste) h.classList.add('alto-contraste')
+          if (a.menosMovimento) h.classList.add('menos-movimento')
+          var t = { grande: '112.5%', maior: '125%' }[a.texto]
+          if (t) h.style.fontSize = t
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="app">
       <!-- Exibido enquanto o banco local é carregado; substituído quando o app monta. -->
-      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:system-ui,sans-serif;color:#475569;background:#f5f7fb">
+      <div id="carregando" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:system-ui,sans-serif;color:#475569;background:#f5f7fb">
         <div style="width:40px;height:40px;border-radius:12px;background:#1d4ed8;animation:dti-pulse 1.1s ease-in-out infinite alternate"></div>
         <p style="margin:0;font-size:14px;font-weight:600">Carregando dados locais…</p>
       </div>
-      <style>@keyframes dti-pulse{from{transform:scale(.85);opacity:.6}to{transform:scale(1);opacity:1}}</style>
+      <style>html.dark,html.dark body,html.dark #carregando{background:#0b1220!important;color:#97a3b6!important}@keyframes dti-pulse{from{transform:scale(.85);opacity:.6}to{transform:scale(1);opacity:1}}</style>
     </div>
     <noscript>Este painel requer JavaScript habilitado para funcionar corretamente.</noscript>
     <script type="module" src="/src/main.js"></script>

@@ -4,9 +4,17 @@ import { useRoute } from 'vue-router'
 import UiButton from './ui/UiButton.vue'
 import UiModal from './ui/UiModal.vue'
 import { usePaleta } from '../composables/usePaleta'
+import { useAparencia } from '../composables/useAparencia'
+import PainelAparencia from './PainelAparencia.vue'
 
 const isOpen = ref(false)
 const mostrarSobre = ref(false)
+const mostrarAparencia = ref(false)
+const { temaEfetivo, alternarTema } = useAparencia()
+const abrirAparencia = () => {
+  isOpen.value = false
+  mostrarAparencia.value = true
+}
 const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
 const route = useRoute()
 const { abrir: abrirBusca } = usePaleta()
@@ -104,6 +112,25 @@ onBeforeUnmount(() => {
 
           <button
             type="button"
+            class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20"
+            :title="temaEfetivo() === 'escuro' ? 'Usar tema claro' : 'Usar tema escuro'"
+            :aria-label="temaEfetivo() === 'escuro' ? 'Usar tema claro' : 'Usar tema escuro'"
+            @click="alternarTema"
+          >
+            <i :class="temaEfetivo() === 'escuro' ? 'fas fa-sun' : 'fas fa-moon'" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="hidden size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:inline-flex"
+            title="Aparência e acessibilidade"
+            aria-label="Aparência e acessibilidade"
+            @click="abrirAparencia"
+          >
+            <i class="fas fa-universal-access" aria-hidden="true"></i>
+          </button>
+
+          <button
+            type="button"
             @click="abrirSobre"
             class="hidden size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:inline-flex"
             title="Sobre o projeto"
@@ -136,17 +163,22 @@ onBeforeUnmount(() => {
             <i :class="[link.icon, 'w-4 text-center text-sm']"></i>
             {{ link.label }}
           </router-link>
-          <div class="grid grid-cols-2 gap-2 pt-2">
+          <div class="grid grid-cols-3 gap-2 pt-2">
             <button type="button" @click="abrirBuscaMobile" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
               <i class="fas fa-search"></i>Buscar
             </button>
             <button type="button" @click="abrirSobre" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
               <i class="fas fa-info-circle"></i>Sobre
             </button>
+            <button type="button" @click="abrirAparencia" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
+              <i class="fas fa-universal-access"></i>Acessibilidade
+            </button>
           </div>
         </div>
       </transition>
     </div>
+
+    <PainelAparencia v-if="mostrarAparencia" @close="mostrarAparencia = false" />
 
     <UiModal
       v-if="mostrarSobre"
