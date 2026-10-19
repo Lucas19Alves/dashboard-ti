@@ -5,6 +5,7 @@ import ComparativoAnterior from './ComparativoAnterior.vue'
 import PrevisaoAuditoria from './PrevisaoAuditoria.vue'
 import { isItemLido } from '../utils/itemLido'
 import { getSetorItem } from '../utils/detalheAuditoria'
+import { extrairDataISOPlanilha } from '../utils/auditoriaHorario'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 
 // Aba "Visão geral" do detalhe da auditoria: previsão, métricas, andamento e mapa de leituras por horário.
@@ -13,6 +14,7 @@ const props = defineProps({
   metricas: { type: Object, default: () => ({}) },
   somenteLeitura: { type: Boolean, default: false },
   horaDoItem: { type: Function, default: null },
+  valorHora: { type: Function, default: null },
   normalizar: { type: Function, default: null },
 })
 const emit = defineEmits(['abrir-metrica', 'upload-completo'])
@@ -24,6 +26,21 @@ const abrirModalMetrica = (...args) => emit('abrir-metrica', ...args)
 const handleUploadCompleto = (...args) => emit('upload-completo', ...args)
 const getItemHour = (...args) => props.horaDoItem?.(...args)
 const normalizar = (...args) => props.normalizar?.(...args)
+const getHoraValor = (...args) => props.valorHora?.(...args)
+
+// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
+// (incluindo _1, _2 do XLSX) e, por fim, o valor de hora.
+const getItemDateISO = (item) => {
+  const chaves = Object.keys(item).filter(k => {
+    const n = k.toLowerCase()
+    return n.startsWith('auditado em') || n.startsWith('auditado_em')
+  })
+  for (const chave of chaves) {
+    const resultado = extrairDataISOPlanilha(item[chave])
+    if (resultado) return resultado
+  }
+  return extrairDataISOPlanilha(getHoraValor(item))
+}
 
 const filtroHorarioUsuario = ref('todos')
 const filtroHorarioSetor = ref('todos')
