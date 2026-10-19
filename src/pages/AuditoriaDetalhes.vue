@@ -1202,7 +1202,7 @@ const fecharRelatorio = () => {
       </section>
 
       <!-- DASHBOARD -->
-      <AbaVisaoGeralAuditoria v-if="abaAtiva === 'dashboard'" :auditoria="auditoria" :metricas="metricasGerais" :somente-leitura="readOnly" @abrir-metrica="abrirModalMetrica" @upload-completo="handleUploadCompleto" :hora-do-item="getItemHour" :normalizar="normalizar" />
+      <AbaVisaoGeralAuditoria v-if="abaAtiva === 'dashboard'" :auditoria="auditoria" :metricas="metricasGerais" :somente-leitura="readOnly" @abrir-metrica="abrirModalMetrica" @upload-completo="handleUploadCompleto" :hora-do-item="getItemHour" :normalizar="normalizar" :valor-hora="getHoraValor" />
 
       <!-- USUÁRIOS -->
       <MapaLoja
