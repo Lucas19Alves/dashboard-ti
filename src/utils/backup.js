@@ -1,5 +1,5 @@
 import { db } from '../db/appDb'
-import { registrarBackupRealizado } from './saudeDados'
+import { limparAlteracoes, marcarBackupFeito } from './lembreteBackup'
 import { carregarLayoutSalvo, layoutValido, salvarLayout } from './mapaLoja'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
@@ -216,7 +216,7 @@ export const exportarBackupJson = async () => {
   const blobFinal = gzipBlob || jsonBlob
 
   baixarBlob(blobFinal, criarNomeBackup(Boolean(gzipBlob)))
-  registrarBackupRealizado()
+  marcarBackupFeito()
 
   return {
     compactado: Boolean(gzipBlob),
@@ -260,6 +260,7 @@ export const importarBackupJson = async (file) => {
   })
 
   limparStatusLocalLegado()
+  limparAlteracoes()
   // Restaura o layout do mapa só quando o backup tem um; senão mantém o atual.
   if (dados.configuracoes?.mapaLoja) salvarLayout(dados.configuracoes.mapaLoja)
 

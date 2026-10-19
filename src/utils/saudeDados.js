@@ -1,6 +1,6 @@
 // Acompanha a "saúde" dos dados locais: último backup e uso do armazenamento do navegador.
 const CHAVE_ULTIMO_BACKUP = 'dashboard_ti_ultimo_backup'
-export const DIAS_LEMBRETE_BACKUP = 7
+export const DIAS_LEMBRETE_BACKUP = 1
 
 export const registrarBackupRealizado = (quando = new Date()) => {
   try {
@@ -32,8 +32,10 @@ export const descreverUltimoBackup = (data, agora = new Date()) => {
   return `Último backup há ${dias} dias`
 }
 
-export const precisaLembrarBackup = (data, temDados, agora = new Date()) => {
+// Lembra quando há dados e: nunca houve backup, passou um dia ou houve mudanças grandes depois dele.
+export const precisaLembrarBackup = (data, temDados, agora = new Date(), alteracoes = 0) => {
   if (!temDados) return false
+  if (alteracoes > 0) return true
   const dias = diasDesde(data, agora)
   return dias === null || dias >= DIAS_LEMBRETE_BACKUP
 }

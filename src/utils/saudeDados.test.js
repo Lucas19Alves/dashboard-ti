@@ -15,8 +15,9 @@ describe('saudeDados', () => {
   it('lembra do backup apenas quando há dados e passou do prazo', () => {
     expect(precisaLembrarBackup(null, false, agora)).toBe(false)
     expect(precisaLembrarBackup(null, true, agora)).toBe(true)
-    expect(precisaLembrarBackup(diasAtras(3), true, agora)).toBe(false)
-    expect(precisaLembrarBackup(diasAtras(7), true, agora)).toBe(true)
+    expect(precisaLembrarBackup(diasAtras(0), true, agora)).toBe(false)
+    expect(precisaLembrarBackup(diasAtras(1), true, agora)).toBe(true)
+    expect(precisaLembrarBackup(diasAtras(0), true, agora, 2)).toBe(true)
   })
 
   it('formata bytes', () => {

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, toRaw, markRaw } from 'vue'
 import { db } from '../db/appDb'
+import { registrarAlteracao } from '../utils/lembreteBackup'
 import { lerPlanilha } from '../utils/planilha'
 import { deduplicarPorCodigo } from '../utils/deduplicar'
 import { VERSAO_RUPTURA_PRESENCA, completarLocaisPelaPresenca, presencaBaseDaRuptura, setoresPelaPresenca } from '../utils/rupturaPresenca'
@@ -1237,6 +1238,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     let id
     try {
       id = await db.auditorias.add(novaAuditoria)
+      registrarAlteracao('auditoria nova')
     } catch (e) {
       console.error('Erro ao salvar auditoria no IndexedDB', e)
       id = Date.now()
@@ -1289,6 +1291,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     } catch (e) {
       console.error('Erro ao atualizar auditoria no IndexedDB', e)
     }
+    if ('dados' in dados) registrarAlteracao('planilha enviada')
     if (auditoria.tipo === 'Presença' && 'dados' in dados) await recalcularRupturas({ presencaId: auditoria.id })
   }
 
@@ -1299,6 +1302,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
       try {
         await db.auditorias.delete(removida.id)
         await db.planosAcao.where('auditoriaId').equals(removida.id).delete()
+        registrarAlteracao('auditoria excluída')
       } catch (e) {
         console.error('Erro ao remover auditoria do IndexedDB', e)
       }

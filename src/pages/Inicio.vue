@@ -16,12 +16,12 @@ import {
 import {
   descreverUltimoBackup,
   formatarBytes,
-  obterUltimoBackup,
   obterUsoArmazenamento,
   precisaLembrarBackup,
   solicitarArmazenamentoPersistente
 } from '../utils/saudeDados'
 import { usePaleta } from '../composables/usePaleta'
+import { estadoBackup } from '../utils/lembreteBackup'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
@@ -139,10 +139,10 @@ const ultimasAuditorias = computed(() => [...auditorias.value]
   .map(a => ({ ...a, metricas: metricasAuditoria(a) })))
 
 // ---------- Backup e armazenamento ----------
-const ultimoBackup = ref(obterUltimoBackup())
+const ultimoBackup = computed(() => estadoBackup.ultimo)
 const armazenamento = ref(null)
 const temDados = computed(() => totalAuditorias.value > 0 || resumoVenc.value.total > 0)
-const lembrarBackup = computed(() => precisaLembrarBackup(ultimoBackup.value, temDados.value))
+const lembrarBackup = computed(() => precisaLembrarBackup(ultimoBackup.value, temDados.value, new Date(), estadoBackup.alteracoes.length))
 const percentualUso = computed(() => {
   const a = armazenamento.value
   return a?.cota ? Math.min(100, (a.usado / a.cota) * 100) : 0
@@ -170,7 +170,6 @@ const handleExportarBackup = async () => {
     const resultado = await exportarBackupJson()
     const reducao = resultado.tamanhoOriginal > 0 ? Math.round((1 - resultado.tamanhoFinal / resultado.tamanhoOriginal) * 100) : 0
     const detalhe = resultado.compactado ? `${formatarBytes(resultado.tamanhoFinal)} (${reducao}% menor)` : formatarBytes(resultado.tamanhoFinal)
-    ultimoBackup.value = obterUltimoBackup()
     auditoriasStore.addToast(`Backup exportado: ${detalhe}.`, 'success')
   } catch (err) {
     auditoriasStore.addToast('Erro ao exportar backup: ' + (err?.message || 'desconhecido'), 'error')
@@ -223,20 +222,6 @@ const handleArquivoBackup = async (e) => {
         </UiButton>
       </div>
     </header>
-
-    <!-- Lembrete de backup -->
-    <div v-if="lembrarBackup" class="ui-fade-in flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
-      <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-        <i class="fas fa-shield-halved"></i>
-      </span>
-      <div class="min-w-0 flex-1">
-        <p class="text-sm font-bold text-amber-900">{{ descreverUltimoBackup(ultimoBackup) }}</p>
-        <p class="text-xs text-amber-800">Os dados ficam apenas neste navegador. Exporte um backup para não perder o histórico.</p>
-      </div>
-      <UiButton variant="warning" size="sm" :disabled="exportando" @click="handleExportarBackup">
-        <i :class="exportando ? 'fas fa-spinner fa-spin' : 'fas fa-download'"></i>Fazer backup agora
-      </UiButton>
-    </div>
 
     <!-- KPIs -->
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
