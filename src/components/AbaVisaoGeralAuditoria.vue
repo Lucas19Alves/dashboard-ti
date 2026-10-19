@@ -4,294 +4,31 @@ import UploadAnaliseAuditoria from './UploadAnaliseAuditoria.vue'
 import ComparativoAnterior from './ComparativoAnterior.vue'
 import PrevisaoAuditoria from './PrevisaoAuditoria.vue'
 import { isItemLido } from '../utils/itemLido'
-import { extrairDataISOPlanilha } from '../utils/auditoriaHorario'
 import { getSetorItem } from '../utils/detalheAuditoria'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 
-// Aba "Visão geral" do detalhe da auditoria: previsão, métricas, andamento por hora e insights.
+// Aba "Visão geral" do detalhe da auditoria: previsão, métricas, andamento e mapa de leituras por horário.
 const props = defineProps({
   auditoria: { type: Object, required: true },
   metricas: { type: Object, default: () => ({}) },
-  itensComEstoqueZero: { type: Array, default: () => [] },
-  itensLidoNaoPertence: { type: Array, default: () => [] },
   somenteLeitura: { type: Boolean, default: false },
   horaDoItem: { type: Function, default: null },
-  valorHora: { type: Function, default: null },
   normalizar: { type: Function, default: null },
 })
 const emit = defineEmits(['abrir-metrica', 'upload-completo'])
 const store = useAuditoriasStore()
 const auditoria = computed(() => props.auditoria)
 const metricasGerais = computed(() => props.metricas)
-const itensComEstoqueZero = computed(() => props.itensComEstoqueZero)
-const itensLidoNaoPertence = computed(() => props.itensLidoNaoPertence)
 const readOnly = computed(() => props.somenteLeitura)
 const abrirModalMetrica = (...args) => emit('abrir-metrica', ...args)
 const handleUploadCompleto = (...args) => emit('upload-completo', ...args)
 const getItemHour = (...args) => props.horaDoItem?.(...args)
-const getHoraValor = (...args) => props.valorHora?.(...args)
 const normalizar = (...args) => props.normalizar?.(...args)
 
 const filtroHorarioUsuario = ref('todos')
 const filtroHorarioSetor = ref('todos')
 
 const filtroAndamentoSetor = ref('todos')
-
-const insights = computed(() => {
-  if (!auditoria.value?.dados || !auditoria.value?.analise) return []
-  
-  const insights = []
-  const a = auditoria.value.analise
-  const dados = auditoria.value.dados
-  const metricas = metricasGerais.value
-  const totalLidos = metricas?.totalLidos ?? 0
-  const totalAuditaveis = metricas?.totalItens ?? 0
-  const percentualConclusao = metricas?.percentualConclusao ?? 0
-  const percentualPendente = metricas?.percentualPendente ?? 0
-
-  // Insight 1: Status da Meta
-  if (percentualPendente <= 3.0) {
-    insights.push({
-      tipo: 'sucesso',
-      titulo: '🎯 Meta Atingida!',
-      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
-      detalhes: [`✅ Auditoria dentro da meta estabelecida`]
-    })
-  } else {
-    const falta = percentualPendente - 3.0
-    const itensFaltam = Math.ceil((falta / 100) * totalAuditaveis)
-    insights.push({
-      tipo: 'critico',
-      titulo: '⚠️ Meta Não Atingida',
-      mensagem: `Pendente: ${percentualPendente.toFixed(2)}% (Meta: 3%)`,
-      detalhes: [
-        `Faltam ${falta.toFixed(2)}% para atingir a meta`,
-        `Aproximadamente ${itensFaltam} itens precisam ser lidos`
-      ]
-    })
-  }
-
-  // Insight 2: Setores críticos
-  if (a.setoresParados?.length > 0) {
-    insights.push({
-      tipo: 'critico',
-      titulo: '🚨 Setores Parados',
-      mensagem: `${a.setoresParados.length} setor(es) sem nenhuma leitura`,
-      detalhes: a.setoresParados.slice(0, 5)
-    })
-  }
-
-  // Insight 3: Itens com Problema
-  if (a.itensLidosComProblema > 0) {
-    const detalhes = []
-    if (a.itensComEstoqueZero > 0) detalhes.push(`${a.itensComEstoqueZero} com estoque zerado`)
-    if (a.itensLidoNaoPertence > 0) detalhes.push(`${a.itensLidoNaoPertence} em local errado`)
-    insights.push({
-      tipo: 'aviso',
-      titulo: '⚠️ Ítens Requerem Atenção',
-      mensagem: `${a.itensLidosComProblema} itens lidos mas com problemas`,
-      detalhes: detalhes
-    })
-  }
-
-  // Insight 4: Progresso Geral
-  if (percentualConclusao >= 95) {
-    insights.push({
-      tipo: 'sucesso',
-      titulo: '🎯 Excelente Progresso!',
-      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
-      detalhes: [`${totalLidos} de ${totalAuditaveis} itens lidos`]
-    })
-  } else if (percentualConclusao >= 80) {
-    insights.push({
-      tipo: 'info',
-      titulo: '⚡ Bom Progresso',
-      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
-      detalhes: [`Ainda restam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens pendentes`]
-    })
-  } else {
-    insights.push({
-      tipo: 'aviso',
-      titulo: '📊 Progresso em Andamento',
-      mensagem: `${percentualConclusao.toFixed(2)}% de conclusão`,
-      detalhes: [`Faltam ${metricasGerais.value?.pendentes ?? a.itensPendentes ?? 0} itens para completar`]
-    })
-  }
-
-  // Insight 5: Usuário mais produtivo
-  if (Object.keys(a.porUsuario).length > 0) {
-    const usuarioTopProdutivo = Object.entries(a.porUsuario)
-      .map(([nome, dados]) => ({
-        nome,
-        total: (dados.lidos || 0) + (dados.comProblema || 0)
-      }))
-      .sort((a, b) => b.total - a.total)[0]
-    if (usuarioTopProdutivo && usuarioTopProdutivo.total > 0) {
-      insights.push({
-        tipo: 'info',
-        titulo: '⭐ Melhor Desempenho',
-        mensagem: `${usuarioTopProdutivo.nome} leu ${usuarioTopProdutivo.total} itens`,
-        detalhes: []
-      })
-    }
-  }
-
-  // Insight 6: Locais críticos
-  if (a.locaisSemLeitura?.length > 0) {
-    insights.push({
-      tipo: 'aviso',
-      titulo: '📍 Locais Sem Leitura',
-      mensagem: `${a.locaisSemLeitura.length} local(is) ainda precisam de atenção`,
-      detalhes: a.locaisSemLeitura.slice(0, 5)
-    })
-  }
-
-  // Insight 7: Distribuição de leituras
-  const usuariosAtivos = Object.keys(a.porUsuario).length
-  if (usuariosAtivos > 0) {
-    const mediaPorUsuario = Math.round(totalLidos / usuariosAtivos)
-    insights.push({
-      tipo: 'info',
-      titulo: '👥 Equipe em Ação',
-      mensagem: `${usuariosAtivos} usuário(s) ativo(s)`,
-      detalhes: [`Média de ${mediaPorUsuario} itens lidos por usuário`]
-    })
-  }
-
-  // Onde focar: top 3 setores por % pendente
-  const setoresOrdenados = Object.entries(a.porSetor || {}).map(([nome, v]) => {
-    const total = (v.lidos || 0) + (v.pendentes || 0) + (v.comProblema || 0)
-    const perc = total > 0 ? (v.pendentes / total) * 100 : 0
-    return { nome, pend: v.pendentes || 0, perc }
-  }).sort((x, y) => (y.perc - x.perc) || (y.pend - x.pend)).slice(0, 3)
-  if (setoresOrdenados.length > 0) {
-    insights.push({
-      tipo: 'critico',
-      titulo: '🎯 Onde Focar',
-      mensagem: 'Setores com maior % pendente',
-      detalhes: setoresOrdenados.map(s => `${s.nome}: ${s.perc.toFixed(1)}% (${s.pend})`)
-    })
-  }
-
-  // Ritmo mais lento: usuário com menor volume de leitura
-  const usuariosLista = Object.entries(a.porUsuario || {}).map(([nome, v]) => ({
-    nome, total: (v.lidos || 0) + (v.comProblema || 0)
-  })).sort((x, y) => x.total - y.total)
-  if (usuariosLista.length > 0) {
-    const lento = usuariosLista[0]
-    insights.push({
-      tipo: 'aviso',
-      titulo: '🐢 Ritmo Mais Lento',
-      mensagem: `${lento.nome} com ${lento.total} leituras`,
-      detalhes: []
-    })
-  }
-
-  // Locais há muito tempo sem ler
-  const qtdMuitoTempo = (itensMuitoTempoNaoLidos?.value || []).length
-  if (qtdMuitoTempo > 0) {
-    insights.push({
-      tipo: 'aviso',
-      titulo: '⏳ Muito Tempo Sem Leitura',
-      mensagem: `${qtdMuitoTempo} item(ns) lidos há muito tempo`,
-      detalhes: []
-    })
-  }
-
-  return insights
-})
-
-// =========== ANÁLISES INTELIGENTES ===========
-
-// =========== ANÁLISES INTELIGENTES ===========
-const horarioInicio = computed(() => {
-  const tipo = auditoria.value?.tipo
-  return tipo === 'Etiqueta' ? '08:00' : '08:00'
-})
-
-const horarioFim = computed(() => {
-  const tipo = auditoria.value?.tipo
-  return tipo === 'Etiqueta' ? '20:00' : '18:00'
-})
-
-const parseHoraHoje = (hhmm) => {
-  try {
-    const [h, m] = String(hhmm).split(':').map(n => parseInt(n, 10))
-    const d = new Date()
-    d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0)
-    return d
-  } catch {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d
-  }
-}
-
-const horasEntre = (inicio, fim) => {
-  const ms = Math.max(0, fim.getTime() - inicio.getTime())
-  return ms / 36e5
-}
-
-const projecoes = computed(() => {
-  if (!auditoria.value?.analise) return null
-  const a = auditoria.value.analise
-  const sku = auditoria.value.sku || a.totalItens || 0
-  const totalLidos = Math.max(0, sku - (a.itensPendentes || 0))
-  const totalAuditaveis = sku
-
-  const agora = new Date()
-  const ini = parseHoraHoje(horarioInicio.value)
-  const fim = parseHoraHoje(horarioFim.value)
-
-  const horasDecorridas = Math.max(0, Math.min(horasEntre(ini, agora), horasEntre(ini, fim)))
-  const horasRestantes = Math.max(0, horasEntre(agora, fim))
-  const ritmoHora = totalLidos / Math.max(0.25, horasDecorridas || 0) // evita divisão por zero
-  const projItens = Math.floor(ritmoHora * horasRestantes)
-  const projPercentualFinal = totalAuditaveis > 0
-    ? Math.min(100, ((totalLidos + projItens) / totalAuditaveis) * 100)
-    : 0
-
-  return {
-    horasDecorridas,
-    horasRestantes,
-    ritmoHora,
-    projItens,
-    projPercentualFinal,
-    totalLidos,
-    totalAuditaveis
-  }
-})
-
-const formatHoras = (valor) => {
-  if (valor == null || isNaN(valor)) return '00:00'
-  const totalMinutos = Math.round(Math.max(0, valor) * 60)
-  const horas = Math.floor(totalMinutos / 60)
-  const minutos = totalMinutos % 60
-  const hStr = String(horas).padStart(2, '0')
-  const mStr = String(minutos).padStart(2, '0')
-  return `${hStr}:${mStr}`
-}
-
-// Converte serial Excel ou valor para data ISO YYYY-MM-DD (seguro para timezone)
-const serialToDateISO = extrairDataISOPlanilha
-
-// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
-
-// Extrai a data ISO (YYYY-MM-DD) de um item, tentando todas as colunas "Auditado em"
-const getItemDateISO = (item) => {
-  // Tentar todas as variações "Auditado em" (incluindo _1, _2 do XLSX)
-  const chaves = Object.keys(item).filter(k => {
-    const n = k.toLowerCase()
-    return n.startsWith('auditado em') || n.startsWith('auditado_em')
-  })
-  for (const chave of chaves) {
-    const resultado = serialToDateISO(item[chave])
-    if (resultado) return resultado
-  }
-  // Fallback: tentar getHoraValor
-  const horaValor = getHoraValor(item)
-  return serialToDateISO(horaValor)
-}
 
 const leituraPorHoraFiltrada = computed(() => {
   if (!auditoria.value?.dados) return null
@@ -525,93 +262,6 @@ const graficoAndamento = computed(() => {
   }
 })
 
-const improvementInsights = computed(() => {
-  if (auditoria.value?.status !== 'fechada') return null
-  
-  const insights = []
-  
-  // 1. Análise de Horários (Pico e Baixa)
-  if (leituraPorHoraFiltrada.value) {
-    const { serie } = leituraPorHoraFiltrada.value
-    const sortedHours = [...serie].sort((a, b) => b.valor - a.valor)
-    const pico = sortedHours[0]
-    const baixa = sortedHours.filter(h => h.valor > 0).pop() // Menor valor maior que zero
-    
-    if (pico && pico.valor > 0) {
-      insights.push({
-        titulo: '⏰ Picos de Produtividade',
-        valor: `${pico.hora}`,
-        descricao: `Horário com maior volume: ${pico.valor} leituras`,
-        tipo: 'sucesso',
-        icon: 'fas fa-chart-line'
-      })
-    }
-    
-    if (baixa) {
-      insights.push({
-        titulo: '📉 Horário de Baixa',
-        valor: `${baixa.hora}`,
-        descricao: `Menor fluxo registrado: ${baixa.valor} leituras`,
-        tipo: 'aviso',
-        icon: 'fas fa-level-down-alt'
-      })
-    }
-  }
-
-  // 2. Análise de Problemas
-  const a = auditoria.value?.analise
-  if (a) {
-    const totalLidos = (a.totalLidos != null)
-      ? a.totalLidos
-      : ((a.itensLidosCorretamente || 0) + (a.itensLidosComProblema || 0))
-    if (totalLidos > 0) {
-      const percProblema = (a.itensLidosComProblema / totalLidos) * 100
-      if (percProblema > 5) {
-        insights.push({
-          titulo: '⚠️ Índice de Problemas',
-          valor: `${percProblema.toFixed(1)}%`,
-          descricao: 'Alto índice de itens com problema. Verificar qualidade das etiquetas ou treinamento.',
-          tipo: 'critico',
-          icon: 'fas fa-exclamation-triangle'
-        })
-      } else {
-        insights.push({
-          titulo: '✅ Qualidade da Leitura',
-          valor: `${(100 - percProblema).toFixed(1)}%`,
-          descricao: 'Excelente índice de leituras corretas.',
-          tipo: 'sucesso',
-          icon: 'fas fa-check-circle'
-        })
-      }
-    }
-
-    // 3. Setores Gargalo
-    if (a.porSetor) {
-      const setoresLentos = Object.entries(a.porSetor)
-        .map(([nome, dados]) => ({
-          nome,
-          pendente: dados.pendentes,
-          total: dados.lidos + dados.pendentes + dados.comProblema
-        }))
-        .filter(s => s.pendente > 0)
-        .sort((a, b) => b.pendente - a.pendente)
-        .slice(0, 1)
-
-      if (setoresLentos.length > 0) {
-        insights.push({
-          titulo: '🐢 Maior Gargalo',
-          valor: setoresLentos[0].nome,
-          descricao: `${setoresLentos[0].pendente} itens ficaram pendentes neste setor.`,
-          tipo: 'aviso',
-          icon: 'fas fa-shipping-fast'
-        })
-      }
-    }
-  }
-
-  return insights
-})
-
 // =========== USUÁRIOS ===========
 </script>
 
@@ -632,7 +282,7 @@ const improvementInsights = computed(() => {
     <!-- Métricas Gerais -->
     <template v-else>
       <!-- Previsão de fechamento (auditoria em andamento) -->
-      <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '18:00'" />
+      <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '20:00'" />
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           @click="abrirModalMetrica('total')"
@@ -866,89 +516,13 @@ const improvementInsights = computed(() => {
         </div>
       </div>
 
-      <!-- Análises Inteligentes -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm space-y-6">
-        <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
-          <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-50 text-violet-600">
-            <i class="fas fa-brain text-sm"></i>
-          </span>
-          Análises Inteligentes
-        </h3>
-
-        <!-- Auditoria em Andamento -->
-        <template v-if="!readOnly">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="rounded-2xl bg-indigo-50/70 p-4 flex flex-col gap-2">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-indigo-500 uppercase tracking-wide">Ritmo Atual</p>
-                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-indigo-100 text-indigo-600">
-                  <i class="fas fa-tachometer-alt text-xs"></i>
-                </span>
-              </div>
-              <p class="text-3xl font-bold text-indigo-700">{{ projecoes?.ritmoHora?.toFixed(1) || 0 }} <span class="text-sm font-medium text-indigo-400">itens/h</span></p>
-              <p class="text-[11px] text-indigo-400">Desde {{ horarioInicio }} até agora</p>
-            </div>
-            <div class="rounded-2xl bg-blue-50/70 p-4 flex flex-col gap-2">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-blue-500 uppercase tracking-wide">Horas Restantes</p>
-                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-blue-100 text-blue-600">
-                  <i class="fas fa-clock text-xs"></i>
-                </span>
-              </div>
-              <p class="text-3xl font-bold text-blue-700">{{ projecoes ? formatHoras(projecoes.horasRestantes) : '00:00' }}</p>
-              <p class="text-[11px] text-blue-400">Fim programado: {{ horarioFim }}</p>
-            </div>
-            <div class="rounded-2xl bg-emerald-50/70 p-4 flex flex-col gap-2">
-              <div class="flex items-center justify-between">
-                <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Projeção</p>
-                <span class="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-emerald-100 text-emerald-600">
-                  <i class="fas fa-chart-line text-xs"></i>
-                </span>
-              </div>
-              <p class="text-3xl font-bold text-emerald-700">+{{ projecoes?.projItens || 0 }} <span class="text-sm font-medium text-emerald-400">itens</span></p>
-              <p class="text-[11px] text-emerald-400">Percentual final: {{ projecoes?.projPercentualFinal?.toFixed(2) || 0 }}%</p>
-            </div>
-          </div>
-
-        </template>
-
-        <!-- Auditoria Fechada (Insights de Melhoria) -->
-        <template v-else>
-          <div v-if="improvementInsights && improvementInsights.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div
-              v-for="(insight, idx) in improvementInsights"
-              :key="idx"
-              class="rounded-2xl p-4 flex items-start gap-3"
-              :class="insight.tipo === 'sucesso' ? 'bg-emerald-50/70' : insight.tipo === 'critico' ? 'bg-red-50/70' : 'bg-amber-50/70'"
-            >
-              <span
-                class="inline-flex items-center justify-center h-8 w-8 rounded-lg shrink-0"
-                :class="insight.tipo === 'sucesso' ? 'bg-emerald-100 text-emerald-600' : insight.tipo === 'critico' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'"
-              >
-                <i :class="insight.icon" class="text-sm"></i>
-              </span>
-              <div class="min-w-0">
-                <p class="text-[11px] font-semibold uppercase tracking-wide" :class="insight.tipo === 'sucesso' ? 'text-emerald-500' : insight.tipo === 'critico' ? 'text-red-500' : 'text-amber-500'">{{ insight.titulo }}</p>
-                <p class="text-xl font-bold mt-0.5" :class="insight.tipo === 'sucesso' ? 'text-emerald-700' : insight.tipo === 'critico' ? 'text-red-700' : 'text-amber-700'">
-                  {{ insight.valor }}
-                </p>
-                <p class="text-[11px] mt-1 leading-relaxed" :class="insight.tipo === 'sucesso' ? 'text-emerald-400' : insight.tipo === 'critico' ? 'text-red-400' : 'text-amber-400'">
-                  {{ insight.descricao }}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-center text-gray-500 py-4">
-            <p>Nenhum insight de melhoria disponível para esta auditoria.</p>
-          </div>
-        </template>
-
-        <!-- Mapa de Leituras por Horário -->
-        <div class="mt-2">
+      <!-- Mapa de Leituras por Horário -->
+      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+        <div>
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <h4 class="font-semibold text-gray-800">
+            <h3 class="font-bold text-lg text-gray-800">
               <i class="fas fa-clock text-blue-600 mr-2"></i>Mapa de Leituras por Horário
-            </h4>
+            </h3>
             <div class="flex flex-wrap gap-2">
               <select
                 v-model="filtroHorarioUsuario"
@@ -1059,7 +633,6 @@ const improvementInsights = computed(() => {
             <p>Não há dados de horário suficientes para montar o mapa.</p>
           </div>
         </div>
-
       </div>
     </template>
   </div>

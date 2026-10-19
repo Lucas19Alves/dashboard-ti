@@ -1202,7 +1202,7 @@ const fecharRelatorio = () => {
       </section>
 
       <!-- DASHBOARD -->
-      <AbaVisaoGeralAuditoria v-if="abaAtiva === 'dashboard'" :auditoria="auditoria" :metricas="metricasGerais" :itens-com-estoque-zero="itensComEstoqueZero" :itens-lido-nao-pertence="itensLidoNaoPertence" :somente-leitura="readOnly" @abrir-metrica="abrirModalMetrica" @upload-completo="handleUploadCompleto" :hora-do-item="getItemHour" :valor-hora="getHoraValor" :normalizar="normalizar" />
+      <AbaVisaoGeralAuditoria v-if="abaAtiva === 'dashboard'" :auditoria="auditoria" :metricas="metricasGerais" :somente-leitura="readOnly" @abrir-metrica="abrirModalMetrica" @upload-completo="handleUploadCompleto" :hora-do-item="getItemHour" :normalizar="normalizar" />
 
       <!-- USUÁRIOS -->
       <MapaLoja
@@ -1214,7 +1214,7 @@ const fecharRelatorio = () => {
 
       <div v-if="abaAtiva === 'plano'" class="space-y-6">
         <PlanoAcaoAuditoria :auditoria="auditoria" />
-        <EscalaSugerida :auditoria="auditoria" :inicio="store.horariosAuditoria?.inicio || '08:00'" :fim="store.horariosAuditoria?.fim || '18:00'" />
+        <EscalaSugerida :auditoria="auditoria" :inicio="store.horariosAuditoria?.inicio || '08:00'" :fim="store.horariosAuditoria?.fim || '20:00'" />
       </div>
 
       <AbaUsuariosAuditoria

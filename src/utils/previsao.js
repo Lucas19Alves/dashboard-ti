@@ -8,11 +8,11 @@ import { momentoLeitura } from './sinaisAuditoria'
 
 const HORA = 3600000
 const segundosDoHorario = (hhmm) => {
-  const [h, m] = String(hhmm || '18:00').split(':').map(Number)
+  const [h, m] = String(hhmm || '20:00').split(':').map(Number)
   return ((h || 0) * 60 + (m || 0)) * 60
 }
 
-export const previsaoAuditoria = (auditoria, { fim = '18:00', meta = META_PENDENTE_PERCENTUAL, janelaMinutos = 60, passoMinutos = 15 } = {}) => {
+export const previsaoAuditoria = (auditoria, { fim = '20:00', meta = META_PENDENTE_PERCENTUAL, janelaMinutos = 60, passoMinutos = 15 } = {}) => {
   const dados = Array.isArray(auditoria?.dados) ? auditoria.dados : []
   // Só leituras que reduzem o pendente (itens com estoque).
   const leituras = []

@@ -48,7 +48,7 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
 
   const horariosAuditoria = {
     inicio: '08:00',
-    fim: '18:00'
+    fim: '20:00'
   }
 
   // Colunas esperadas do Excel para auditoria de Presença
