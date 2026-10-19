@@ -1338,6 +1338,13 @@ const abrirModalUsuario = (nome) => {
 
 // Lista do modal de itens de um local (UiListaItens).
 const setorDoItem = item => (item['Classe de Produto Raiz'] || item['Setor'] || '').toString().trim()
+// Vazio quando a planilha não traz a coluna (ex.: Etiqueta).
+const diasSemVendaDoItem = item => {
+  const bruto = item['Dias sem venda'] ?? item['Dias sem Venda']
+  if (bruto === undefined || bruto === null || String(bruto).trim() === '') return ''
+  const dias = Number(String(bruto).replace(',', '.'))
+  return Number.isFinite(dias) ? dias : String(bruto)
+}
 // Mesma regra do modal anterior: ignora itens sem presença e sem estoque.
 const itensModalLista = computed(() => (itensModal.value || [])
   .filter(item => !isSemPresencaSemEstoque(item))
@@ -1356,6 +1363,7 @@ const colunasListaItens = [
   { chave: 'setor', titulo: 'Setor', valor: setorDoItem, largura: 'max-w-44' },
   { chave: 'Usuário', titulo: 'Usuário' },
   { chave: '_estoque', titulo: 'Estoque', alinhamento: 'right', valor: i => Number(i._estoque || 0) },
+  { chave: 'diasSemVenda', titulo: 'Dias sem venda', alinhamento: 'right', valor: diasSemVendaDoItem },
   { chave: 'status', titulo: 'Status', alinhamento: 'center', badge: v => (v === 'Lido' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700') }
 ]
 const facetasListaItens = [
