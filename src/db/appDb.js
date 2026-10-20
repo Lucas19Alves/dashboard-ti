@@ -20,3 +20,11 @@ db.version(3).stores({
   vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
   planosAcao: '++id, auditoriaId, status'
 })
+
+// Configurações que precisam ficar no IndexedDB (ex.: pasta do backup automático).
+db.version(4).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status',
+  config: 'chave'
+})

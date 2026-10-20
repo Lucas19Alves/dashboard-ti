@@ -1,8 +1,20 @@
-const CACHE_NAME = 'dashboard-ti-v3'
+const CACHE_NAME = 'dashboard-ti-v4'
 const APP_SHELL = ['/', '/favicon.png', '/manifest.webmanifest']
 
+// Na instalação guarda o app inteiro (lista gerada no build), não só as telas já visitadas.
+const listaDoBuild = () => fetch('/precache.json', { cache: 'no-store' })
+  .then(resposta => (resposta.ok ? resposta.json() : { arquivos: [] }))
+  .then(lista => lista.arquivos || [])
+  .catch(() => [])
+
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)))
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME)
+    await cache.addAll(APP_SHELL)
+    const arquivos = await listaDoBuild()
+    // Um arquivo que falhar não impede os demais.
+    await Promise.all(arquivos.map(url => cache.add(url).catch(() => {})))
+  })())
   self.skipWaiting()
 })
 

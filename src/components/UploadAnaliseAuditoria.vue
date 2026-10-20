@@ -227,6 +227,7 @@
 </template>
 
 <script setup>
+import { useConferencia } from '../composables/useConferencia'
 import { ref, computed } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import ModalMetrica from './ModalMetrica.vue'
@@ -309,6 +310,8 @@ const onDrop = (e) => {
   erroUpload.value = ''
 }
 
+const { conferir } = useConferencia()
+
 const processar = async () => {
   console.clear()
   console.log('🚀 PROCESSAMENTO INICIADO')
@@ -347,6 +350,7 @@ const processar = async () => {
       store.addToast('Arquivo vazio ou inválido!', 'warning')
       return
     }
+    if (!(await conferir(dados, { tipo, data: props.auditoria?.data, arquivo: arquivoSelecionado.value?.name }))) return
 
     console.log('✅ Dados recebidos:', dados.length, 'linhas')
     // Usar o tipo definido na auditoria (já foi selecionado no formulário)

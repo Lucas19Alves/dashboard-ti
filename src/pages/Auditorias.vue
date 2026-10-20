@@ -1,4 +1,5 @@
 <script setup>
+import { useConferencia } from '../composables/useConferencia'
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
@@ -115,6 +116,8 @@ const erroUpload = ref('')
 const previaArquivo = ref(null)
 const carregandoPrevia = ref(false)
 
+const { conferir } = useConferencia()
+
 const submeterAuditoria = async () => {
   if (!formulario.value.arquivo) {
     store.addToast('Selecione um arquivo Excel!', 'warning')
@@ -161,6 +164,7 @@ const submeterAuditoria = async () => {
       store.addToast('Arquivo vazio ou inválido!', 'warning')
       return
     }
+    if (!(await conferir(dados, { tipo, data: formulario.value.data, arquivo: formulario.value.arquivo?.name }))) return
 
     // Usar o tipo que foi selecionado no formulário
     const tipoEfetivo = formulario.value.tipo

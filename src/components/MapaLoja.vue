@@ -25,7 +25,8 @@ const props = defineProps({
   isItemLido: { type: Function, required: true },
   itensDisponiveis: { type: Boolean, default: true }, // false no mapa consolidado (sem lista de itens)
   // Outra leitura do percentual (ex.: reincidência): limite das cores e nomes exibidos.
-  metrica: { type: Object, default: null } // { meta, rotulo, curto, pendentes, lidos }
+  metrica: { type: Object, default: null }, // { meta, rotulo, curto, pendentes, lidos }
+  modoInicial: { type: String, default: 'pendente' } // pendente | leituras | usuario
 })
 const emit = defineEmits(['ver-itens'])
 const META = props.metrica?.meta ?? META_PENDENTE_PERCENTUAL
@@ -129,7 +130,7 @@ const aoTeclar = (evento) => {
 }
 
 // ---------- Cores ----------
-const modo = ref('pendente') // pendente | leituras | usuario
+const modo = ref(props.modoInicial) // pendente | leituras | usuario
 const usuarioFoco = ref('')
 const usuarios = computed(() => {
   const total = new Map()
@@ -422,7 +423,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
                 <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-xs" :class="classeDados(a)"><i :class="TIPOS_AREA[a.tipo]?.icone"></i></span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-sm font-semibold text-slate-800">{{ titulo(a) }}</span>
-                  <span class="block text-xs text-slate-500">{{ a.pendentes }} pendentes de {{ a.total }}</span>
+                  <span class="block text-xs text-slate-500">{{ a.pendentes }} {{ textos.pendentes }} de {{ a.total }}</span>
                 </span>
                 <span class="text-sm font-black" :class="percentualPendente(a) > META ? 'text-red-700' : 'text-emerald-700'">{{ percentualPendente(a).toFixed(1) }}%</span>
               </button>
