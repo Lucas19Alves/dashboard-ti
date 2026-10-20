@@ -1,4 +1,5 @@
-const CACHE_NAME = 'dashboard-ti-v4'
+// Um cache por build (o app registra /sw.js?v=<build>); a ativação apaga os anteriores.
+const CACHE_NAME = `dashboard-ti-${new URL(self.location).searchParams.get('v') || 'dev'}`
 const APP_SHELL = ['/', '/favicon.png', '/manifest.webmanifest']
 
 // Na instalação guarda o app inteiro (lista gerada no build), não só as telas já visitadas.
