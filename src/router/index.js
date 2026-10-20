@@ -7,6 +7,7 @@ const AuditoriaDetalhes = () => import('../pages/AuditoriaDetalhes.vue')
 const Vencimentos = () => import('../pages/Vencimentos.vue')
 const AnaliseAuditorias = () => import('../pages/AnaliseAuditorias.vue')
 const Documentacao = () => import('../pages/Documentacao.vue')
+const FichaColaborador = () => import('../pages/FichaColaborador.vue')
 
 const routes = [
   {
@@ -26,6 +27,12 @@ const routes = [
     name: 'AuditoriaDetalhes',
     meta: { titulo: 'Detalhes da auditoria' },
     component: AuditoriaDetalhes
+  },
+  {
+    path: '/colaborador/:usuario',
+    name: 'FichaColaborador',
+    meta: { titulo: 'Ficha do colaborador' },
+    component: FichaColaborador
   },
   {
     path: '/auditorias/analise',

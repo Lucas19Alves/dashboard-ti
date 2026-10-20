@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
+import { iniciarBackupAutomatico } from './utils/backupPasta'
 import router from './router/index.js'
 import '@fortawesome/fontawesome-free/css/all.css'
 import { useAuditoriasStore } from './stores/auditoriasStore'
@@ -32,6 +33,7 @@ Promise.all([
   vencimentosStore.carregarVencimentosPersistidos()
 ]).finally(() => {
   app.mount('#app')
+  iniciarBackupAutomatico()
 })
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

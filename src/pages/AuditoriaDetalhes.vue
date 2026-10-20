@@ -1342,7 +1342,10 @@ const fecharRelatorio = () => {
 
     <UiModal v-if="modalUsuarioAberto && usuarioDetalhes" :title="separarUsuario(usuarioDetalhes.nome).nome || usuarioDetalhes.nome" :subtitle="separarUsuario(usuarioDetalhes.nome).matricula ? `Matrícula: ${separarUsuario(usuarioDetalhes.nome).matricula} · desempenho nesta auditoria` : 'Desempenho do usuário nesta auditoria'" width="max-w-4xl" @close="fecharModalUsuario">
       <div class="space-y-5">
-        <button type="button" class="ui-btn-primary py-2" @click="verTrajetoUsuario(usuarioDetalhes.nome)"><i class="fas fa-route"></i>Ver trajeto no mapa</button>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="ui-btn-primary py-2" @click="verTrajetoUsuario(usuarioDetalhes.nome)"><i class="fas fa-route"></i>Ver trajeto no mapa</button>
+          <router-link :to="`/colaborador/${encodeURIComponent(usuarioDetalhes.nome)}`" class="ui-btn-secondary py-2" @click="fecharModalUsuario"><i class="fas fa-id-badge"></i>Ficha do colaborador</router-link>
+        </div>
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="rounded-2xl bg-slate-50 p-3">
             <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lidos</p>

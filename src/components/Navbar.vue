@@ -5,12 +5,14 @@ import UiButton from './ui/UiButton.vue'
 import UiModal from './ui/UiModal.vue'
 import { usePaleta } from '../composables/usePaleta'
 import { useAparencia } from '../composables/useAparencia'
+import { useInstalarApp } from '../composables/useInstalarApp'
 import PainelAparencia from './PainelAparencia.vue'
 
 const isOpen = ref(false)
 const mostrarSobre = ref(false)
 const mostrarAparencia = ref(false)
 const { temaEfetivo, alternarTema } = useAparencia()
+const { podeInstalar, instalar } = useInstalarApp()
 const abrirAparencia = () => {
   isOpen.value = false
   mostrarAparencia.value = true
@@ -110,6 +112,15 @@ onBeforeUnmount(() => {
             <i class="fas fa-search text-sm"></i>
           </button>
 
+          <button
+            v-if="podeInstalar"
+            type="button"
+            class="inline-flex h-9 items-center gap-2 rounded-xl bg-white px-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:bg-blue-50"
+            title="Instalar como aplicativo: abre em janela própria e funciona sem internet"
+            @click="instalar"
+          >
+            <i class="fas fa-download text-xs" aria-hidden="true"></i><span class="hidden sm:inline">Instalar app</span><span class="sr-only sm:hidden">Instalar app</span>
+          </button>
           <button
             type="button"
             class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20"

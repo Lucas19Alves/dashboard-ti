@@ -5,6 +5,7 @@ import { useVencimentosStore } from '../stores/vencimentosStore'
 import { estadoBackup, resumirAlteracoes } from '../utils/lembreteBackup'
 import { descreverUltimoBackup, precisaLembrarBackup } from '../utils/saudeDados'
 import { exportarBackupJson } from '../utils/backup'
+import { escolherPasta, estadoPasta, permitirPasta } from '../utils/backupPasta'
 
 // Aviso em todas as páginas: sem backup há um dia ou mais, ou com mudanças grandes desde o último.
 const auditorias = useAuditoriasStore()
@@ -62,6 +63,12 @@ const fazerBackup = async () => {
             <i class="fas fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
+        <button v-if="estadoPasta.configurada && estadoPasta.permissao !== 'granted'" type="button" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700" @click="permitirPasta">
+          <i class="fas fa-folder-open" aria-hidden="true"></i>Permitir backup automático em “{{ estadoPasta.nome }}”
+        </button>
+        <button v-else-if="estadoPasta.suportado && !estadoPasta.configurada" type="button" class="mt-2 text-xs font-semibold text-amber-900 underline-offset-2 hover:underline" @click="escolherPasta">
+          <i class="fas fa-folder-plus mr-1" aria-hidden="true"></i>Salvar automaticamente numa pasta
+        </button>
         <div class="mt-3 flex justify-end gap-2">
           <button type="button" class="rounded-xl px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100" @click="adiar">Depois</button>
           <button type="button" class="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-3.5 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-600 disabled:opacity-60" :disabled="exportando" @click="fazerBackup">

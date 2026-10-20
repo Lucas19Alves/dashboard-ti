@@ -32,6 +32,7 @@ import MapaLoja from '../components/MapaLoja.vue'
 import AnaliseReincidencia from '../components/AnaliseReincidencia.vue'
 import AnaliseRupturaValor from '../components/AnaliseRupturaValor.vue'
 import EvolucaoUsuarios from '../components/EvolucaoUsuarios.vue'
+import DuplasUsuarios from '../components/DuplasUsuarios.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -696,7 +697,7 @@ const gerarRelatorioPDF = () => {
                 <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
               </td>
               <td class="px-3 py-2.5">
-                <p class="font-medium text-slate-800">{{ separarUsuario(u.usuario).nome || u.usuario }}</p>
+                <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-indigo-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
                 <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
               </td>
               <td class="px-3 py-2.5 text-right text-slate-600">{{ u.auditorias }}</td>
@@ -727,6 +728,7 @@ const gerarRelatorioPDF = () => {
     </section>
 
     <EvolucaoUsuarios :auditorias="auditoriasFiltradas" />
+    <DuplasUsuarios :auditorias="auditoriasFiltradas" />
     </template>
 
     <!-- ===== REINCIDÊNCIA ===== -->

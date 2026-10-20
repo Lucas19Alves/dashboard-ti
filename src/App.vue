@@ -3,6 +3,7 @@ import Navbar from './components/Navbar.vue'
 import Toast from './components/Toast.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import AvisoBackup from './components/AvisoBackup.vue'
+import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
 </script>
 
 <template>
@@ -14,6 +15,7 @@ import AvisoBackup from './components/AvisoBackup.vue'
     <Toast />
     <CommandPalette />
     <AvisoBackup />
+    <ModalConferenciaPlanilha />
     <main id="conteudo">
       <router-view v-slot="{ Component, route }">
         <transition name="pagina" mode="out-in">

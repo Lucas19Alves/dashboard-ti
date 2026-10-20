@@ -13,6 +13,7 @@ import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
+import VencimentosMapaRuptura from '../components/VencimentosMapaRuptura.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,12 +29,13 @@ const inputRef = ref(null)
 
 // Abas (3 tabs)
 const abaAtiva = ref('visao')
-const abas = ['visao', 'explorar', 'analise']
-const abasDisplay = { visao: 'Visão Geral', explorar: 'Explorar', analise: 'Análise' }
+const abas = ['visao', 'explorar', 'analise', 'mapa']
+const abasDisplay = { visao: 'Visão Geral', explorar: 'Explorar', analise: 'Análise', mapa: 'Mapa e ruptura' }
 const iconeAba = (tab) => ({
   visao: 'fas fa-chart-line',
   explorar: 'fas fa-search',
-  analise: 'fas fa-chart-bar'
+  analise: 'fas fa-chart-bar',
+  mapa: 'fas fa-map-location-dot'
 })[tab]
 const abasVencimentos = abas.map(tab => ({ value: tab, label: abasDisplay[tab], icon: iconeAba(tab) }))
 
@@ -1156,6 +1158,8 @@ const exportarDetalhamentoSetor = async () => {
       <!-- ============================================================ -->
       <!-- ===== TAB 3: ANALISE ===== -->
       <!-- ============================================================ -->
+      <VencimentosMapaRuptura v-if="store.itens.length > 0 && abaAtiva === 'mapa'" :itens="store.itens" :auditorias="toastStore.auditorias" />
+
       <template v-if="store.itens.length > 0 && abaAtiva === 'analise'">
 
         <!-- Print Actions Bar -->

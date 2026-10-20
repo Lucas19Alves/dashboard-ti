@@ -24,6 +24,7 @@ import { usePaleta } from '../composables/usePaleta'
 import { estadoBackup } from '../utils/lembreteBackup'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import BackupPastaConfig from '../components/BackupPastaConfig.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
 
 const router = useRouter()
@@ -463,6 +464,8 @@ const handleArquivoBackup = async (e) => {
               Proteger armazenamento
             </button>
           </div>
+
+          <BackupPastaConfig />
 
           <div class="grid grid-cols-2 gap-2">
             <UiButton variant="success" size="sm" :disabled="exportando" @click="handleExportarBackup">

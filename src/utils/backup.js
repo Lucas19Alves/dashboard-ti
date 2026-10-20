@@ -195,7 +195,8 @@ export const normalizarFormatoBackup = dados => {
   return dados
 }
 
-export const exportarBackupJson = async () => {
+// Monta o arquivo de backup (JSON compactado em gzip quando o navegador permite).
+export const gerarBackupArquivo = async () => {
   const auditorias = await db.auditorias.toArray()
   const vencimentos = await db.vencimentos.toArray()
   const planosAcao = await db.planosAcao.toArray()
@@ -213,16 +214,21 @@ export const exportarBackupJson = async () => {
     type: 'application/json;charset=utf-8'
   })
   const gzipBlob = await compactarGzip(jsonBlob)
-  const blobFinal = gzipBlob || jsonBlob
-
-  baixarBlob(blobFinal, criarNomeBackup(Boolean(gzipBlob)))
-  marcarBackupFeito()
-
+  const blob = gzipBlob || jsonBlob
   return {
+    blob,
+    nome: criarNomeBackup(Boolean(gzipBlob)),
     compactado: Boolean(gzipBlob),
     tamanhoOriginal: jsonBlob.size,
-    tamanhoFinal: blobFinal.size
+    tamanhoFinal: blob.size
   }
+}
+
+export const exportarBackupJson = async () => {
+  const { blob, nome, ...info } = await gerarBackupArquivo()
+  baixarBlob(blob, nome)
+  marcarBackupFeito()
+  return info
 }
 
 export const importarBackupJson = async (file) => {
