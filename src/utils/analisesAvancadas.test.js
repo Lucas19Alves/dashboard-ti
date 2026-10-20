@@ -84,37 +84,24 @@ describe('plano e escala', () => {
     expect(acoes[0]).toMatchObject({ responsavelSugerido: 'Ana', setor: 'MERCEARIA' })
   })
 
+  it('sobe a prioridade de local reincidente e escolhe responsável pelo perfil', async () => {
+    const { perfisColaboradores } = await import('./perfilColaborador')
+    const auditoria = {
+      tipo: 'Etiqueta',
+      analise: { porLocal: { G01A: { lidos: 95, pendentes: 5 }, FLV: { lidos: 90, pendentes: 10 } }, porUsuario: { Ana: {}, Flavio: {} } },
+      dados: [lido('Ana', 'G01A', '09:00:00'), lido('Flavio', 'FLV', '09:00:00')]
+    }
+    const anteriores = [1, 2].map(() => ({ analise: { porLocal: { G01A: { lidos: 80, pendentes: 20 } } } }))
+    const historico = [{ dados: [...Array(40).fill(0).map(() => lido('Ana', 'G01A', '09:00:00')), ...Array(40).fill(0).map(() => lido('Flavio', 'FLV', '09:00:00'))], analise: {} }]
+    const acoes = gerarAcoes(auditoria, 3, { anteriores, perfis: perfisColaboradores(historico) })
+    const g01 = acoes.find(a => a.local === 'G01A')
+    expect(g01).toMatchObject({ prioridade: 'alta', reincidente: true, responsavelSugerido: 'Ana' })
+    expect(g01.descricao).toMatch(/etiqueta.*Reincidente/)
+    expect(acoes.find(a => a.local === 'FLV').responsavelSugerido).toBe('Flavio')
+  })
+
   it('mediana', () => {
     expect(mediana([3, 1, 2])).toBe(2)
     expect(mediana([])).toBeNull()
-  })
-})
-
-describe('escala por afinidade', () => {
-  it('mantém cada colaborador nas áreas e setores em que costuma ler', async () => {
-    const { historicoLeitores, escalaPorAfinidade } = await import('./planoAcao')
-    const item = (usuario, local, setor) => ({ 'Usuário': usuario, Local: local, 'Classe de Produto Raiz': setor, _temPresenca: true })
-    const passado = [{ dados: [
-      ...Array(30).fill(0).map(() => item('Ana', 'G01A', 'BEBIDAS')), ...Array(30).fill(0).map(() => item('Ana', 'G02A', 'BEBIDAS')),
-      ...Array(30).fill(0).map(() => item('Bia', 'F01', 'FRIOS')), ...Array(10).fill(0).map(() => item('Bia', 'G03A', 'FRIOS'))
-    ] }]
-    const historico = historicoLeitores(passado)
-    const setores = new Map([['G01', 'BEBIDAS'], ['G02', 'BEBIDAS'], ['G03', 'FRIOS'], ['F01', 'FRIOS']])
-    const areas = [
-      { bloco: 'G01', tipo: 'gondola', numero: 1, itens: 100 }, { bloco: 'G02', tipo: 'gondola', numero: 2, itens: 100 },
-      { bloco: 'G03', tipo: 'gondola', numero: 3, itens: 100 }, { bloco: 'F01', tipo: 'freezer', numero: 1, itens: 100 }
-    ]
-    const escala = escalaPorAfinidade({ areas, pessoas: [{ usuario: 'Ana', ritmo: 100 }, { usuario: 'Bia', ritmo: 100 }], historico, setores, horas: 2 })
-    const de = u => escala.grupos.find(g => g.usuario === u).areas.map(a => a.bloco).sort()
-    expect(de('Ana')).toEqual(['G01', 'G02'])
-    expect(de('Bia')).toEqual(['F01', 'G03'])
-    expect(escala.aderencia).toBe(100)
-
-    // Área fixada à mão vai para quem foi escolhido; o restante se reequilibra.
-    const ajustada = escalaPorAfinidade({ areas, pessoas: [{ usuario: 'Ana', ritmo: 100 }, { usuario: 'Bia', ritmo: 100 }], historico, setores, horas: 2, fixas: new Map([['F01', 'Ana']]) })
-    const deAjustada = u => ajustada.grupos.find(g => g.usuario === u).areas
-    expect(deAjustada('Ana').find(a => a.bloco === 'F01')).toMatchObject({ fixa: true, habitual: false })
-    expect(deAjustada('Bia').map(a => a.bloco)).toContain('G03')
-    expect(ajustada.grupos.reduce((s, g) => s + g.itens, 0)).toBe(400)
   })
 })

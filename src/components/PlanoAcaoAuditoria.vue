@@ -1,6 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { gerarAcoes } from '../utils/planoAcao'
+import { perfisColaboradores } from '../utils/perfilColaborador'
+import { useAuditoriasStore } from '../stores/auditoriasStore'
+import { META_PENDENTE_PERCENTUAL } from '../utils/metricasAuditoria'
 import { adicionarAcoes, listarAcoes, removerAcao, salvarAcao, STATUS_ACAO } from '../db/planosAcao'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
 import { baixarCsv } from '../utils/csv'
@@ -27,18 +30,30 @@ const carregar = async () => {
 }
 watch(() => props.auditoria?.id, carregar, { immediate: true })
 
-const sugestoes = computed(() => gerarAcoes(props.auditoria))
+// Sugestões: reincidência pelas auditorias anteriores do mesmo tipo e responsável pelo perfil
+// de leitura (últimas 10 auditorias com itens, incluindo esta).
+const store = useAuditoriasStore()
+const dataDe = a => String(a?.data || '').slice(0, 10)
+const anteriores = computed(() => (store.auditorias || [])
+  .filter(a => a && a.id !== props.auditoria?.id && a.tipo === props.auditoria?.tipo && dataDe(a) < dataDe(props.auditoria))
+  .sort((a, b) => dataDe(b).localeCompare(dataDe(a)))
+  .slice(0, 8))
+const perfis = computed(() => perfisColaboradores([props.auditoria, ...(store.auditorias || [])
+  .filter(a => a && a.id !== props.auditoria?.id && Array.isArray(a.dados) && a.dados.length)
+  .sort((a, b) => dataDe(b).localeCompare(dataDe(a)))
+  .slice(0, 9)]))
+const sugestoes = computed(() => gerarAcoes(props.auditoria, META_PENDENTE_PERCENTUAL, { anteriores: anteriores.value, perfis: perfis.value }))
 const locaisNoPlano = computed(() => new Set(acoes.value.map(a => a.local)))
 const novas = computed(() => sugestoes.value.filter(s => !locaisNoPlano.value.has(s.local)))
 const usuarios = computed(() => props.auditoria?.analise?.usuarios || Object.keys(props.auditoria?.analise?.porUsuario || {}))
 
-const prazoPadrao = () => {
-  // Dia seguinte à auditoria; se já passou, amanhã.
+const prazoPadrao = (dias = 1) => {
+  // N dias depois da auditoria (pela prioridade); se já passou, N dias a partir de hoje.
   const base = new Date(`${String(props.auditoria?.data || paraISOLocal(new Date())).slice(0, 10)}T12:00:00`)
-  base.setDate(base.getDate() + 1)
-  const amanha = new Date()
-  amanha.setDate(amanha.getDate() + 1)
-  return paraISOLocal(base < amanha ? amanha : base)
+  base.setDate(base.getDate() + dias)
+  const minimo = new Date()
+  minimo.setDate(minimo.getDate() + dias)
+  return paraISOLocal(base < minimo ? minimo : base)
 }
 
 const minimoPendentes = ref(1)
@@ -54,9 +69,13 @@ const gerar = async () => {
       pendentes: s.pendentes,
       perc: s.perc,
       prioridade: s.prioridade,
-      descricao: s.semLeitura ? `Local sem leitura: auditar os ${s.pendentes} itens` : `Conferir ${s.pendentes} item(ns) pendente(s)`,
+      descricao: s.descricao,
+      motivos: s.motivos,
+      reincidente: s.reincidente,
+      custo: s.custo,
+      estimativaMin: s.estimativaMin || null,
       responsavel: s.responsavelSugerido,
-      prazo: prazoPadrao(),
+      prazo: prazoPadrao(s.prazoDias),
       status: 'aberta',
       observacao: ''
     }))
@@ -121,8 +140,25 @@ const RAPIDOS = [
   { valor: 'semResponsavel', rotulo: 'Sem responsável', teste: a => !a.responsavel && a.status !== 'feita' }
 ]
 const rapido = ref('todas')
+const filtroResponsavel = ref('')
+// Carga em aberto por responsável (ações e minutos estimados).
+const cargaResponsaveis = computed(() => {
+  const mapa = new Map()
+  for (const a of acoes.value.filter(x => x.status !== 'feita')) {
+    const chave = a.responsavel || ''
+    const r = mapa.get(chave) || { responsavel: chave, acoes: 0, minutos: 0, atrasadas: 0 }
+    r.acoes++
+    r.minutos += a.estimativaMin || 0
+    if (atrasada(a)) r.atrasadas++
+    mapa.set(chave, r)
+  }
+  return [...mapa.values()].sort((a, b) => b.acoes - a.acoes)
+})
+const maiorCarga = computed(() => Math.max(1, ...cargaResponsaveis.value.map(r => r.acoes)))
+const textoMin = m => (m >= 60 ? `${Math.floor(m / 60)}h${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`)
 const contagemRapidos = computed(() => Object.fromEntries(RAPIDOS.map(r => [r.valor, acoes.value.filter(r.teste).length])))
 const passaRapido = a => (RAPIDOS.find(r => r.valor === rapido.value)?.teste || (() => true))(a)
+  && (filtroResponsavel.value === '' || (filtroResponsavel.value === '—' ? !a.responsavel : a.responsavel === filtroResponsavel.value))
 
 // Quadro (arrastar entre colunas) ou lista; lembrado neste navegador.
 const CHAVE_VISAO = 'dashboard_ti_plano_visao'
@@ -185,12 +221,13 @@ const rotuloStatus = v => STATUS_ACAO.find(s => s.valor === v)?.rotulo || v
 
 const linhasExport = () => visiveis.value.map(a => ({
   ...a, prioridadeTexto: ROTULO_PRIORIDADE[a.prioridade], statusTexto: rotuloStatus(a.status), prazoBR: formatarDataBR(a.prazo),
-  responsavelTexto: a.responsavel ? rotuloUsuario(a.responsavel) : '', percTexto: a.pendentes ? `${Number(a.perc || 0).toFixed(1)}%` : ''
+  responsavelTexto: a.responsavel ? rotuloUsuario(a.responsavel) : '', percTexto: a.pendentes ? `${Number(a.perc || 0).toFixed(1)}%` : '',
+  motivosTexto: (a.motivos || []).join(' · ')
 }))
 const COLUNAS = [
   { chave: 'prioridadeTexto', titulo: 'Prioridade' }, { chave: 'local', titulo: 'Local' }, { chave: 'setor', titulo: 'Setor' },
   { chave: 'descricao', titulo: 'Ação' }, { chave: 'pendentes', titulo: 'Pendentes' }, { chave: 'percTexto', titulo: '% pendente' },
-  { chave: 'responsavelTexto', titulo: 'Responsável' }, { chave: 'prazoBR', titulo: 'Prazo' }, { chave: 'statusTexto', titulo: 'Situação' }, { chave: 'observacao', titulo: 'Observação' }
+  { chave: 'responsavelTexto', titulo: 'Responsável' }, { chave: 'prazoBR', titulo: 'Prazo' }, { chave: 'statusTexto', titulo: 'Situação' }, { chave: 'motivosTexto', titulo: 'Motivos' }, { chave: 'observacao', titulo: 'Observação' }
 ]
 const exportarCsv = () => baixarCsv(linhasExport(), COLUNAS, `plano-acao-auditoria-${props.auditoria.id}`)
 const { abrir: abrirSeletor } = useRelatorio()
@@ -198,7 +235,7 @@ const imprimir = () => {
   const todas = acoes.value.map(a => ({
     ...a, prioridadeTexto: ROTULO_PRIORIDADE[a.prioridade], statusTexto: rotuloStatus(a.status), prazoBR: formatarDataBR(a.prazo),
     responsavelTexto: a.responsavel ? rotuloUsuario(a.responsavel) : '—', percTexto: a.pendentes ? `${Number(a.perc || 0).toFixed(1).replace('.', ',')}%` : '',
-    atrasada: atrasada(a)
+    atrasada: atrasada(a), motivosTexto: (a.motivos || []).join(' · ')
   })).sort((a, b) => (a.status === 'feita') - (b.status === 'feita') || ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade] || b.pendentes - a.pendentes)
   const tabela = (linhas, colunas) => blocoTabela({
     colunas: COLUNAS.filter(c => colunas.includes(c.chave)).map(c => ({
@@ -239,7 +276,7 @@ const imprimir = () => {
     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-list-check mr-2 text-blue-600"></i>Plano de ação</h3>
-        <p class="text-xs text-slate-500">Uma ação por local com pendentes. Responsável sugerido = quem mais leu naquela área nesta auditoria. Salvo só neste navegador (entra no backup).</p>
+        <p class="text-xs text-slate-500">Uma ação por local com pendentes. Prioridade pelo % pendente, local sem leitura, reincidência nas auditorias anteriores de {{ auditoria.tipo }} e custo de ruptura. Responsável: quem tem aquele tipo de área no perfil, sem acumular ações demais na mesma pessoa. Salvo só neste navegador.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <label class="text-xs font-semibold text-slate-600" for="minimo-pendentes">Locais com</label>
@@ -270,6 +307,20 @@ const imprimir = () => {
       <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em andamento</p><p class="text-xl font-black text-slate-900">{{ resumo.andamento }}</p></div>
       <div class="rounded-xl p-3" :class="resumo.atrasadas ? 'bg-red-50' : 'bg-slate-50'"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Atrasadas</p><p class="text-xl font-black" :class="resumo.atrasadas ? 'text-red-700' : 'text-slate-900'">{{ resumo.atrasadas }}</p></div>
       <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Itens em aberto</p><p class="text-xl font-black text-amber-800">{{ resumo.itensAbertos.toLocaleString('pt-BR') }}</p></div>
+    </div>
+
+    <div v-if="cargaResponsaveis.length > 1 || (cargaResponsaveis.length === 1 && cargaResponsaveis[0].responsavel)" class="mt-4">
+      <p class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Em aberto por responsável <span class="font-medium normal-case tracking-normal">· clique para filtrar</span></p>
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button v-for="r in cargaResponsaveis" :key="r.responsavel || '—'" type="button" :aria-pressed="filtroResponsavel === (r.responsavel || '—')"
+          class="min-w-40 shrink-0 rounded-xl px-3 py-2 text-left ring-1 transition"
+          :class="filtroResponsavel === (r.responsavel || '—') ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white ring-slate-200 hover:ring-slate-400'"
+          @click="filtroResponsavel = filtroResponsavel === (r.responsavel || '—') ? '' : (r.responsavel || '—')">
+          <p class="truncate text-xs font-bold">{{ r.responsavel ? rotuloUsuario(r.responsavel) : 'Sem responsável' }}</p>
+          <p class="text-[11px] opacity-75">{{ r.acoes }} ação(ões){{ r.minutos ? ` · ≈ ${textoMin(r.minutos)}` : '' }}<span v-if="r.atrasadas" class="font-bold text-red-500"> · {{ r.atrasadas }} atrasada(s)</span></p>
+          <div class="mt-1.5 h-1 rounded-full bg-slate-200/60"><div class="h-full rounded-full bg-blue-500" :style="{ width: `${(r.acoes / maiorCarga) * 100}%` }"></div></div>
+        </button>
+      </div>
     </div>
 
     <div v-if="acoes.length" class="mt-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros rápidos">
@@ -331,6 +382,9 @@ const imprimir = () => {
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-bold text-slate-900">{{ a.local }}<span v-if="a.setor" class="font-medium text-slate-500"> · {{ a.setor }}</span></p>
                 <p class="text-xs text-slate-600" :class="a.status === 'feita' ? 'line-through' : ''">{{ a.descricao }}</p>
+                <p v-if="a.motivos?.length" class="mt-1 flex flex-wrap gap-1">
+                  <span v-for="m in a.motivos" :key="m" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold" :class="m.startsWith('Fora da meta') ? 'bg-red-50 text-red-700' : m.includes('R$') ? 'bg-amber-50 text-amber-800' : 'text-slate-600'">{{ m }}</span>
+                </p>
               </div>
               <span v-if="a.pendentes" class="shrink-0 text-right"><b class="block text-sm text-amber-700">{{ a.pendentes }}</b><span class="text-[10px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</span></span>
             </div>
@@ -338,6 +392,7 @@ const imprimir = () => {
               <span v-if="a.responsavel" class="inline-flex min-w-0 items-center gap-1 text-slate-600" :title="rotuloUsuario(a.responsavel)"><span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-black text-blue-700">{{ iniciais(a.responsavel) }}</span><span class="truncate">{{ rotuloUsuario(a.responsavel) }}</span></span>
               <span v-else class="text-slate-400">Sem responsável</span>
               <span class="ml-auto shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="atrasada(a) ? 'bg-red-100 text-red-700' : venceHoje(a) ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"><i class="far fa-calendar mr-1"></i>{{ textoPrazo(a) }}</span>
+              <span v-if="a.estimativaMin && a.status !== 'feita'" class="shrink-0 text-slate-500" title="Tempo estimado pelo ritmo do responsável">≈ {{ textoMin(a.estimativaMin) }}</span>
               <i v-if="a.observacao" class="fas fa-note-sticky text-slate-400" :title="a.observacao"></i>
             </div>
             <div class="mt-2 flex items-center gap-1 border-t border-slate-100 pt-2">
