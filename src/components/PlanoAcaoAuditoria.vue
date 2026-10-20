@@ -70,9 +70,21 @@ const atualizar = async (acao, mudanca) => {
   const salvo = await salvarAcao({ ...acao, ...mudanca })
   acoes.value = acoes.value.map(a => (a.id === acao.id ? salvo : a))
 }
+// Remoção com "Desfazer" por alguns segundos.
+const removida = ref(null)
+let timerRemovida = null
 const remover = async (acao) => {
   await removerAcao(acao.id)
   acoes.value = acoes.value.filter(a => a.id !== acao.id)
+  removida.value = acao
+  clearTimeout(timerRemovida)
+  timerRemovida = setTimeout(() => { removida.value = null }, 6000)
+}
+const desfazerRemocao = async () => {
+  const { id, ...acao } = removida.value || {}
+  if (!id) return
+  removida.value = null
+  acoes.value = [...acoes.value, ...(await adicionarAcoes([acao]))]
 }
 const limparConcluidas = async () => {
   for (const a of acoes.value.filter(x => x.status === 'feita')) await removerAcao(a.id)
@@ -98,7 +110,57 @@ const busca = ref('')
 const ORDEM_PRIORIDADE = { alta: 0, media: 1, baixa: 2 }
 const hoje = paraISOLocal(new Date())
 const atrasada = a => a.status !== 'feita' && a.prazo && a.prazo < hoje
+const venceHoje = a => a.status !== 'feita' && a.prazo === hoje
+
+// Filtros rápidos (valem para o quadro e a lista).
+const RAPIDOS = [
+  { valor: 'todas', rotulo: 'Todas', teste: () => true },
+  { valor: 'alta', rotulo: 'Prioridade alta', teste: a => a.prioridade === 'alta' && a.status !== 'feita' },
+  { valor: 'atrasadas', rotulo: 'Atrasadas', teste: atrasada },
+  { valor: 'hoje', rotulo: 'Vencem hoje', teste: venceHoje },
+  { valor: 'semResponsavel', rotulo: 'Sem responsável', teste: a => !a.responsavel && a.status !== 'feita' }
+]
+const rapido = ref('todas')
+const contagemRapidos = computed(() => Object.fromEntries(RAPIDOS.map(r => [r.valor, acoes.value.filter(r.teste).length])))
+const passaRapido = a => (RAPIDOS.find(r => r.valor === rapido.value)?.teste || (() => true))(a)
+
+// Quadro (arrastar entre colunas) ou lista; lembrado neste navegador.
+const CHAVE_VISAO = 'dashboard_ti_plano_visao'
+const visao = ref((() => { try { return localStorage.getItem(CHAVE_VISAO) || 'quadro' } catch { return 'quadro' } })())
+watch(visao, v => { try { localStorage.setItem(CHAVE_VISAO, v) } catch {} })
+const filtradasQuadro = computed(() => acoes.value
+  .filter(passaRapido)
+  .filter(a => filtroPrioridade.value === 'todas' || a.prioridade === filtroPrioridade.value)
+  .filter(a => correspondeBusca(busca.value, [a.local, a.setor, a.responsavel, a.descricao, a.observacao]))
+  .sort((a, b) => ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade] || (atrasada(b) - atrasada(a)) || b.pendentes - a.pendentes))
+const colunas = computed(() => STATUS_ACAO.map(s => ({ ...s, acoes: filtradasQuadro.value.filter(a => a.status === s.valor) })))
+const COR_COLUNA = { aberta: 'bg-slate-400', andamento: 'bg-blue-500', feita: 'bg-emerald-500' }
+const ORDEM_STATUS = STATUS_ACAO.map(s => s.valor)
+const mover = (acao, passo) => {
+  const destino = ORDEM_STATUS[ORDEM_STATUS.indexOf(acao.status) + passo]
+  if (destino) atualizar(acao, { status: destino })
+}
+const arrastando = ref(null)
+const colunaAlvo = ref(null)
+const soltar = (status) => {
+  const acao = acoes.value.find(a => a.id === arrastando.value)
+  if (acao && acao.status !== status) atualizar(acao, { status })
+  arrastando.value = null
+  colunaAlvo.value = null
+}
+const editando = ref(null) // id do cartão aberto para edição
+const proximaPrioridade = { alta: 'media', media: 'baixa', baixa: 'alta' }
+const textoPrazo = (a) => {
+  if (!a.prazo) return 'Sem prazo'
+  if (a.status === 'feita') return formatarDataBR(a.prazo)
+  if (atrasada(a)) return `Atrasada · ${formatarDataBR(a.prazo)}`
+  if (venceHoje(a)) return 'Vence hoje'
+  return formatarDataBR(a.prazo)
+}
+const iniciais = u => (rotuloUsuario(u).split(' ').filter(Boolean).slice(0, 2).map(x => x[0]).join('') || '?').toUpperCase()
+
 const visiveis = computed(() => acoes.value
+  .filter(passaRapido)
   .filter(a => filtroStatus.value === 'todas' || (filtroStatus.value === 'pendentes' ? a.status !== 'feita' : a.status === filtroStatus.value))
   .filter(a => filtroPrioridade.value === 'todas' || a.prioridade === filtroPrioridade.value)
   .filter(a => correspondeBusca(busca.value, [a.local, a.setor, a.responsavel, a.descricao, a.observacao]))
@@ -199,21 +261,37 @@ const imprimir = () => {
           <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Progresso</p>
           <p class="text-sm font-black text-slate-900">{{ resumo.feitas }}/{{ resumo.total }}</p>
         </div>
-        <div class="mt-2 h-2.5 overflow-hidden rounded-full bg-white ring-1 ring-slate-200" role="progressbar" :aria-valuenow="Math.round(resumo.progresso)" aria-valuemin="0" aria-valuemax="100" aria-label="Ações resolvidas">
-          <div class="h-full rounded-full bg-emerald-500 transition-all" :style="{ width: `${resumo.progresso}%` }"></div>
+        <div class="mt-2 flex h-2.5 overflow-hidden rounded-full bg-white ring-1 ring-slate-200" role="progressbar" :aria-valuenow="Math.round(resumo.progresso)" aria-valuemin="0" aria-valuemax="100" aria-label="Ações resolvidas">
+          <div class="h-full bg-emerald-500 transition-all duration-500" :style="{ width: `${resumo.progresso}%` }"></div>
+          <div class="h-full bg-blue-400 transition-all duration-500" :style="{ width: `${resumo.total ? (resumo.andamento / resumo.total) * 100 : 0}%` }"></div>
         </div>
+        <p class="mt-1 text-[10px] text-slate-500"><span class="mr-1 inline-block size-2 rounded-full bg-emerald-500"></span>resolvidas <span class="ml-2 mr-1 inline-block size-2 rounded-full bg-blue-400"></span>em andamento</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em andamento</p><p class="text-xl font-black text-slate-900">{{ resumo.andamento }}</p></div>
       <div class="rounded-xl p-3" :class="resumo.atrasadas ? 'bg-red-50' : 'bg-slate-50'"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Atrasadas</p><p class="text-xl font-black" :class="resumo.atrasadas ? 'text-red-700' : 'text-slate-900'">{{ resumo.atrasadas }}</p></div>
       <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Itens em aberto</p><p class="text-xl font-black text-amber-800">{{ resumo.itensAbertos.toLocaleString('pt-BR') }}</p></div>
     </div>
 
-    <div v-if="acoes.length" class="mt-4 flex flex-wrap items-center gap-2">
+    <div v-if="acoes.length" class="mt-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros rápidos">
+      <button v-for="r in RAPIDOS" :key="r.valor" type="button" :aria-pressed="rapido === r.valor"
+        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition"
+        :class="rapido === r.valor ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-400'" @click="rapido = r.valor">
+        {{ r.rotulo }}<span class="rounded-full px-1.5 text-[10px]" :class="rapido === r.valor ? 'bg-white/20' : r.valor === 'atrasadas' && contagemRapidos[r.valor] ? 'bg-red-100 text-red-700' : 'bg-slate-100'">{{ contagemRapidos[r.valor] }}</span>
+      </button>
+      <div class="ml-auto inline-flex rounded-lg bg-slate-100 p-0.5" role="radiogroup" aria-label="Visualização">
+        <button v-for="[v, r, i] in [['quadro', 'Quadro', 'fas fa-table-columns'], ['lista', 'Lista', 'fas fa-list']]" :key="v" type="button" role="radio" :aria-checked="visao === v"
+          class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition" :class="visao === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600'" @click="visao = v">
+          <i :class="i" aria-hidden="true"></i>{{ r }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="acoes.length" class="mt-2 flex flex-wrap items-center gap-2">
       <div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
         <input v-model="busca" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Local, setor, responsável..." aria-label="Buscar ações">
       </div>
-      <select v-model="filtroStatus" class="ui-input w-auto py-2 text-xs" aria-label="Situação">
+      <select v-if="visao === 'lista'" v-model="filtroStatus" class="ui-input w-auto py-2 text-xs" aria-label="Situação">
         <option value="pendentes">Não resolvidas</option>
         <option value="todas">Todas</option>
         <option v-for="s in STATUS_ACAO" :key="s.valor" :value="s.valor">{{ s.rotulo }}</option>
@@ -232,6 +310,56 @@ const imprimir = () => {
       <p class="mt-1 text-xs text-slate-500">{{ sugestoes.length ? 'Use “Gerar ações” para montar o plano.' : 'Não há o que planejar nesta auditoria.' }}</p>
     </div>
 
+    <!-- Quadro -->
+    <div v-else-if="visao === 'quadro'" class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+      <section v-for="c in colunas" :key="c.valor" class="flex min-h-40 flex-col rounded-xl bg-slate-50 p-2.5 transition"
+        :class="colunaAlvo === c.valor ? 'bg-blue-50 ring-2 ring-blue-300' : ''" :aria-label="c.rotulo"
+        @dragover.prevent="colunaAlvo = c.valor" @dragleave.self="colunaAlvo = null" @drop.prevent="soltar(c.valor)">
+        <header class="mb-2 flex items-center gap-2 px-1">
+          <span class="size-2.5 rounded-full" :class="COR_COLUNA[c.valor]"></span>
+          <h4 class="text-sm font-bold text-slate-800">{{ c.rotulo }}</h4>
+          <span class="rounded-full bg-white px-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200">{{ c.acoes.length }}</span>
+          <span v-if="c.valor !== 'feita'" class="ml-auto text-[11px] text-slate-500">{{ c.acoes.reduce((s, a) => s + (a.pendentes || 0), 0).toLocaleString('pt-BR') }} itens</span>
+        </header>
+        <TransitionGroup tag="ul" name="cartao" class="relative flex max-h-[620px] flex-1 flex-col gap-2 overflow-y-auto p-0.5">
+          <li v-for="a in c.acoes" :key="a.id" draggable="true"
+            class="group cursor-grab rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md active:cursor-grabbing"
+            :class="[arrastando === a.id ? 'opacity-40' : '', atrasada(a) ? 'ring-red-200' : '']"
+            @dragstart="arrastando = a.id" @dragend="arrastando = null; colunaAlvo = null">
+            <div class="flex items-start gap-2">
+              <button type="button" class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase transition hover:brightness-95" :class="CLASSE_PRIORIDADE[a.prioridade]" :title="'Clique para trocar a prioridade'" @click="atualizar(a, { prioridade: proximaPrioridade[a.prioridade] })">{{ ROTULO_PRIORIDADE[a.prioridade] }}</button>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-bold text-slate-900">{{ a.local }}<span v-if="a.setor" class="font-medium text-slate-500"> · {{ a.setor }}</span></p>
+                <p class="text-xs text-slate-600" :class="a.status === 'feita' ? 'line-through' : ''">{{ a.descricao }}</p>
+              </div>
+              <span v-if="a.pendentes" class="shrink-0 text-right"><b class="block text-sm text-amber-700">{{ a.pendentes }}</b><span class="text-[10px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</span></span>
+            </div>
+            <div class="mt-2 flex items-center gap-2 text-[11px]">
+              <span v-if="a.responsavel" class="inline-flex min-w-0 items-center gap-1 text-slate-600" :title="rotuloUsuario(a.responsavel)"><span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-black text-blue-700">{{ iniciais(a.responsavel) }}</span><span class="truncate">{{ rotuloUsuario(a.responsavel) }}</span></span>
+              <span v-else class="text-slate-400">Sem responsável</span>
+              <span class="ml-auto shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="atrasada(a) ? 'bg-red-100 text-red-700' : venceHoje(a) ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"><i class="far fa-calendar mr-1"></i>{{ textoPrazo(a) }}</span>
+              <i v-if="a.observacao" class="fas fa-note-sticky text-slate-400" :title="a.observacao"></i>
+            </div>
+            <div class="mt-2 flex items-center gap-1 border-t border-slate-100 pt-2">
+              <button v-if="a.status !== 'aberta'" type="button" class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100" :aria-label="`Voltar ${a.local}`" @click="mover(a, -1)"><i class="fas fa-arrow-left"></i></button>
+              <button type="button" class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100" :aria-expanded="editando === a.id" @click="editando = editando === a.id ? null : a.id"><i class="fas fa-pen mr-1"></i>Editar</button>
+              <button v-if="a.status !== 'feita'" type="button" class="ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold transition" :class="a.status === 'aberta' ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'" @click="mover(a, 1)">
+                {{ a.status === 'aberta' ? 'Iniciar' : 'Concluir' }}<i class="fas ml-1" :class="a.status === 'aberta' ? 'fa-play' : 'fa-check'"></i>
+              </button>
+            </div>
+            <div v-if="editando === a.id" class="mt-2 grid grid-cols-2 gap-2">
+              <input :value="a.responsavel" list="usuarios-plano" class="ui-input col-span-2 py-1.5 text-xs" placeholder="Responsável" :aria-label="`Responsável por ${a.local}`" @change="atualizar(a, { responsavel: $event.target.value.trim() })">
+              <input :value="a.prazo" type="date" class="ui-input py-1.5 text-xs" :aria-label="`Prazo de ${a.local}`" @change="atualizar(a, { prazo: $event.target.value })">
+              <button type="button" class="rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50" @click="remover(a)"><i class="fas fa-trash-can mr-1"></i>Remover</button>
+              <input :value="a.observacao" class="ui-input col-span-2 py-1.5 text-xs" placeholder="Anotação" :aria-label="`Observação de ${a.local}`" @change="atualizar(a, { observacao: $event.target.value })">
+            </div>
+          </li>
+        </TransitionGroup>
+        <p v-if="!c.acoes.length" class="px-2 py-6 text-center text-xs text-slate-400">{{ arrastando ? 'Solte aqui' : 'Nada aqui' }}</p>
+      </section>
+    </div>
+
+    <!-- Lista -->
     <div v-else class="mt-3 overflow-x-auto rounded-xl ring-1 ring-slate-200">
       <table class="w-full min-w-[1100px] text-sm">
         <thead class="bg-slate-50 text-xs text-slate-500">
@@ -283,6 +411,13 @@ const imprimir = () => {
       </table>
       <p v-if="!visiveis.length" class="py-6 text-center text-sm text-slate-500">Nenhuma ação com esses filtros.</p>
     </div>
+    <transition name="aviso">
+      <div v-if="removida" class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">
+        <span>Ação de <b>{{ removida.local }}</b> removida</span>
+        <button type="button" class="font-bold text-blue-300 hover:text-blue-200" @click="desfazerRemocao">Desfazer</button>
+      </div>
+    </transition>
+
     <datalist id="usuarios-plano">
       <option v-for="u in usuarios" :key="u" :value="u">{{ rotuloUsuario(u) }}</option>
     </datalist>
@@ -294,3 +429,11 @@ const imprimir = () => {
     </form>
   </section>
 </template>
+
+<style scoped>
+.cartao-move, .cartao-enter-active, .cartao-leave-active { transition: all 0.25s ease; }
+.cartao-enter-from, .cartao-leave-to { opacity: 0; transform: translateY(6px); }
+.cartao-leave-active { position: absolute; width: calc(100% - 4px); }
+.aviso-enter-active, .aviso-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.aviso-enter-from, .aviso-leave-to { opacity: 0; transform: translateY(8px); }
+</style>

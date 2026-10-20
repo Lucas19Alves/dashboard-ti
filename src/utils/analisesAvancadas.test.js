@@ -109,5 +109,12 @@ describe('escala por afinidade', () => {
     expect(de('Ana')).toEqual(['G01', 'G02'])
     expect(de('Bia')).toEqual(['F01', 'G03'])
     expect(escala.aderencia).toBe(100)
+
+    // Área fixada à mão vai para quem foi escolhido; o restante se reequilibra.
+    const ajustada = escalaPorAfinidade({ areas, pessoas: [{ usuario: 'Ana', ritmo: 100 }, { usuario: 'Bia', ritmo: 100 }], historico, setores, horas: 2, fixas: new Map([['F01', 'Ana']]) })
+    const deAjustada = u => ajustada.grupos.find(g => g.usuario === u).areas
+    expect(deAjustada('Ana').find(a => a.bloco === 'F01')).toMatchObject({ fixa: true, habitual: false })
+    expect(deAjustada('Bia').map(a => a.bloco)).toContain('G03')
+    expect(ajustada.grupos.reduce((s, g) => s + g.itens, 0)).toBe(400)
   })
 })

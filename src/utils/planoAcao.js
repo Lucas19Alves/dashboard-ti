@@ -122,7 +122,8 @@ export const afinidade = (historico, area, setor) => {
 
 // Distribui as áreas entre as pessoas escolhidas priorizando onde cada uma costuma ler,
 // respeitando a capacidade de cada uma (ritmo próprio × horas disponíveis).
-export const escalaPorAfinidade = ({ areas = [], pessoas = [], historico = new Map(), setores = new Map(), horas = 8, ritmoPadrao = 120 }) => {
+// fixas: Map área → usuário escolhidos à mão; entram primeiro e o resto se redistribui.
+export const escalaPorAfinidade = ({ areas = [], pessoas = [], historico = new Map(), setores = new Map(), horas = 8, ritmoPadrao = 120, fixas = new Map() }) => {
   const lista = areas.filter(a => a.itens > 0)
   const totalItens = lista.reduce((s, a) => s + a.itens, 0)
   const pessoasNecessarias = Math.max(1, Math.ceil(totalItens / Math.max(1, ritmoPadrao * horas)))
@@ -133,8 +134,20 @@ export const escalaPorAfinidade = ({ areas = [], pessoas = [], historico = new M
   const grupos = pessoas.map((p, i) => ({ pessoa: i + 1, usuario: p.usuario, ritmo: ritmos[i], alvo: (totalItens * ritmos[i]) / somaRitmos, areas: [], itens: 0, itensHabituais: 0 }))
   const pontuar = area => grupos.map(g => ({ g, af: afinidade(historico.get(g.usuario), area.bloco, setores.get(area.bloco)) }))
 
+  const atribuir = (g, area, af, fixa = false) => {
+    g.areas.push({ ...area, setor: setores.get(area.bloco) || '', habitual: af > 0, fixa })
+    g.itens += area.itens
+    if (af > 0) g.itensHabituais += area.itens
+  }
+  const livres = []
+  for (const area of lista) {
+    const g = grupos.find(x => x.usuario === fixas.get(area.bloco))
+    if (g) atribuir(g, area, afinidade(historico.get(g.usuario), area.bloco, setores.get(area.bloco)), true)
+    else livres.push(area)
+  }
+
   // Áreas com "dono" mais claro primeiro; entre elas, as maiores.
-  const ordenadas = lista.map(area => {
+  const ordenadas = livres.map(area => {
     const notas = pontuar(area).sort((a, b) => b.af - a.af)
     return { area, notas, clareza: (notas[0]?.af || 0) - (notas[1]?.af || 0) }
   }).sort((a, b) => b.clareza - a.clareza || b.area.itens - a.area.itens)
@@ -146,10 +159,7 @@ export const escalaPorAfinidade = ({ areas = [], pessoas = [], historico = new M
       const comHistorico = notas.filter(n => n.af > 0).sort((a, b) => ocupacao(a.g) - ocupacao(b.g))
       escolhido = comHistorico.length && ocupacao(comHistorico[0].g) <= 1.3 ? comHistorico[0].g : [...grupos].sort((a, b) => ocupacao(a) - ocupacao(b))[0]
     }
-    const af = notas.find(n => n.g === escolhido)?.af || 0
-    escolhido.areas.push({ ...area, setor: setores.get(area.bloco) || '', habitual: af > 0 })
-    escolhido.itens += area.itens
-    if (af > 0) escolhido.itensHabituais += area.itens
+    atribuir(escolhido, area, notas.find(n => n.g === escolhido)?.af || 0)
   }
 
   const resultado = grupos.map(g => {

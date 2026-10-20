@@ -63,7 +63,49 @@ const horario = h => {
   return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+// Ajustes manuais: área → colaborador, lembrados por auditoria neste navegador.
+const chaveFixas = () => `dashboard_ti_escala_${props.auditoria?.id}`
+const lerFixas = () => { try { return new Map(JSON.parse(localStorage.getItem(chaveFixas()) || '[]')) } catch { return new Map() } }
+const fixas = ref(lerFixas())
+watch(() => props.auditoria?.id, () => { fixas.value = lerFixas() })
+const salvarFixas = (mapa) => {
+  fixas.value = mapa
+  try { mapa.size ? localStorage.setItem(chaveFixas(), JSON.stringify([...mapa])) : localStorage.removeItem(chaveFixas()) } catch {}
+}
+const fixar = (bloco, usuario) => {
+  const novo = new Map(fixas.value)
+  usuario ? novo.set(bloco, usuario) : novo.delete(bloco)
+  salvarFixas(novo)
+}
+const fixasAtivas = computed(() => [...fixas.value].filter(([, u]) => selecionados.value.has(u)).length)
+
+// Interação mapa ↔ lista: destacar a pessoa, escolher uma área para reatribuir.
+const destaque = ref(null) // usuário em foco
+const areaEscolhida = ref(null) // bloco clicado no mapa
+const opacidade = (p) => {
+  const g = grupoDaArea.value.get(p.id)
+  if (destaque.value) return g?.usuario === destaque.value ? 1 : 0.15
+  if (areaEscolhida.value) return p.id === areaEscolhida.value ? 1 : 0.55
+  return g ? (g.areas.find(a => a.bloco === p.id)?.habitual ? 0.9 : 0.45) : 1
+}
+const infoArea = computed(() => {
+  if (!areaEscolhida.value) return null
+  const a = areas.value.find(x => x.bloco === areaEscolhida.value)
+  if (!a) return null
+  const g = grupoDaArea.value.get(a.bloco)
+  return { ...a, nome: rotulo({ id: a.bloco }), setor: setores.value.get(a.bloco) || '', grupo: g, fixa: fixas.value.has(a.bloco) }
+})
+const escolherArea = (id) => {
+  if (!areas.value.some(a => a.bloco === id)) return
+  areaEscolhida.value = areaEscolhida.value === id ? null : id
+}
+
+// Linha do tempo: escala de início ao maior entre o fim do expediente e o último término.
+const escalaTempo = computed(() => Math.max(horas.value, escala.value.horasNecessarias || 0, 0.5))
+const larguraTempo = h => `${Math.min(100, (h / escalaTempo.value) * 100)}%`
+
 const escala = computed(() => escalaPorAfinidade({
+  fixas: fixas.value,
   areas: areas.value,
   pessoas: colaboradores.value.filter(c => selecionados.value.has(c.usuario)).map(c => ({ usuario: c.usuario, ritmo: c.ritmo })),
   historico: historico.value,
@@ -136,6 +178,7 @@ const imprimirEscala = () => {
         <p class="text-xs text-slate-500">Cada colaborador fica nas áreas e setores em que costuma ler (histórico), dentro do que o seu ritmo permite até {{ horaFim }}.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+      <button v-if="fixas.size" type="button" class="ui-btn-secondary py-1.5 text-xs" title="Volta à divisão automática" @click="salvarFixas(new Map()); areaEscolhida = null"><i class="fas fa-rotate-left"></i>Desfazer ajustes ({{ fixasAtivas }})</button>
       <button type="button" class="ui-btn-secondary py-1.5 text-xs" :disabled="!escala.grupos.length" @click="imprimirEscala"><i class="fas fa-print"></i>Imprimir escala</button>
       <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
         Histórico das últimas
@@ -196,17 +239,39 @@ const imprimirEscala = () => {
         <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="w-full min-w-[600px]" role="img" aria-label="Divisão das áreas por colaborador">
           <g v-for="p in posicoes" :key="p.id">
             <rect :x="p.x + 0.08" :y="p.y + 0.08" :width="p.w - 0.16" :height="p.h - 0.16" rx="0.35" :fill="grupoDaArea.has(p.id) ? cor(grupoDaArea.get(p.id).pessoa) : '#e2e8f0'"
-              :fill-opacity="grupoDaArea.has(p.id) ? (grupoDaArea.get(p.id).areas.find(a => a.bloco === p.id)?.habitual ? 0.9 : 0.45) : 1" stroke="#fff" stroke-width="0.08">
+              :fill-opacity="opacidade(p)" :stroke="areaEscolhida === p.id ? '#0f172a' : '#fff'" :stroke-width="areaEscolhida === p.id ? 0.18 : 0.08"
+              class="cursor-pointer transition-[fill-opacity,fill] duration-300" @mouseenter="grupoDaArea.has(p.id) && !areaEscolhida && (destaque = grupoDaArea.get(p.id).usuario)" @mouseleave="destaque = null" @click="destaque = null; escolherArea(p.id)">
               <title>{{ rotulo(p) }}{{ grupoDaArea.has(p.id) ? ` · ${rotuloUsuario(grupoDaArea.get(p.id).usuario)}` : '' }}{{ setores.get(p.id) ? ` · ${setores.get(p.id)}` : '' }}</title>
             </rect>
-            <text :x="p.x + p.w / 2" :y="p.y + p.h / 2 - (grupoDaArea.has(p.id) && p.h > 2 ? 0.45 : 0)" text-anchor="middle" dominant-baseline="central" font-size="0.75" font-weight="800" :fill="grupoDaArea.has(p.id) ? '#fff' : '#64748b'">{{ rotulo(p) }}</text>
-            <text v-if="grupoDaArea.has(p.id) && p.h > 2" :x="p.x + p.w / 2" :y="p.y + p.h / 2 + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.62" font-weight="700" fill="#fff">{{ iniciais(grupoDaArea.get(p.id).usuario) }}</text>
+            <text class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 - (grupoDaArea.has(p.id) && p.h > 2 ? 0.45 : 0)" text-anchor="middle" dominant-baseline="central" font-size="0.75" font-weight="800" :fill="grupoDaArea.has(p.id) ? '#fff' : '#64748b'">{{ rotulo(p) }}</text>
+            <text v-if="fixas.has(p.id) && grupoDaArea.has(p.id)" :x="p.x + p.w - 0.45" :y="p.y + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.55" fill="#fff" class="pointer-events-none">●</text>
+            <text v-if="grupoDaArea.has(p.id) && p.h > 2" class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.62" font-weight="700" fill="#fff">{{ iniciais(grupoDaArea.get(p.id).usuario) }}</text>
           </g>
         </svg>
-        <p class="mt-2 text-[11px] text-slate-500">Cor cheia = área em que a pessoa já costuma ler · cor clara = área nova para ela (sem alternativa com histórico).</p>
+        <transition name="fade" mode="out-in">
+          <div v-if="infoArea" :key="infoArea.bloco" class="mt-3 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p class="text-sm font-bold text-slate-900">{{ infoArea.nome }} <span class="text-xs font-medium text-slate-500">· {{ infoArea.itens.toLocaleString('pt-BR') }} itens{{ infoArea.setor ? ` · ${infoArea.setor}` : '' }}</span></p>
+              <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @click="areaEscolhida = null"><i class="fas fa-xmark mr-1"></i>Fechar</button>
+            </div>
+            <p class="mt-1 text-[11px] text-slate-500">Passar para:</p>
+            <div class="mt-1.5 flex flex-wrap gap-1.5">
+              <button v-for="g in escala.grupos" :key="g.usuario" type="button" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition"
+                :class="infoArea.grupo?.usuario === g.usuario ? 'text-white ring-transparent' : 'bg-white text-slate-700 ring-slate-200 hover:ring-slate-400'"
+                :style="infoArea.grupo?.usuario === g.usuario ? { background: cor(g.pessoa) } : {}" @click="fixar(infoArea.bloco, g.usuario)">
+                <span class="size-2.5 rounded-full" :style="{ background: cor(g.pessoa) }"></span>{{ rotuloUsuario(g.usuario) }}
+              </button>
+              <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.bloco, null)"><i class="fas fa-wand-magic-sparkles mr-1"></i>Automático</button>
+            </div>
+          </div>
+          <p v-else class="mt-2 text-[11px] text-slate-500">Clique numa área para passá-la a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver as áreas dela · cor cheia = área habitual, clara = área nova para a pessoa.</p>
+        </transition>
       </div>
       <ol class="max-h-[560px] space-y-2 overflow-y-auto">
-        <li v-for="g in escala.grupos" :key="g.pessoa" class="rounded-xl p-3 ring-1 ring-slate-200">
+        <li v-for="g in escala.grupos" :key="g.usuario" class="cursor-default rounded-xl p-3 ring-1 transition duration-200"
+          :class="destaque === g.usuario || infoArea?.grupo?.usuario === g.usuario ? 'bg-slate-50 shadow-sm ring-2' : destaque ? 'opacity-50 ring-slate-200' : 'ring-slate-200'"
+          :style="destaque === g.usuario || infoArea?.grupo?.usuario === g.usuario ? { '--tw-ring-color': cor(g.pessoa) } : {}"
+          @mouseenter="destaque = g.usuario" @mouseleave="destaque = null">
           <div class="flex items-center gap-2">
             <span class="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-black text-white" :style="{ background: cor(g.pessoa) }">{{ iniciais(g.usuario) }}</span>
             <div class="min-w-0 flex-1">
@@ -218,9 +283,19 @@ const imprimirEscala = () => {
           <p class="mt-1.5 text-xs text-slate-700">{{ resumirAreas(g.areas) || 'Sem áreas' }}</p>
           <p class="text-[11px] text-slate-500">
             {{ g.itens.toLocaleString('pt-BR') }} itens · {{ Math.round(g.ritmo) }}/h · <span :class="g.horas > horas ? 'font-bold text-red-700' : ''">até {{ horario(g.horas) }}</span>
+            <span v-if="g.areas.some(a => a.fixa)" class="ml-1 text-blue-700">· {{ g.areas.filter(a => a.fixa).length }} ajuste(s)</span>
           </p>
+          <div class="relative mt-1.5 h-2 rounded-full bg-slate-100" :title="`${horaInicio} até ${horario(g.horas)} (fim do expediente ${horaFim})`">
+            <div class="absolute inset-y-0 left-0 rounded-full transition-all duration-500" :style="{ width: larguraTempo(g.horas), background: g.horas > horas ? '#dc2626' : cor(g.pessoa) }"></div>
+            <div class="absolute -inset-y-0.5 w-px bg-slate-700" :style="{ left: larguraTempo(horas) }"></div>
+          </div>
         </li>
       </ol>
     </div>
   </section>
 </template>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+</style>
