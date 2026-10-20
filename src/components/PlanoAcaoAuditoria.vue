@@ -309,16 +309,20 @@ const imprimir = () => {
       <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Itens em aberto</p><p class="text-xl font-black text-amber-800">{{ resumo.itensAbertos.toLocaleString('pt-BR') }}</p></div>
     </div>
 
-    <div v-if="cargaResponsaveis.length > 1 || (cargaResponsaveis.length === 1 && cargaResponsaveis[0].responsavel)" class="mt-4">
-      <p class="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Em aberto por responsável <span class="font-medium normal-case tracking-normal">· clique para filtrar</span></p>
-      <div class="flex gap-2 overflow-x-auto pb-1">
+    <div v-if="cargaResponsaveis.length > 1 || (cargaResponsaveis.length === 1 && cargaResponsaveis[0].responsavel)" class="mt-4 rounded-xl ring-1 ring-slate-200">
+      <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em aberto por responsável</p>
+        <button v-if="filtroResponsavel" type="button" class="text-[11px] font-semibold text-blue-700 hover:underline" @click="filtroResponsavel = ''">Mostrar todos</button>
+        <span v-else class="text-[11px] text-slate-400">clique para filtrar</span>
+      </div>
+      <div class="grid grid-cols-1 gap-x-4 px-3 py-1 sm:grid-cols-2 xl:grid-cols-3">
         <button v-for="r in cargaResponsaveis" :key="r.responsavel || '—'" type="button" :aria-pressed="filtroResponsavel === (r.responsavel || '—')"
-          class="min-w-40 shrink-0 rounded-xl px-3 py-2 text-left ring-1 transition"
-          :class="filtroResponsavel === (r.responsavel || '—') ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white ring-slate-200 hover:ring-slate-400'"
+          class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 text-left transition"
+          :class="filtroResponsavel === (r.responsavel || '—') ? 'bg-blue-50' : filtroResponsavel ? 'opacity-50 hover:opacity-100' : 'hover:bg-slate-50'"
           @click="filtroResponsavel = filtroResponsavel === (r.responsavel || '—') ? '' : (r.responsavel || '—')">
-          <p class="truncate text-xs font-bold">{{ r.responsavel ? rotuloUsuario(r.responsavel) : 'Sem responsável' }}</p>
-          <p class="text-[11px] opacity-75">{{ r.acoes }} ação(ões){{ r.minutos ? ` · ≈ ${textoMin(r.minutos)}` : '' }}<span v-if="r.atrasadas" class="font-bold text-red-500"> · {{ r.atrasadas }} atrasada(s)</span></p>
-          <div class="mt-1.5 h-1 rounded-full bg-slate-200/60"><div class="h-full rounded-full bg-blue-500" :style="{ width: `${(r.acoes / maiorCarga) * 100}%` }"></div></div>
+          <span class="truncate text-xs font-semibold" :class="r.responsavel ? 'text-slate-800' : 'italic text-slate-500'">{{ r.responsavel ? rotuloUsuario(r.responsavel) : 'Sem responsável' }}</span>
+          <span class="text-right text-[11px] tabular-nums text-slate-500"><b class="text-slate-800">{{ r.acoes }}</b>{{ r.minutos ? ` · ≈ ${textoMin(r.minutos)}` : '' }}<b v-if="r.atrasadas" class="text-red-600"> · {{ r.atrasadas }} atras.</b></span>
+          <span class="col-span-2 mt-1 h-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full" :class="r.atrasadas ? 'bg-red-400' : 'bg-blue-500'" :style="{ width: `${(r.acoes / maiorCarga) * 100}%` }"></span></span>
         </button>
       </div>
     </div>
