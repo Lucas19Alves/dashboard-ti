@@ -56,47 +56,45 @@ const prazoPadrao = (dias = 1) => {
   return paraISOLocal(base < minimo ? minimo : base)
 }
 
-// Gerador: escolhe quais locais viram ação (mínimo de pendentes, prioridades, só reincidentes)
-// com prévia ao vivo do que será criado.
-// Mínimo de pendentes: valor livre entre 5 e 200, com sugestões prontas.
-const MINIMO = 5
-const MAXIMO = 200
-const minimoPendentes = ref(MINIMO)
-const minimoDigitado = ref(String(MINIMO))
-const aplicarMinimo = () => {
-  const n = Math.round(Number(String(minimoDigitado.value).replace(',', '.')))
-  minimoPendentes.value = Number.isFinite(n) ? Math.min(MAXIMO, Math.max(MINIMO, n)) : MINIMO
-  minimoDigitado.value = String(minimoPendentes.value)
+// Sugestões: o usuário marca quais locais viram ação. Atalhos marcam por prioridade,
+// reincidência ou mínimo de pendentes; o rodapé mostra o que será criado.
+const marcadas = ref(new Set())
+const marcarPor = (teste) => { marcadas.value = new Set(novas.value.filter(teste).map(s => s.local)) }
+const ATALHOS_SELECAO = [
+  { valor: 'todas', rotulo: 'Todas', teste: () => true },
+  { valor: 'alta', rotulo: 'Alta prioridade', teste: s => s.prioridade === 'alta' },
+  { valor: 'acima', rotulo: 'Acima da meta', teste: s => s.prioridade !== 'baixa' },
+  { valor: 'reincidentes', rotulo: 'Reincidentes', teste: s => s.reincidente },
+  { valor: 'nenhuma', rotulo: 'Nenhuma', teste: () => false }
+]
+const contarAtalho = a => novas.value.filter(a.teste).length
+const minimoPendentes = ref(5)
+const marcarMinimo = () => {
+  const n = Math.max(1, Math.round(Number(minimoPendentes.value) || 1))
+  minimoPendentes.value = n
+  marcarPor(s => s.pendentes >= n)
 }
-watch(minimoDigitado, (v) => {
-  const n = Number(String(v).replace(',', '.'))
-  if (Number.isFinite(n) && n >= MINIMO && n <= MAXIMO) minimoPendentes.value = Math.round(n)
-})
-const prioridadesGerar = ref(['alta', 'media', 'baixa'])
-const soReincidentes = ref(false)
-const ATALHOS_MINIMO = [5, 10, 20, 30, 50, 100, 150, 200]
-const contarMinimo = n => novas.value.filter(s => s.pendentes >= n).length
-const passaGerador = (s, { minimo = minimoPendentes.value, prioridades = prioridadesGerar.value, reincidentes = soReincidentes.value } = {}) =>
-  s.pendentes >= minimo && prioridades.includes(s.prioridade) && (!reincidentes || s.reincidente)
-const selecionadasGerar = computed(() => novas.value.filter(s => passaGerador(s)))
-const contarPrioridade = p => novas.value.filter(s => passaGerador(s, { prioridades: [p] })).length
-const alternarPrioridadeGerar = (p) => {
-  const atual = prioridadesGerar.value
-  prioridadesGerar.value = atual.includes(p) ? (atual.length > 1 ? atual.filter(x => x !== p) : atual) : [...atual, p]
+const alternarMarcada = (local) => {
+  const novo = new Set(marcadas.value)
+  novo.has(local) ? novo.delete(local) : novo.add(local)
+  marcadas.value = novo
 }
+// Seleção inicial: o que está acima da meta (ou tudo, se nada estiver).
+watch(() => novas.value.map(s => s.local).join('|'), () => {
+  const acima = novas.value.filter(s => s.prioridade !== 'baixa')
+  marcadas.value = new Set((acima.length ? acima : novas.value).map(s => s.local))
+}, { immediate: true })
+const selecionadasGerar = computed(() => novas.value.filter(s => marcadas.value.has(s.local)))
 const previa = computed(() => {
   const lista = selecionadasGerar.value
   return {
     total: lista.length,
     itens: lista.reduce((t, s) => t + s.pendentes, 0),
     minutos: lista.reduce((t, s) => t + (s.estimativaMin || 0), 0),
-    reincidentes: lista.filter(s => s.reincidente).length,
-    porPrioridade: ['alta', 'media', 'baixa'].map(p => ({ p, n: lista.filter(s => s.prioridade === p).length })),
-    pessoas: new Set(lista.map(s => s.responsavelSugerido).filter(Boolean)).size,
-    exemplos: lista.slice(0, 8)
+    pessoas: new Set(lista.map(s => s.responsavelSugerido).filter(Boolean)).size
   }
 })
-const COR_PRIORIDADE_BARRA = { alta: 'bg-red-500', media: 'bg-amber-400', baixa: 'bg-slate-300' }
+const sugestoesAbertas = ref(true)
 const gerando = ref(false)
 const gerar = async () => {
   gerando.value = true
@@ -324,70 +322,81 @@ const imprimir = () => {
     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-list-check mr-2 text-blue-600"></i>Plano de ação</h3>
-        <p class="text-xs text-slate-500">Uma ação por local com pendentes. Prioridade pelo % pendente, local sem leitura, reincidência nas auditorias anteriores de {{ auditoria.tipo }} e custo de ruptura. Responsável: quem tem aquele tipo de área no perfil, sem acumular ações demais na mesma pessoa. Salvo só neste navegador.</p>
+        <p class="text-xs text-slate-500" title="Prioridade pelo % pendente, local sem leitura, reincidência e custo de ruptura. Responsável pelo perfil de leitura, sem acumular ações na mesma pessoa.">Uma ação por local com pendentes, priorizada e com responsável sugerido. Salvo só neste navegador.</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
         <button type="button" class="ui-btn-secondary py-2" :disabled="!acoes.length" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</button>
         <button type="button" class="ui-btn-secondary py-2" :disabled="!acoes.length" @click="imprimir"><i class="fas fa-print"></i>Imprimir</button>
       </div>
     </div>
 
-    <!-- Gerador de ações -->
-    <div v-if="novas.length" class="mt-4 rounded-xl bg-slate-50 p-4">
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <div class="space-y-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <label for="minimo-pendentes" class="text-xs font-bold text-slate-700">Locais com pelo menos</label>
-            <div class="relative">
-              <input id="minimo-pendentes" v-model="minimoDigitado" list="minimos-pendentes" type="number" inputmode="numeric" :min="MINIMO" :max="MAXIMO" step="1"
-                class="ui-input w-28 py-1.5 pr-2 text-sm font-bold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" @change="aplicarMinimo" @blur="aplicarMinimo" @keydown.enter.prevent="aplicarMinimo">
-              <datalist id="minimos-pendentes">
-                <option v-for="n in ATALHOS_MINIMO" :key="n" :value="n">{{ contarMinimo(n) }} local(is)</option>
-              </datalist>
-            </div>
-            <span class="text-xs font-bold text-slate-700">pendentes</span>
-            <span class="text-[11px] text-slate-500">· de {{ MINIMO }} a {{ MAXIMO }} · {{ novas.length }} local(is) com pendentes</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <span class="mr-1 text-xs font-bold text-slate-700">Prioridade</span>
-            <button v-for="p in ['alta', 'media', 'baixa']" :key="p" type="button" :aria-pressed="prioridadesGerar.includes(p)"
-              class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 transition"
-              :class="prioridadesGerar.includes(p) ? `${CLASSE_PRIORIDADE[p]} ring-transparent` : 'bg-white text-slate-400 ring-slate-200 line-through'"
-              @click="alternarPrioridadeGerar(p)">{{ ROTULO_PRIORIDADE[p] }} <span class="opacity-70">{{ contarPrioridade(p) }}</span></button>
-            <label class="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-              <input v-model="soReincidentes" type="checkbox" class="size-3.5 accent-red-600">Só reincidentes
-            </label>
-          </div>
+    <!-- Sugestões de ação -->
+    <div v-if="novas.length" class="mt-4 overflow-hidden rounded-xl ring-1 ring-slate-200">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 bg-slate-50 px-4 py-2.5">
+        <button type="button" class="flex items-center gap-2 text-left" :aria-expanded="sugestoesAbertas" @click="sugestoesAbertas = !sugestoesAbertas">
+          <i class="fas fa-chevron-down text-[10px] text-slate-400 transition-transform" :class="sugestoesAbertas ? '' : '-rotate-90'" aria-hidden="true"></i>
+          <span class="text-sm font-bold text-slate-900">Sugestões</span>
+          <span class="text-xs text-slate-500">{{ novas.length }} local(is) com pendentes fora do plano</span>
+        </button>
+        <div v-if="sugestoesAbertas" class="flex flex-wrap items-center gap-1 text-xs sm:ml-auto">
+          <span class="mr-1 text-slate-500">Marcar:</span>
+          <button v-for="a in ATALHOS_SELECAO" :key="a.valor" type="button" class="rounded-md px-2 py-1 font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="marcarPor(a.teste)">
+            {{ a.rotulo }}<span v-if="a.valor !== 'nenhuma'" class="ml-1 font-normal text-slate-400">{{ contarAtalho(a) }}</span>
+          </button>
+          <form class="ml-1 inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 ring-1 ring-slate-200" @submit.prevent="marcarMinimo">
+            <label for="minimo-pendentes" class="text-slate-500">≥</label>
+            <input id="minimo-pendentes" v-model="minimoPendentes" type="number" min="1" step="1" class="w-12 border-0 bg-transparent p-0.5 text-xs font-bold tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" aria-label="Mínimo de pendentes">
+            <button type="submit" class="font-semibold text-blue-700 hover:underline">pendentes</button>
+          </form>
         </div>
+      </div>
 
-        <div class="flex flex-col justify-between gap-3 rounded-lg bg-white p-3 ring-1 ring-slate-200">
-          <div>
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Prévia</p>
-            <p class="mt-0.5 text-sm text-slate-700">
-              <b class="text-2xl font-black text-slate-900 tabular-nums">{{ previa.total }}</b> ação(ões) ·
-              <b class="tabular-nums">{{ previa.itens.toLocaleString('pt-BR') }}</b> itens<template v-if="previa.minutos"> · ≈ <b>{{ textoMin(previa.minutos) }}</b></template><template v-if="previa.pessoas"> · {{ previa.pessoas }} pessoa(s)</template>
-            </p>
-            <div class="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-100">
-              <div v-for="x in previa.porPrioridade" :key="x.p" class="h-full transition-all duration-300" :class="COR_PRIORIDADE_BARRA[x.p]" :style="{ width: `${previa.total ? (x.n / previa.total) * 100 : 0}%` }"></div>
-            </div>
-            <p class="mt-1 text-[11px] text-slate-500">
-              <span v-for="x in previa.porPrioridade.filter(x => x.n)" :key="x.p" class="mr-2">{{ x.n }} {{ ROTULO_PRIORIDADE[x.p].toLowerCase() }}</span>
-              <span v-if="previa.reincidentes" class="font-semibold text-red-600">{{ previa.reincidentes }} reincidente(s)</span>
-            </p>
-            <TransitionGroup tag="div" name="cartao" class="relative mt-2 flex flex-wrap gap-1">
-              <span v-for="x in previa.exemplos" :key="x.local" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{{ x.local }} · {{ x.pendentes }}</span>
-              <span v-if="previa.total > previa.exemplos.length" key="mais" class="px-1 py-0.5 text-[10px] text-slate-400">+{{ previa.total - previa.exemplos.length }}</span>
-            </TransitionGroup>
-          </div>
-          <button type="button" class="ui-btn-primary w-full py-2" :disabled="gerando || !previa.total" @click="gerar">
+      <template v-if="sugestoesAbertas">
+        <div class="max-h-72 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead class="sticky top-0 z-10 bg-white text-[11px] uppercase tracking-wider text-slate-500 shadow-[0_1px_0_#f1f5f9]">
+              <tr>
+                <th scope="col" class="w-10 px-4 py-2 text-left">
+                  <input type="checkbox" class="size-3.5 accent-blue-600" :checked="marcadas.size === novas.length" :indeterminate.prop="marcadas.size > 0 && marcadas.size < novas.length" aria-label="Marcar todas" @change="marcarPor(() => !(marcadas.size === novas.length))">
+                </th>
+                <th scope="col" class="px-2 py-2 text-left font-semibold">Local</th>
+                <th scope="col" class="px-2 py-2 text-right font-semibold">Pendentes</th>
+                <th scope="col" class="hidden px-2 py-2 text-left font-semibold md:table-cell">Por quê</th>
+                <th scope="col" class="hidden px-2 py-2 text-left font-semibold lg:table-cell">Responsável sugerido</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Tempo</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="s in novas" :key="s.local" class="cursor-pointer transition-colors" :class="marcadas.has(s.local) ? 'bg-blue-50/40' : 'text-slate-400 hover:bg-slate-50'" @click="alternarMarcada(s.local)">
+                <td class="px-4 py-2"><input type="checkbox" class="size-3.5 accent-blue-600" :checked="marcadas.has(s.local)" :aria-label="`Marcar ${s.local}`" @click.stop @change="alternarMarcada(s.local)"></td>
+                <td class="px-2 py-2">
+                  <div class="flex items-center gap-2">
+                    <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase" :class="CLASSE_PRIORIDADE[s.prioridade]">{{ ROTULO_PRIORIDADE[s.prioridade] }}</span>
+                    <span class="font-bold" :class="marcadas.has(s.local) ? 'text-slate-900' : ''">{{ s.local }}</span>
+                    <span class="truncate text-xs">{{ s.setor }}</span>
+                  </div>
+                </td>
+                <td class="px-2 py-2 text-right tabular-nums"><b :class="marcadas.has(s.local) ? 'text-amber-700' : ''">{{ s.pendentes }}</b> <span class="text-[11px]">{{ s.perc.toFixed(0) }}%</span></td>
+                <td class="hidden px-2 py-2 text-xs md:table-cell">{{ s.motivos.slice(s.semLeitura ? 0 : 1).join(' · ') || '—' }}</td>
+                <td class="hidden max-w-48 truncate px-2 py-2 text-xs lg:table-cell">{{ s.responsavelSugerido ? rotuloUsuario(s.responsavelSugerido) : '—' }}</td>
+                <td class="px-4 py-2 text-right text-xs tabular-nums">{{ s.estimativaMin ? `≈ ${textoMin(s.estimativaMin)}` : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-white px-4 py-2.5">
+          <p class="text-xs text-slate-600">
+            <b class="text-slate-900">{{ previa.total }}</b> de {{ novas.length }} marcada(s) · {{ previa.itens.toLocaleString('pt-BR') }} itens<template v-if="previa.minutos"> · ≈ {{ textoMin(previa.minutos) }}</template><template v-if="previa.pessoas"> · {{ previa.pessoas }} pessoa(s)</template>
+          </p>
+          <button type="button" class="ui-btn-primary py-2" :disabled="gerando || !previa.total" @click="gerar">
             <i :class="gerando ? 'fas fa-spinner fa-spin' : 'fas fa-wand-magic-sparkles'"></i>
             Gerar {{ previa.total }} ação(ões)
           </button>
         </div>
-      </div>
+      </template>
     </div>
 
-    <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+    <div v-if="acoes.length" class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
       <div class="rounded-xl bg-slate-50 p-3 md:col-span-2">
         <div class="flex items-baseline justify-between">
           <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Progresso</p>
@@ -457,7 +466,7 @@ const imprimir = () => {
     <div v-else-if="!acoes.length" class="mt-4 rounded-xl bg-slate-50 px-6 py-10 text-center">
       <i class="fas fa-clipboard-check text-2xl text-slate-300"></i>
       <p class="mt-2 text-sm font-semibold text-slate-700">{{ sugestoes.length ? `${sugestoes.length} local(is) com pendentes` : 'Nenhum local com pendentes' }}</p>
-      <p class="mt-1 text-xs text-slate-500">{{ sugestoes.length ? 'Use “Gerar ações” para montar o plano.' : 'Não há o que planejar nesta auditoria.' }}</p>
+      <p class="mt-1 text-xs text-slate-500">{{ sugestoes.length ? 'Marque as sugestões acima e clique em “Gerar”.' : 'Não há o que planejar nesta auditoria.' }}</p>
     </div>
 
     <!-- Quadro -->
