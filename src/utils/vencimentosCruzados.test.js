@@ -14,17 +14,22 @@ describe('vencimentos cruzados', () => {
     expect(localDoVencimento({ _codigo: 'A' }, new Map([['A', 'G01A']]))).toEqual({ local: 'G01A', origem: 'auditoria' })
   })
 
-  it('monta o mapa de críticos por local', () => {
-    const { auditoria, semLocal, pelaAuditoria } = mapaVencimentos([venc('A', 1, 'ate3'), venc('B', 20, 'futuro'), venc('Z', 1, 'ate3')], auditorias)
-    expect(auditoria.analise.porLocal).toEqual({ G01A: { lidos: 0, pendentes: 1, comProblema: 0 }, G02B: { lidos: 1, pendentes: 0, comProblema: 0 } })
+  it('monta o mapa por categoria (vencidos, hoje, a vencer)', () => {
+    const itens = [venc('A', -2, 'vencidos'), venc('A', 0, 'hoje'), venc('B', 20, 'futuro'), venc('Z', 1, 'ate3')]
+    const { auditoria, semLocal, pelaAuditoria } = mapaVencimentos(itens, auditorias)
+    expect(auditoria.analise.porLocal).toEqual({ G01A: { lidos: 0, pendentes: 1, comProblema: 1 }, G02B: { lidos: 1, pendentes: 0, comProblema: 0 } })
+    expect(auditoria.dados.map(d => [d._codigo, d.Local, d._categoria])).toEqual([['A', 'G01A', 'vencidos'], ['A', 'G01A', 'hoje'], ['B', 'G02B', 'aVencer']])
     expect(semLocal).toBe(1)
-    expect(pelaAuditoria).toBe(2)
+    expect(pelaAuditoria).toBe(3)
+    expect(Object.keys(mapaVencimentos(itens, auditorias, ['vencidos']).auditoria.analise.porLocal)).toEqual(['G01A'])
   })
 
   it('cruza validade curta com ruptura recorrente', () => {
-    const linhas = cruzarValidadeRuptura([venc('A', 2, 'ate3'), venc('B', 60, 'futuro'), venc('C', 1, 'ate3')], auditorias)
-    expect(linhas).toHaveLength(1)
-    expect(linhas[0]).toMatchObject({ codigo: 'A', vezesRuptura: 2, custoRuptura: 20 })
+    const itens = [venc('A', 2, 'ate3'), venc('B', 60, 'futuro'), venc('C', 1, 'ate3')]
+    const linhas = cruzarValidadeRuptura(itens, auditorias, { categorias: ['aVencer'] })
+    expect(linhas.map(l => l.codigo)).toEqual(['A', 'B'])
+    expect(cruzarValidadeRuptura(itens, auditorias, { categorias: ['vencidos'] })).toHaveLength(0)
+    expect(linhas[0]).toMatchObject({ codigo: 'A', vezesRuptura: 2, custoRuptura: 20, categoria: 'aVencer' })
     expect(linhas[0].diagnostico).toMatch(/com frequência/)
   })
 })

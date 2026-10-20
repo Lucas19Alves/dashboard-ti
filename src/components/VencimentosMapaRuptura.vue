@@ -1,22 +1,73 @@
 <script setup>
 import { computed, ref } from 'vue'
 import MapaLoja from './MapaLoja.vue'
+import UiModal from './ui/UiModal.vue'
 import UiListaItens from './ui/UiListaItens.vue'
-import { cruzarValidadeRuptura, mapaVencimentos, PRAZOS_CRITICOS } from '../utils/vencimentosCruzados'
+import { CATEGORIAS_VENCIMENTO, categoriaVencimento, cruzarValidadeRuptura, mapaVencimentos } from '../utils/vencimentosCruzados'
 import { formatarDataBR } from '../utils/busca'
 
-// Vencimentos no mapa da loja e produtos que vencem no estoque enquanto faltam na gôndola.
+// Vencimentos no mapa da loja (vencidos, vencem hoje, a vencer) e produtos que vencem
+// no estoque enquanto faltam na gôndola.
 const props = defineProps({
   itens: { type: Array, default: () => [] },
   auditorias: { type: Array, default: () => [] }
 })
 
-const mapa = computed(() => mapaVencimentos(props.itens, props.auditorias))
-const criticos = computed(() => props.itens.filter(i => PRAZOS_CRITICOS.includes(i._prazo)).length)
-const metricaMapa = { meta: 10, rotulo: '% crítico', curto: 'dos itens críticos', pendentes: 'críticos', lidos: 'no prazo' }
+const ROTULO = Object.fromEntries(CATEGORIAS_VENCIMENTO.map(c => [c.valor, c.rotulo]))
+const contagem = computed(() => {
+  const c = { vencidos: 0, hoje: 0, aVencer: 0 }
+  props.itens.forEach(i => { const k = categoriaVencimento(i); if (k) c[k]++ })
+  return c
+})
+const alternar = (lista, valor) => (lista.includes(valor) ? lista.filter(v => v !== valor) : [...lista, valor])
 
-const diasLimite = ref(30)
-const cruzamento = computed(() => cruzarValidadeRuptura(props.itens, props.auditorias, { diasLimite: diasLimite.value }))
+// ---------- Mapa ----------
+const categoriasMapa = ref(CATEGORIAS_VENCIMENTO.map(c => c.valor))
+const mapa = computed(() => mapaVencimentos(props.itens, props.auditorias, categoriasMapa.value))
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
+// No mapa: pendentes = vencidos, comProblema = vencem hoje, lidos = a vencer.
+const pintura = {
+  rotulo: 'Vencimentos',
+  icone: 'fas fa-calendar-xmark',
+  semItens: 'Sem itens nas categorias escolhidas',
+  classe: d => (d.pendentes ? 'bg-red-500 text-white' : d.comProblema ? 'bg-orange-400 text-orange-950' : d.lidos ? 'bg-amber-200 text-amber-900' : 'bg-slate-100 text-slate-400'),
+  texto: d => String(d.total || ''),
+  dica: d => [d.pendentes ? plural(d.pendentes, 'vencido', 'vencidos') : '', d.comProblema ? plural(d.comProblema, 'vence hoje', 'vencem hoje') : '', d.lidos ? `${d.lidos} a vencer` : ''].filter(Boolean).join(' · ') || 'Sem itens',
+  resumo: d => [
+    { rotulo: 'vencidos', valor: d.pendentes || 0, classe: 'bg-red-50 text-red-700' },
+    { rotulo: 'vencem hoje', valor: d.comProblema || 0, classe: 'bg-orange-50 text-orange-700' },
+    { rotulo: 'a vencer', valor: d.lidos || 0, classe: 'bg-amber-50 text-amber-800' }
+  ],
+  colunasFace: [
+    { rotulo: 'Venc.', valor: d => d.pendentes || 0, classe: 'text-red-700 font-bold' },
+    { rotulo: 'Hoje', valor: d => d.comProblema || 0, classe: 'text-orange-700' },
+    { rotulo: 'A vencer', valor: d => d.lidos || 0, classe: 'text-amber-800' }
+  ],
+  legenda: [
+    { classe: 'bg-red-500', rotulo: 'Tem vencidos' },
+    { classe: 'bg-orange-400', rotulo: 'Vencem hoje' },
+    { classe: 'bg-amber-200', rotulo: 'Só a vencer' }
+  ]
+}
+
+// ---------- Modal de itens do local ----------
+const modal = ref(null) // { local, itens }
+const abrirItens = ({ local, itens }) => { modal.value = { local, itens } }
+const diasTexto = v => (v === null || v === undefined || v === '' ? '—' : v < 0 ? `vencido há ${-v}` : v === 0 ? 'hoje' : `${v}`)
+const colunasItens = [
+  { chave: '_codigo', titulo: 'Código' },
+  { chave: '_produto', titulo: 'Produto', largura: 'max-w-72' },
+  { chave: 'Local', titulo: 'Local' },
+  { chave: '_validadeISO', titulo: 'Validade', formato: v => formatarDataBR(v) },
+  { chave: '_diasParaVencer', titulo: 'Dias', alinhamento: 'right', valor: i => (i._diasParaVencer === null || i._diasParaVencer === undefined ? null : Number(i._diasParaVencer)), formato: diasTexto },
+  { chave: '_estoque', titulo: 'Estoque', alinhamento: 'right', valor: i => Number(i._estoque) || 0 },
+  { chave: '_categoria', titulo: 'Situação', alinhamento: 'center', valor: i => ROTULO[i._categoria], badge: v => (v === 'Vencidos' ? 'bg-red-50 text-red-700' : v === 'Vencem hoje' ? 'bg-orange-50 text-orange-700' : 'bg-amber-50 text-amber-800') }
+]
+const facetasItens = [{ chave: '_categoria', titulo: 'Situação', valor: i => ROTULO[i._categoria] }, { chave: '_setor', titulo: 'Setor' }, { chave: 'Local', titulo: 'Local' }]
+
+// ---------- Vence no estoque, falta na gôndola ----------
+const categoriasCruzamento = ref(CATEGORIAS_VENCIMENTO.map(c => c.valor))
+const cruzamento = computed(() => cruzarValidadeRuptura(props.itens, props.auditorias, { categorias: categoriasCruzamento.value }))
 const recorrentes = computed(() => cruzamento.value.filter(l => l.vezesRuptura >= 2).length)
 const comEstoque = computed(() => cruzamento.value.filter(l => l.estoque > 0).length)
 const moeda = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -26,14 +77,16 @@ const colunas = [
   { chave: 'codigo', titulo: 'Código' },
   { chave: 'produto', titulo: 'Produto', largura: 'max-w-64' },
   { chave: 'setor', titulo: 'Setor', largura: 'max-w-40' },
-  { chave: 'validade', titulo: 'Validade', valor: l => l.validade, formato: v => formatarDataBR(v) },
-  { chave: 'dias', titulo: 'Dias', alinhamento: 'right', formato: v => (v < 0 ? `vencido há ${-v}` : v === 0 ? 'hoje' : `${v}`) },
+  { chave: 'categoria', titulo: 'Situação', alinhamento: 'center', valor: l => ROTULO[l.categoria], badge: v => (v === 'Vencidos' ? 'bg-red-50 text-red-700' : v === 'Vencem hoje' ? 'bg-orange-50 text-orange-700' : 'bg-amber-50 text-amber-800') },
+  { chave: 'validade', titulo: 'Validade', formato: v => formatarDataBR(v) },
+  { chave: 'dias', titulo: 'Dias', alinhamento: 'right', formato: diasTexto },
   { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' },
   { chave: 'vezesRuptura', titulo: 'Rupturas', alinhamento: 'right' },
   { chave: 'custoRuptura', titulo: 'Custo ruptura', alinhamento: 'right', valor: l => Math.round(l.custoRuptura * 100) / 100, formato: v => moeda(v) },
   { chave: 'diagnostico', titulo: 'O que fazer', largura: 'max-w-96' }
 ]
-const facetas = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'fornecedor', titulo: 'Fornecedor' }, { chave: 'vezesRuptura', titulo: 'Rupturas' }]
+const facetas = [{ chave: 'categoria', titulo: 'Situação', valor: l => ROTULO[l.categoria] }, { chave: 'setor', titulo: 'Setor' }, { chave: 'fornecedor', titulo: 'Fornecedor' }, { chave: 'vezesRuptura', titulo: 'Rupturas' }]
+const ESTILO_CHIP = { vencidos: 'bg-red-600 ring-red-600', hoje: 'bg-orange-500 ring-orange-500', aVencer: 'bg-amber-500 ring-amber-500' }
 </script>
 
 <template>
@@ -42,30 +95,46 @@ const facetas = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'fornecedor', tit
     <section class="space-y-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900"><i class="fas fa-map-location-dot mr-2 text-blue-600" aria-hidden="true"></i>Vencimentos no mapa da loja</h2>
-        <p class="text-xs text-slate-500">Cor = % dos itens monitorados do local que estão vencidos ou vencem em até 3 dias (verde até 10%, amarelo até 20%, vermelho acima). Local da planilha de vencimentos; sem ele, o último local do produto nas auditorias.</p>
+        <p class="text-xs text-slate-500">Número na área = itens das situações escolhidas. Clique numa área para ver o detalhe e os itens. Local da planilha de vencimentos; sem ele, o último local do produto nas auditorias.</p>
       </div>
-      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div class="ui-card p-4"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Itens monitorados</p><p class="text-2xl font-black text-slate-900">{{ itens.length.toLocaleString('pt-BR') }}</p></div>
-        <div class="ui-card p-4"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Críticos</p><p class="text-2xl font-black" :class="criticos ? 'text-red-700' : 'text-slate-900'">{{ criticos.toLocaleString('pt-BR') }}</p><p class="text-xs text-slate-500">vencidos ou até 3 dias</p></div>
-        <div class="ui-card p-4"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Local pela auditoria</p><p class="text-2xl font-black text-slate-900">{{ mapa.pelaAuditoria.toLocaleString('pt-BR') }}</p><p class="text-xs text-slate-500">sem local na planilha</p></div>
-        <div class="ui-card p-4"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Sem local</p><p class="text-2xl font-black" :class="mapa.semLocal ? 'text-amber-700' : 'text-slate-900'">{{ mapa.semLocal.toLocaleString('pt-BR') }}</p><p class="text-xs text-slate-500">fora do mapa</p></div>
+
+      <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Situações no mapa">
+        <button v-for="c in CATEGORIAS_VENCIMENTO" :key="c.valor" type="button" :aria-pressed="categoriasMapa.includes(c.valor)"
+          class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 transition"
+          :class="categoriasMapa.includes(c.valor) ? `${ESTILO_CHIP[c.valor]} text-white` : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300'"
+          @click="categoriasMapa = alternar(categoriasMapa, c.valor)">
+          <i :class="categoriasMapa.includes(c.valor) ? 'fas fa-check' : 'fas fa-plus opacity-50'" aria-hidden="true"></i>{{ c.rotulo }}
+          <span class="rounded-full bg-black/10 px-1.5 text-xs">{{ contagem[c.valor] }}</span>
+        </button>
+        <span class="ml-auto text-xs text-slate-500">
+          {{ mapa.auditoria.dados.length.toLocaleString('pt-BR') }} no mapa
+          <template v-if="mapa.pelaAuditoria"> · {{ mapa.pelaAuditoria }} com local pela auditoria</template>
+          <template v-if="mapa.semLocal"> · <b class="text-amber-700">{{ mapa.semLocal }} sem local</b></template>
+        </span>
       </div>
-      <MapaLoja :auditoria="mapa.auditoria" :is-item-lido="() => true" :itens-disponiveis="false" :metrica="metricaMapa" />
+
+      <MapaLoja :auditoria="mapa.auditoria" :is-item-lido="() => false" :itens-disponiveis="true" :modos="['pendente']" :laterais="false" :pintura="pintura" @ver-itens="abrirItens" />
     </section>
 
-    <!-- Validade × ruptura -->
+    <UiModal v-if="modal" :title="modal.local" :subtitle="`${modal.itens.length} item(ns) neste local`" width="max-w-6xl" @close="modal = null">
+      <UiListaItens :itens="modal.itens" :colunas="colunasItens" :facetas="facetasItens" :titulo="`Vencimentos · ${modal.local}`" :ordem-inicial="{ chave: '_diasParaVencer', direcao: 'asc' }" />
+    </UiModal>
+
+    <!-- Vence no estoque, falta na gôndola -->
     <section class="ui-card p-5">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 class="text-lg font-bold text-slate-900"><i class="fas fa-arrows-to-circle mr-2 text-red-500" aria-hidden="true"></i>Vence no estoque, falta na gôndola</h2>
-          <p class="text-xs text-slate-500">Produtos com validade curta que já ficaram sem presença em auditorias de Presença ou Ruptura: sinal de pedido grande demais para o giro ou de reposição/exposição falhando.</p>
+          <p class="text-xs text-slate-500">Produtos da planilha de vencimentos que já ficaram sem presença em auditorias de Presença ou Ruptura: sinal de pedido grande demais para o giro ou de reposição/exposição falhando.</p>
         </div>
-        <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
-          Vencendo em até
-          <select v-model.number="diasLimite" class="ui-input w-auto py-1.5 text-xs">
-            <option v-for="d in [7, 15, 30, 60, 90]" :key="d" :value="d">{{ d }} dias</option>
-          </select>
-        </label>
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Situações">
+          <button v-for="c in CATEGORIAS_VENCIMENTO" :key="c.valor" type="button" :aria-pressed="categoriasCruzamento.includes(c.valor)"
+            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition"
+            :class="categoriasCruzamento.includes(c.valor) ? `${ESTILO_CHIP[c.valor]} text-white` : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300'"
+            @click="categoriasCruzamento = alternar(categoriasCruzamento, c.valor)">
+            <i :class="categoriasCruzamento.includes(c.valor) ? 'fas fa-check' : 'fas fa-plus opacity-50'" aria-hidden="true"></i>{{ c.rotulo }}
+          </button>
+        </div>
       </div>
       <p v-if="!temAuditoriasPresenca" class="mt-4 rounded-xl bg-slate-50 py-8 text-center text-sm text-slate-500">Sem auditorias de Presença ou Ruptura com itens para cruzar.</p>
       <template v-else>
@@ -75,7 +144,7 @@ const facetas = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'fornecedor', tit
           <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Com estoque</p><p class="text-xl font-black text-amber-800">{{ comEstoque }}</p><p class="text-[11px] text-amber-700">dá para repor agora</p></div>
         </div>
         <div class="mt-4">
-          <UiListaItens :itens="cruzamento" :colunas="colunas" :facetas="facetas" titulo="Validade curta e ruptura" :ordem-inicial="{ chave: null, direcao: 'desc' }" />
+          <UiListaItens :itens="cruzamento" :colunas="colunas" :facetas="facetas" titulo="Vence no estoque, falta na gôndola" :ordem-inicial="{ chave: null, direcao: 'desc' }" />
         </div>
       </template>
     </section>
