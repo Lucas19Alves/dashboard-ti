@@ -30,7 +30,8 @@ const props = defineProps({
   modos: { type: Array, default: () => ['pendente', 'leituras', 'usuario'] }, // abas de cor disponíveis
   laterais: { type: Boolean, default: true }, // cards "Áreas mais críticas" e "Usuários no mapa"
   // Pintura própria da aba principal (ex.: vencimentos), no lugar do % pendente:
-  // { rotulo, classe(d), texto(d), dica(d), resumo(d) → [{ rotulo, valor, classe }], colunasFace: [{ rotulo, valor(d), classe }], legenda: [{ classe, rotulo }], semItens }
+  // { rotulo, classe(d), texto(d), dica(d), resumo(d) → [{ rotulo, valor, classe }], colunasFace: [{ rotulo, valor(d), classe }], legenda: [{ classe, rotulo }], semItens, botao, botaoIcone }
+  // Slot #area ({ area }): conteúdo extra no painel da área selecionada.
   pintura: { type: Object, default: null }
 })
 const emit = defineEmits(['ver-itens'])
@@ -416,7 +417,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </ul>
           </div>
 
-          <button v-if="areaSelecionada.total && itensDisponiveis" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i class="fas fa-list"></i>Ver itens</button>
+          <slot name="area" :area="areaSelecionada" />
+          <button v-if="areaSelecionada.total && itensDisponiveis" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i :class="pintura?.botaoIcone || 'fas fa-list'"></i>{{ pintura?.botao || 'Ver itens' }}</button>
 
           <!-- Ajustes da área (modo edição) -->
           <div v-if="editando && posicaoSelecionada" class="mt-4 space-y-3 rounded-xl bg-blue-50 p-3">

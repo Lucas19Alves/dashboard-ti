@@ -23,7 +23,7 @@ export const reincidenciaLocais = (auditorias, meta = META_PENDENTE_PERCENTUAL) 
     for (const [local, d] of Object.entries(auditoria?.analise?.porLocal || {})) {
       const { total, pendentes, perc } = pendenteDoLocal(d)
       if (!total) continue
-      const r = mapa.get(local) || { local: codigoLocal(local), auditorias: 0, foraMeta: 0, pendentes: 0, itens: 0, sequencia: 0, ultimaData: '', historico: [] }
+      const r = mapa.get(local) || { chave: local, local: codigoLocal(local), auditorias: 0, foraMeta: 0, pendentes: 0, itens: 0, sequencia: 0, ultimaData: '', historico: [] }
       const fora = perc > meta
       r.auditorias++
       r.foraMeta += fora ? 1 : 0
@@ -74,7 +74,9 @@ export const mapaReincidencia = (auditorias, meta = META_PENDENTE_PERCENTUAL) =>
       else destino.lidos++
     }
   }
-  return { analise: { porLocal }, dados: [] }
+  // Uma linha por local (com o histórico) para o painel e a lista de locais de cada área.
+  const dados = reincidenciaLocais(auditorias, meta).map(r => ({ ...r, Local: r.chave }))
+  return { analise: { porLocal }, dados }
 }
 
 // ---------- Evolução dos usuários ----------
