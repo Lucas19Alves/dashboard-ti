@@ -6,6 +6,7 @@ import { evolucaoUsuarios } from '../utils/historicoAuditorias'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { correspondeBusca } from '../utils/busca'
 import { rotuloUsuario } from '../utils/usuario'
+import { blocoTabela, escapeHtml, imprimirRelatorio, selo } from '../utils/print'
 
 // Escala para a próxima auditoria: cada colaborador fica com as áreas e setores em que costuma
 // ler (histórico das últimas auditorias), dentro da capacidade do seu ritmo até o fim do horário.
@@ -90,6 +91,41 @@ const rotulo = (p) => {
   return area.tipo === 'gondola' ? p.id.slice(1) : nomeArea(area)
 }
 const iniciais = usuario => (rotuloUsuario(usuario).split(' ').filter(Boolean).slice(0, 2).map(x => x[0]).join('') || '?').toUpperCase()
+
+// Escala impressa para afixar ou entregar à equipe: uma linha por pessoa, com assinatura.
+const imprimirEscala = () => {
+  const e = escala.value
+  if (!e.grupos.length) return
+  imprimirRelatorio({
+    titulo: 'Escala da auditoria',
+    subtitulo: `${props.auditoria.tipo} · ${horaInicio.value} às ${horaFim.value}`,
+    contexto: [
+      { rotulo: 'Base', valor: `${props.auditoria.tipo} · histórico das últimas ${base.value} auditorias` },
+      { rotulo: 'Horário', valor: `${horaInicio.value} às ${horaFim.value}` },
+      { rotulo: 'Colaboradores', valor: `${e.grupos.length} (necessárias: ${e.pessoasNecessarias})` },
+      { rotulo: 'Término previsto', valor: horario(e.horasNecessarias) }
+    ],
+    indicadores: [
+      { rotulo: 'Itens a auditar', valor: e.totalItens.toLocaleString('pt-BR'), tom: 'neutro' },
+      { rotulo: 'Pessoas necessárias', valor: e.pessoasNecessarias, tom: e.pessoasNecessarias > e.grupos.length ? 'ruim' : 'bom' },
+      { rotulo: 'Término previsto', valor: horario(e.horasNecessarias), tom: e.cabeNoHorario ? 'bom' : 'ruim' },
+      { rotulo: 'Áreas habituais', valor: `${e.aderencia.toFixed(0)}%`, detalhe: 'itens onde a pessoa já costuma ler', tom: 'neutro' }
+    ],
+    secoes: [{
+      titulo: 'Divisão por colaborador',
+      html: blocoTabela({
+        colunas: [
+          { chave: 'pessoa', titulo: '#', alinhamento: 'right' }, { chave: 'nome', titulo: 'Colaborador' }, { chave: 'areas', titulo: 'Áreas' },
+          { chave: 'itens', titulo: 'Itens', alinhamento: 'right', format: v => v.toLocaleString('pt-BR') }, { chave: 'ritmo', titulo: 'Ritmo (/h)', alinhamento: 'right' },
+          { chave: 'termino', titulo: 'Até', alinhamento: 'right', html: (v, l) => (l.estoura ? selo(v, 'ruim') : escapeHtml(v)) },
+          { chave: 'visto', titulo: 'Visto', html: () => '&nbsp;'.repeat(18) }
+        ],
+        linhas: e.grupos.map(g => ({ pessoa: g.pessoa, nome: rotuloUsuario(g.usuario), areas: resumirAreas(g.areas) || '—', itens: g.itens, ritmo: Math.round(g.ritmo), termino: horario(g.horas), estoura: g.horas > horas.value }))
+      })
+    }],
+    assinaturas: ['Responsável pela auditoria', 'Liderança', 'Data']
+  })
+}
 </script>
 
 <template>
@@ -99,12 +135,15 @@ const iniciais = usuario => (rotuloUsuario(usuario).split(' ').filter(Boolean).s
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-people-arrows mr-2 text-blue-600"></i>Escala sugerida para a próxima auditoria</h3>
         <p class="text-xs text-slate-500">Cada colaborador fica nas áreas e setores em que costuma ler (histórico), dentro do que o seu ritmo permite até {{ horaFim }}.</p>
       </div>
+      <div class="flex flex-wrap items-center gap-2">
+      <button type="button" class="ui-btn-secondary py-1.5 text-xs" :disabled="!escala.grupos.length" @click="imprimirEscala"><i class="fas fa-print"></i>Imprimir escala</button>
       <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
         Histórico das últimas
         <select v-model.number="base" class="ui-input w-auto py-1.5 text-xs">
           <option v-for="n in BASES" :key="n" :value="n">{{ n }} auditorias</option>
         </select>
       </label>
+      </div>
     </div>
 
     <!-- Colaboradores -->

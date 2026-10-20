@@ -5,7 +5,14 @@ import UiModal from './ui/UiModal.vue'
 import { itensParaMeta } from '../utils/analiseHistorica'
 import { META_PENDENTE_PERCENTUAL, metricasAuditoria } from '../utils/metricasAuditoria'
 import { formatarDataBR } from '../utils/busca'
-import { blocoBarras, blocoTabela, escapeHtml, grade, imprimirRelatorioVisual } from '../utils/print'
+import { blocoBarras, blocoTabela, escapeHtml, selo } from '../utils/print'
+import { useRelatorio } from '../composables/useRelatorio'
+import { useAuditoriasStore } from '../stores/auditoriasStore'
+import { listarAcoes } from '../db/planosAcao'
+import { auditoriaAnteriorDoTipo, compararAuditorias } from '../utils/analiseHistorica'
+import { ritmosDaAuditoria } from '../utils/planoAcao'
+import { previsaoAuditoria } from '../utils/previsao'
+import { rotuloUsuario } from '../utils/usuario'
 
 // Relatório da auditoria: % pendente, indicadores e os três focos de ação
 // (setores, locais com mais pendentes e locais sem leitura).
@@ -84,35 +91,92 @@ const salvarImagem = async () => {
   }
 }
 
-const imprimir = () => {
-  const chips = locaisSemLeitura.value.length
-    ? `<div class="secao painel"><h2>Locais sem leitura (${locaisSemLeitura.value.length})</h2><p class="sub">Nenhum item lido nesses locais.</p>
-        <div style="display:flex;flex-wrap:wrap;gap:5px">${locaisSemLeitura.value.map(l => `<span style="padding:3px 8px;border-radius:6px;background:#fee2e2;color:#b91c1c;font-weight:700;font-size:10.5px">${escapeHtml(l)}</span>`).join('')}</div></div>`
-    : ''
-  imprimirRelatorioVisual({
-    titulo: `Relatório de Auditoria · ${props.auditoria.tipo}`,
-    subtitulo: `${dataBR.value} · ${props.auditoria.status === 'fechada' ? 'Fechada' : 'Em andamento'}`,
+// ---------- Relatório A4 (seletor de conteúdo) ----------
+const store = useAuditoriasStore()
+const { abrir: abrirSeletor } = useRelatorio()
+const pct = (v, casas = 1) => `${Number(v || 0).toFixed(casas).replace('.', ',')}%`
+const int = v => (Number(v) || 0).toLocaleString('pt-BR')
+const imprimir = async () => {
+  const a = props.auditoria
+  const acoes = await listarAcoes(a.id).catch(() => [])
+  const anterior = auditoriaAnteriorDoTipo(a, store.auditorias)
+  const comparacao = anterior ? compararAuditorias(a, anterior) : null
+  const usuarios = Object.entries(a.analise?.porUsuario || {})
+    .map(([nome, d]) => ({ nome, leituras: (d.lidos || 0) + (d.comProblema || 0), comProblema: d.comProblema || 0 }))
+    .filter(u => u.leituras > 0)
+    .sort((x, y) => y.leituras - x.leituras)
+  const ritmos = new Map(ritmosDaAuditoria(a).map(r => [r.usuario, r.ritmo]))
+  const zero = a.analise?.itensComEstoqueZeroDetalhes || []
+  const foraLocal = a.analise?.itensLidoNaoPertenceDetalhes || []
+  const previsao = a.status !== 'fechada' ? previsaoAuditoria(a, { fim: store.horariosAuditoria?.fim || '20:00' }) : null
+  const tomPend = v => (v > META ? 'ruim' : 'bom')
+  const ROT_PRIOR = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
+  const ROT_STATUS = { aberta: 'A fazer', andamento: 'Em andamento', feita: 'Resolvida' }
+
+  abrirSeletor({
+    id: 'auditoria',
+    titulo: `Relatório de auditoria · ${a.tipo}`,
+    subtitulo: `${dataBR.value} · ${a.status === 'fechada' ? 'Fechada' : 'Em andamento'}`,
+    contexto: [
+      { rotulo: 'Tipo', valor: a.tipo },
+      { rotulo: 'Data', valor: dataBR.value },
+      { rotulo: 'Situação', valor: a.status === 'fechada' ? 'Fechada' : 'Em andamento' },
+      { rotulo: 'Meta', valor: `até ${META}% pendente` },
+    ],
     indicadores: [
-      { rotulo: '% Pendente', valor: `${m.value.percentualPendente.toFixed(2)}%`, detalhe: naMeta.value ? `Dentro da meta (${META}%)` : `Fora da meta (${META}%)`, tom: naMeta.value ? 'bom' : 'ruim' },
+      { rotulo: '% Pendente', valor: pct(m.value.percentualPendente, 2), detalhe: naMeta.value ? 'dentro da meta' : 'fora da meta', tom: naMeta.value ? 'bom' : 'ruim' },
       ...cards.value.map(c => ({ rotulo: c.rotulo, valor: c.valor, detalhe: c.detalhe, tom: c.rotulo === 'Pendentes' ? 'alerta' : c.rotulo === 'Com problema' && c.valor ? 'ruim' : 'neutro' }))
     ],
-    blocos: [
-      blocoTabela({
-        titulo: '% pendente por setor',
+    secoes: [
+      ...(previsao ? [{ id: 'previsao', titulo: 'Previsão de fechamento', descricao: 'Ritmo da última hora aplicado até o fim do expediente.', gerar: () => blocoTabela({
+        colunas: [{ chave: 'i', titulo: 'Indicador' }, { chave: 'v', titulo: 'Valor', alinhamento: 'right' }],
+        linhas: [
+          { i: 'Última leitura', v: new Date(previsao.ultima).toISOString().slice(11, 16) },
+          { i: 'Ritmo atual (última hora)', v: `${int(Math.round(previsao.ritmo))}/h · ${previsao.pessoasAtivas} pessoa(s)` },
+          { i: 'Faltam para a meta', v: int(previsao.faltam) },
+          { i: 'Previsão no fim do expediente', v: pct(previsao.percentualPrevisto, 2) },
+          { i: 'Ritmo necessário', v: Number.isFinite(previsao.ritmoNecessario) ? `${int(Math.round(previsao.ritmoNecessario))}/h` : '—' },
+          { i: 'Pessoas necessárias', v: previsao.pessoasNecessarias ?? '—' }
+        ]
+      }) }] : []),
+      { id: 'setores', titulo: '% pendente por setor', descricao: `Setores do maior para o menor % pendente (${setoresAcima.value} acima da meta).`, gerar: () => blocoTabela({
         subtitulo: `${setoresAcima.value} de ${setoresOrdenados.value.length} setores acima da meta de ${META}%`,
         colunas: [
-          { chave: 'nome', titulo: 'Setor' }, { chave: 'total', titulo: 'Itens', alinhamento: 'right' }, { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right' }, { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right' },
-          { chave: 'comProblema', titulo: 'Problemas', alinhamento: 'right' },
-          ...(ehEtiqueta.value ? [{ chave: 'desatualizados', titulo: 'Desatualizados', alinhamento: 'right' }] : []),
-          { chave: 'percentualPendente', titulo: '% Pendente', alinhamento: 'right', format: v => `${v.toFixed(2)}%` },
+          { chave: 'nome', titulo: 'Setor' }, { chave: 'total', titulo: 'Itens', alinhamento: 'right', format: int }, { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right', format: int },
+          { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right', format: int }, { chave: 'comProblema', titulo: 'Problemas', alinhamento: 'right', format: int },
+          ...(ehEtiqueta.value ? [{ chave: 'desatualizados', titulo: 'Desatualizados', alinhamento: 'right', format: int }] : []),
+          { chave: 'percentualPendente', titulo: '% Pendente', alinhamento: 'right', format: v => pct(v, 2), barra: { max: Math.max(META * 2, ...setoresOrdenados.value.map(x => x.percentualPendente)), tom: tomPend } },
           { chave: 'classificacao', titulo: 'Classificação' }
         ],
         linhas: setoresOrdenados.value
-      }),
-      grade(
-        blocoBarras({ titulo: 'Top 10 locais com mais pendentes', barras: topLocais.value.map(l => ({ rotulo: l.nome, valor: l.pendentes, texto: `${l.pendentes} · ${l.percentualPendente.toFixed(1)}%`, tom: 'alerta' })) }),
-        chips
-      ),
+      }) },
+      { id: 'locais', titulo: 'Locais com mais pendentes', descricao: 'Top 15 locais e a lista de locais sem nenhuma leitura.', gerar: () => [
+        blocoBarras({ titulo: 'Top 15 locais com mais pendentes', barras: [...props.locais].filter(l => l.pendentes > 0).sort((x, y) => y.pendentes - x.pendentes).slice(0, 15).map(l => ({ rotulo: l.nome, valor: l.pendentes, texto: `${l.pendentes} · ${pct(l.percentualPendente)}`, tom: 'alerta' })) }),
+        locaisSemLeitura.value.length ? `<div class="secao painel"><h2>Locais sem leitura (${locaisSemLeitura.value.length})</h2><div class="chips">${locaisSemLeitura.value.map(l => `<span>${escapeHtml(l)}</span>`).join('')}</div></div>` : ''
+      ].filter(Boolean).join('') },
+      ...(comparacao ? [{ id: 'comparacao', titulo: 'Comparação com a auditoria anterior', descricao: `${anterior.tipo} de ${formatarDataBR(String(anterior.data).slice(0, 10))}: variação do % pendente geral e por setor.`, gerar: () => blocoTabela({
+        subtitulo: `Geral: ${pct(comparacao.anterior.percentualPendente, 2)} → ${pct(comparacao.atual.percentualPendente, 2)} (${comparacao.diferencaPendente > 0 ? '+' : ''}${comparacao.diferencaPendente.toFixed(2).replace('.', ',')} p.p.)`,
+        colunas: [
+          { chave: 'setor', titulo: 'Setor' }, { chave: 'anterior', titulo: 'Anterior', alinhamento: 'right', format: v => pct(v, 2) }, { chave: 'atual', titulo: 'Atual', alinhamento: 'right', format: v => pct(v, 2) },
+          { chave: 'diferenca', titulo: 'Variação (p.p.)', alinhamento: 'right', html: v => (v === null ? '—' : selo(`${v > 0 ? '+' : ''}${v.toFixed(2).replace('.', ',')}`, v > 0.5 ? 'ruim' : v < -0.5 ? 'bom' : 'cinza')) }
+        ],
+        linhas: comparacao.setores
+      }) }] : []),
+      ...(usuarios.length ? [{ id: 'usuarios', titulo: 'Equipe', descricao: 'Leituras, ritmo e problemas por pessoa.', gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'pos', titulo: '#', alinhamento: 'right' }, { chave: 'nome', titulo: 'Colaborador' }, { chave: 'leituras', titulo: 'Leituras', alinhamento: 'right', format: int, barra: { max: usuarios[0].leituras } },
+          { chave: 'ritmo', titulo: 'Ritmo (/h)', alinhamento: 'right' }, { chave: 'comProblema', titulo: 'Com problema', alinhamento: 'right', format: int }
+        ],
+        linhas: usuarios.map((u, i) => ({ pos: i + 1, nome: rotuloUsuario(u.nome), leituras: u.leituras, ritmo: ritmos.has(u.nome) ? Math.round(ritmos.get(u.nome)) : '—', comProblema: u.comProblema }))
+      }) }] : []),
+      ...(zero.length || foraLocal.length ? [{ id: 'problemas', titulo: 'Leituras com problema', descricao: `${zero.length} com estoque zero · ${foraLocal.length} fora do local.`, padrao: false, gerar: () => blocoTabela({
+        colunas: [{ chave: 'motivo', titulo: 'Motivo' }, { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'local', titulo: 'Local' }, { chave: 'usuario', titulo: 'Usuário' }],
+        linhas: [...zero.map(x => ({ ...x, motivo: 'Estoque zero' })), ...foraLocal.map(x => ({ ...x, motivo: 'Fora do local' }))].map(x => ({ ...x, usuario: rotuloUsuario(x.usuario || '') || '—' }))
+      }) }] : []),
+      ...(acoes.length ? [{ id: 'plano', titulo: 'Plano de ação', descricao: `${acoes.filter(x => x.status !== 'feita').length} ação(ões) em aberto de ${acoes.length}.`, gerar: () => blocoTabela({
+        colunas: [{ chave: 'prioridade', titulo: 'Prioridade' }, { chave: 'local', titulo: 'Local' }, { chave: 'descricao', titulo: 'Ação' }, { chave: 'responsavel', titulo: 'Responsável' }, { chave: 'prazo', titulo: 'Prazo' }, { chave: 'status', titulo: 'Situação' }],
+        linhas: acoes.map(x => ({ ...x, prioridade: ROT_PRIOR[x.prioridade] || x.prioridade, responsavel: x.responsavel ? rotuloUsuario(x.responsavel) : '—', prazo: formatarDataBR(x.prazo), status: ROT_STATUS[x.status] || x.status }))
+      }) }] : [])
     ]
   })
 }

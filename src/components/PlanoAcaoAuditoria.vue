@@ -4,7 +4,8 @@ import { gerarAcoes } from '../utils/planoAcao'
 import { adicionarAcoes, listarAcoes, removerAcao, salvarAcao, STATUS_ACAO } from '../db/planosAcao'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
 import { baixarCsv } from '../utils/csv'
-import { blocoTabela, imprimirRelatorioVisual } from '../utils/print'
+import { blocoBarras, blocoTabela, escapeHtml, selo } from '../utils/print'
+import { useRelatorio } from '../composables/useRelatorio'
 import { rotuloUsuario } from '../utils/usuario'
 import { paraISOLocal } from '../utils/metricasAuditoria'
 
@@ -130,16 +131,45 @@ const COLUNAS = [
   { chave: 'responsavelTexto', titulo: 'Responsável' }, { chave: 'prazoBR', titulo: 'Prazo' }, { chave: 'statusTexto', titulo: 'Situação' }, { chave: 'observacao', titulo: 'Observação' }
 ]
 const exportarCsv = () => baixarCsv(linhasExport(), COLUNAS, `plano-acao-auditoria-${props.auditoria.id}`)
-const imprimir = () => imprimirRelatorioVisual({
-  titulo: `Plano de ação · ${props.auditoria.tipo}`,
-  subtitulo: `Auditoria de ${formatarDataBR(String(props.auditoria.data).slice(0, 10))} · ${resumo.value.feitas} de ${resumo.value.total} resolvidas`,
-  indicadores: [
-    { rotulo: 'Ações', valor: resumo.value.total, detalhe: `${resumo.value.feitas} resolvidas`, tom: 'neutro' },
-    { rotulo: 'Itens em aberto', valor: resumo.value.itensAbertos, detalhe: 'nas ações não resolvidas', tom: 'alerta' },
-    { rotulo: 'Atrasadas', valor: resumo.value.atrasadas, detalhe: 'prazo vencido', tom: resumo.value.atrasadas ? 'ruim' : 'bom' }
-  ],
-  blocos: [blocoTabela({ titulo: 'Ações', colunas: COLUNAS.map(c => ({ ...c, alinhamento: c.chave === 'pendentes' ? 'right' : undefined })), linhas: linhasExport() })]
-})
+const { abrir: abrirSeletor } = useRelatorio()
+const imprimir = () => {
+  const todas = acoes.value.map(a => ({
+    ...a, prioridadeTexto: ROTULO_PRIORIDADE[a.prioridade], statusTexto: rotuloStatus(a.status), prazoBR: formatarDataBR(a.prazo),
+    responsavelTexto: a.responsavel ? rotuloUsuario(a.responsavel) : '—', percTexto: a.pendentes ? `${Number(a.perc || 0).toFixed(1).replace('.', ',')}%` : '',
+    atrasada: atrasada(a)
+  })).sort((a, b) => (a.status === 'feita') - (b.status === 'feita') || ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade] || b.pendentes - a.pendentes)
+  const tabela = (linhas, colunas) => blocoTabela({
+    colunas: COLUNAS.filter(c => colunas.includes(c.chave)).map(c => ({
+      ...c, alinhamento: c.chave === 'pendentes' || c.chave === 'percTexto' ? 'right' : undefined,
+      ...(c.chave === 'prazoBR' ? { html: (v, l) => (l.atrasada ? selo(`${v} · atrasada`, 'ruim') : escapeHtml(v || '—')) } : {})
+    })),
+    linhas
+  })
+  const porResponsavel = new Map()
+  for (const a of todas.filter(x => x.status !== 'feita')) porResponsavel.set(a.responsavelTexto, (porResponsavel.get(a.responsavelTexto) || 0) + 1)
+  abrirSeletor({
+    id: 'plano-acao',
+    titulo: `Plano de ação · ${props.auditoria.tipo}`,
+    subtitulo: `Auditoria de ${formatarDataBR(String(props.auditoria.data).slice(0, 10))}`,
+    contexto: [
+      { rotulo: 'Auditoria', valor: `${props.auditoria.tipo} · ${formatarDataBR(String(props.auditoria.data).slice(0, 10))}` },
+      { rotulo: 'Progresso', valor: `${resumo.value.feitas} de ${resumo.value.total} resolvidas (${resumo.value.progresso.toFixed(0)}%)` },
+    ],
+    indicadores: [
+      { rotulo: 'Ações', valor: resumo.value.total, detalhe: `${resumo.value.feitas} resolvidas`, tom: 'neutro' },
+      { rotulo: 'Em andamento', valor: resumo.value.andamento, tom: 'neutro' },
+      { rotulo: 'Itens em aberto', valor: resumo.value.itensAbertos, detalhe: 'nas ações não resolvidas', tom: 'alerta' },
+      { rotulo: 'Atrasadas', valor: resumo.value.atrasadas, detalhe: 'prazo vencido', tom: resumo.value.atrasadas ? 'ruim' : 'bom' }
+    ],
+    assinaturaPadrao: true,
+    colunas: { lista: COLUNAS.map(c => ({ chave: c.chave, titulo: c.titulo })), padrao: ['prioridadeTexto', 'local', 'descricao', 'pendentes', 'responsavelTexto', 'prazoBR', 'statusTexto'] },
+    secoes: [
+      ...(porResponsavel.size ? [{ id: 'responsaveis', titulo: 'Ações em aberto por responsável', descricao: 'Quantas ações cada pessoa tem pendentes.', gerar: () => blocoBarras({ titulo: 'Ações em aberto por responsável', barras: [...porResponsavel].sort((a, b) => b[1] - a[1]).map(([rotulo, valor]) => ({ rotulo, valor })) }) }] : []),
+      { id: 'tabela', titulo: 'Ações em aberto', descricao: 'A fazer e em andamento, por prioridade.', gerar: ({ colunas }) => tabela(todas.filter(a => a.status !== 'feita'), colunas) },
+      { id: 'resolvidas', titulo: 'Ações resolvidas', descricao: 'Histórico do que já foi concluído.', padrao: false, gerar: ({ colunas }) => tabela(todas.filter(a => a.status === 'feita'), colunas) }
+    ]
+  })
+}
 </script>
 
 <template>
