@@ -30,4 +30,14 @@ describe('conferência da planilha', () => {
     expect(v.locais.exemplos).toEqual(['DEPOSITO (1)'])
     expect(v.usuarios.exemplos).toEqual(['ANA'])
   })
+
+  it('considera a planta padrão e o layout salvo do mapa', () => {
+    const locais = ['PAO - PAO', 'I01 - I01', 'IF01', 'PA01', 'SORVETE', 'CS01', 'IF02', 'GELO', 'CO01', 'G01A - G01A']
+    const dados = locais.map((Local, i) => item({ 'Código': String(i), Local }))
+    const semLayout = conferirPlanilha(dados, { tipo: 'Etiqueta', data: '2026-10-14', layoutSalvo: null })
+    expect(semLayout.verificacoes.find(v => v.chave === 'locais').exemplos).toEqual(['CO01 (1)'])
+    const salvo = { posicoes: [{ id: 'CO01', x: 20, y: 22, w: 10, h: 2 }] }
+    const comLayout = conferirPlanilha(dados, { tipo: 'Etiqueta', data: '2026-10-14', layoutSalvo: salvo })
+    expect(comLayout.verificacoes.find(v => v.chave === 'locais').nivel).toBe('ok')
+  })
 })
