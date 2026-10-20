@@ -71,7 +71,7 @@ const TEXTOS = [
 </script>
 
 <template>
-  <UiModal title="Configurações" subtitle="Salvas apenas neste navegador" width="max-w-2xl" @close="emit('close')">
+  <UiModal title="Configurações" subtitle="Salvas neste navegador e incluídas no backup" width="max-w-2xl" @close="emit('close')">
     <UiTabs v-model="aba" :items="ABAS" class="mb-5" />
     <div v-if="aba === 'aparencia'" class="space-y-6">
       <fieldset>
@@ -193,7 +193,7 @@ const TEXTOS = [
       <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
         <div>
           <p class="text-sm font-semibold text-slate-800">Backup manual</p>
-          <p class="text-xs text-slate-500">Baixa um arquivo com auditorias, vencimentos, planos e configurações do mapa.</p>
+          <p class="text-xs text-slate-500">Baixa um arquivo com auditorias, vencimentos, planos, mapa da loja e todas estas configurações.</p>
         </div>
         <UiButton variant="secondary" size="sm" :disabled="exportando" @click="exportar"><i class="fas fa-download"></i>Exportar</UiButton>
       </div>
