@@ -6,11 +6,8 @@ import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import GraficoEvolucaoUsuario from '../components/GraficoEvolucaoUsuario.vue'
 import MapaLoja from '../components/MapaLoja.vue'
-import TrajetoUsuario from '../components/TrajetoUsuario.vue'
 import { evolucaoUsuarios } from '../utils/historicoAuditorias'
-import { historicoLeitores } from '../utils/planoAcao'
 import { duplas, mapaLeiturasColaborador, problemasColaborador, ritmoPorSetor } from '../utils/fichaColaborador'
-import { isItemLido } from '../utils/itemLido'
 import { formatarDataBR } from '../utils/busca'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 
@@ -24,15 +21,12 @@ const pessoa = computed(() => separarUsuario(usuario.value))
 const auditorias = computed(() => (store.auditorias || []).filter(Boolean))
 const comLeituras = computed(() => auditorias.value.filter(a => (a.analise?.porUsuario || {})[usuario.value]))
 const evolucao = computed(() => evolucaoUsuarios(comLeituras.value).find(u => u.usuario === usuario.value) || null)
-const historico = computed(() => historicoLeitores(comLeituras.value).get(usuario.value) || null)
 const setores = computed(() => ritmoPorSetor(comLeituras.value, usuario.value))
 const mapa = computed(() => mapaLeiturasColaborador(comLeituras.value, usuario.value))
 const problemas = computed(() => problemasColaborador(comLeituras.value, usuario.value))
 const parceiros = computed(() => duplas(auditorias.value, { minimo: 1 })
   .filter(d => d.a === usuario.value || d.b === usuario.value)
   .map(d => ({ ...d, outro: d.a === usuario.value ? d.b : d.a })))
-const ultimaAuditoria = computed(() => [...comLeituras.value].filter(a => a.dados?.length)
-  .sort((a, b) => String(b.data).localeCompare(String(a.data)) || b.id - a.id)[0] || null)
 const periodo = computed(() => {
   const datas = comLeituras.value.map(a => String(a.data).slice(0, 10)).filter(Boolean).sort()
   return datas.length ? `${formatarDataBR(datas[0])} a ${formatarDataBR(datas.at(-1))}` : '—'
@@ -118,11 +112,8 @@ const imprimir = () => window.print()
       <section class="space-y-2">
         <h2 class="text-base font-bold text-slate-900">Onde costuma ler</h2>
         <p class="text-xs text-slate-500">Leituras do colaborador por área, somando {{ comLeituras.length }} auditoria(s).</p>
-        <MapaLoja :auditoria="mapa" :is-item-lido="() => true" :itens-disponiveis="false" modo-inicial="leituras" />
+        <MapaLoja :auditoria="mapa" :is-item-lido="() => true" :itens-disponiveis="false" modo-inicial="leituras" :modos="['leituras']" :laterais="false" />
       </section>
-
-      <TrajetoUsuario v-if="ultimaAuditoria" :auditoria="ultimaAuditoria" :is-item-lido="isItemLido"
-        :usuarios="[{ nome: usuario, exibicao: pessoa.nome, leituras: historico?.total || 0 }]" :usuario-inicial="usuario" />
 
       <div class="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <section class="ui-card p-5">
