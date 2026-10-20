@@ -1,4 +1,6 @@
-export const META_PENDENTE_PERCENTUAL = 3
+// Meta de % pendente; ajustável em Configurações (vale para as telas abertas depois da mudança).
+export let META_PENDENTE_PERCENTUAL = 3
+export const definirMetaPendente = (valor) => { META_PENDENTE_PERCENTUAL = valor }
 
 // Métricas derivadas sempre do SKU atual: backups antigos podem trazer
 // percentuais desatualizados dentro de `analise`.
