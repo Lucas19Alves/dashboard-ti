@@ -58,11 +58,23 @@ const prazoPadrao = (dias = 1) => {
 
 // Gerador: escolhe quais locais viram ação (mínimo de pendentes, prioridades, só reincidentes)
 // com prévia ao vivo do que será criado.
-const minimoPendentes = ref(1)
+// Mínimo de pendentes: valor livre entre 5 e 200, com sugestões prontas.
+const MINIMO = 5
+const MAXIMO = 200
+const minimoPendentes = ref(MINIMO)
+const minimoDigitado = ref(String(MINIMO))
+const aplicarMinimo = () => {
+  const n = Math.round(Number(String(minimoDigitado.value).replace(',', '.')))
+  minimoPendentes.value = Number.isFinite(n) ? Math.min(MAXIMO, Math.max(MINIMO, n)) : MINIMO
+  minimoDigitado.value = String(minimoPendentes.value)
+}
+watch(minimoDigitado, (v) => {
+  const n = Number(String(v).replace(',', '.'))
+  if (Number.isFinite(n) && n >= MINIMO && n <= MAXIMO) minimoPendentes.value = Math.round(n)
+})
 const prioridadesGerar = ref(['alta', 'media', 'baixa'])
 const soReincidentes = ref(false)
-const maiorPendente = computed(() => Math.max(1, ...novas.value.map(s => s.pendentes)))
-const ATALHOS_MINIMO = [1, 3, 5, 10, 20]
+const ATALHOS_MINIMO = [5, 10, 20, 30, 50, 100, 150, 200]
 const contarMinimo = n => novas.value.filter(s => s.pendentes >= n).length
 const passaGerador = (s, { minimo = minimoPendentes.value, prioridades = prioridadesGerar.value, reincidentes = soReincidentes.value } = {}) =>
   s.pendentes >= minimo && prioridades.includes(s.prioridade) && (!reincidentes || s.reincidente)
@@ -85,7 +97,6 @@ const previa = computed(() => {
   }
 })
 const COR_PRIORIDADE_BARRA = { alta: 'bg-red-500', media: 'bg-amber-400', baixa: 'bg-slate-300' }
-watch(maiorPendente, m => { if (minimoPendentes.value > m) minimoPendentes.value = m })
 const gerando = ref(false)
 const gerar = async () => {
   gerando.value = true
@@ -317,17 +328,17 @@ const imprimir = () => {
     <div v-if="novas.length" class="mt-4 rounded-xl bg-slate-50 p-4">
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div class="space-y-3">
-          <div>
-            <div class="flex items-baseline justify-between gap-2">
-              <label for="minimo-pendentes" class="text-xs font-bold text-slate-700">Locais com pelo menos <span class="text-blue-700">{{ minimoPendentes }}</span> pendente(s)</label>
-              <span class="text-[11px] text-slate-500">{{ novas.length }} local(is) disponíveis</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="minimo-pendentes" class="text-xs font-bold text-slate-700">Locais com pelo menos</label>
+            <div class="relative">
+              <input id="minimo-pendentes" v-model="minimoDigitado" list="minimos-pendentes" type="number" inputmode="numeric" :min="MINIMO" :max="MAXIMO" step="1"
+                class="ui-input w-28 py-1.5 pr-2 text-sm font-bold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" @change="aplicarMinimo" @blur="aplicarMinimo" @keydown.enter.prevent="aplicarMinimo">
+              <datalist id="minimos-pendentes">
+                <option v-for="n in ATALHOS_MINIMO" :key="n" :value="n">{{ contarMinimo(n) }} local(is)</option>
+              </datalist>
             </div>
-            <input id="minimo-pendentes" v-model.number="minimoPendentes" type="range" min="1" :max="maiorPendente" step="1" class="mt-2 w-full accent-blue-600">
-            <div class="mt-1 flex flex-wrap gap-1.5">
-              <button v-for="n in ATALHOS_MINIMO.filter(n => n <= maiorPendente)" :key="n" type="button" :aria-pressed="minimoPendentes === n"
-                class="rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition" :class="minimoPendentes === n ? 'bg-blue-600 text-white ring-blue-600' : 'bg-white text-slate-600 ring-slate-200 hover:ring-blue-300'"
-                @click="minimoPendentes = n">{{ n }}+ <span class="opacity-70">({{ contarMinimo(n) }})</span></button>
-            </div>
+            <span class="text-xs font-bold text-slate-700">pendentes</span>
+            <span class="text-[11px] text-slate-500">· de {{ MINIMO }} a {{ MAXIMO }} · {{ novas.length }} local(is) com pendentes</span>
           </div>
           <div class="flex flex-wrap items-center gap-1.5">
             <span class="mr-1 text-xs font-bold text-slate-700">Prioridade</span>
