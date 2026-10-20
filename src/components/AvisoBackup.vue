@@ -5,7 +5,7 @@ import { useVencimentosStore } from '../stores/vencimentosStore'
 import { estadoBackup, resumirAlteracoes } from '../utils/lembreteBackup'
 import { descreverUltimoBackup, precisaLembrarBackup } from '../utils/saudeDados'
 import { exportarBackupJson } from '../utils/backup'
-import { escolherPasta, estadoPasta, permitirPasta } from '../utils/backupPasta'
+import { backupAutomaticoAtivo, escolherPasta, estadoPasta, permitirPasta } from '../utils/backupPasta'
 
 // Aviso em todas as páginas: sem backup há um dia ou mais, ou com mudanças grandes desde o último.
 const auditorias = useAuditoriasStore()
@@ -25,7 +25,8 @@ const adiar = () => {
 }
 const estaAdiado = computed(() => Boolean(adiado.value && adiado.value.ate > Date.now() && mudancas.value <= adiado.value.mudancas))
 
-const visivel = computed(() => !estaAdiado.value && precisaLembrarBackup(estadoBackup.ultimo, temDados.value, new Date(), mudancas.value))
+// Com o backup automático ativo o sistema já cuida disso: não há o que lembrar.
+const visivel = computed(() => !backupAutomaticoAtivo() && !estaAdiado.value && precisaLembrarBackup(estadoBackup.ultimo, temDados.value, new Date(), mudancas.value))
 const titulo = computed(() => (mudancas.value
   ? `${mudancas.value} alteração(ões) sem backup: ${resumirAlteracoes(estadoBackup.alteracoes)}`
   : descreverUltimoBackup(estadoBackup.ultimo)))

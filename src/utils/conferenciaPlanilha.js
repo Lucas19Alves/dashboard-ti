@@ -1,4 +1,4 @@
-import { interpretarLocal } from './mapaLoja'
+import { carregarLayoutSalvo, gerarLayoutPadrao, interpretarLocal, mesclarLayout } from './mapaLoja'
 import { isItemLido } from './itemLido'
 import { momentoLeitura } from './sinaisAuditoria'
 import { separarUsuario } from './usuario'
@@ -25,7 +25,19 @@ const COLUNAS = {
 
 const MAX_EXEMPLOS = 12
 
-export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '' } = {}) => {
+// Áreas que aparecem no mapa da loja com estes locais: planta padrão + layout salvo pelo usuário
+// (o mesmo cálculo do mapa). Local cuja área não está lá fica fora do mapa.
+export const areasNoMapa = (locais, layoutSalvo = carregarLayoutSalvo()) => {
+  const areas = new Map()
+  for (const local of locais) {
+    const info = interpretarLocal(local)
+    if (!areas.has(info.bloco)) areas.set(info.bloco, { bloco: info.bloco, tipo: info.tipo, numero: info.numero })
+  }
+  const layout = mesclarLayout(gerarLayoutPadrao(areas.values()), layoutSalvo)
+  return new Set(layout.posicoes.filter(p => !p.oculto).map(p => p.id))
+}
+
+export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '', layoutSalvo } = {}) => {
   const linhas = Array.isArray(dados) ? dados : []
   const chaves = new Set()
   linhas.slice(0, 200).forEach(item => Object.keys(item || {}).forEach(k => chaves.add(k)))
@@ -38,7 +50,7 @@ export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '' } = {}) =
   const outroDia = []
   const semUsuario = []
   const usuariosSemMatricula = new Set()
-  const locaisForaPadrao = new Map()
+  const locaisContagem = new Map()
   let semLocal = 0
   const codigos = new Map()
   const dia = String(data || '').slice(0, 10)
@@ -48,7 +60,7 @@ export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '' } = {}) =
     if (codigo) codigos.set(codigo, (codigos.get(codigo) || 0) + 1)
     const local = item?.Local ? codigoLocal(localDoItem(item)) : ''
     if (!local) semLocal++
-    else if (interpretarLocal(local).tipo === 'outro') locaisForaPadrao.set(local, (locaisForaPadrao.get(local) || 0) + 1)
+    else locaisContagem.set(local, (locaisContagem.get(local) || 0) + 1)
     if (!isItemLido(item)) continue
     lidos++
     const usuario = usuarioDoItem(item)
@@ -59,6 +71,8 @@ export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '' } = {}) =
     else if (dia && momento.data !== dia) outroDia.push(`${codigo} (${momento.data.split('-').reverse().join('/')})`)
   }
   const repetidos = [...codigos].filter(([, n]) => n > 1)
+  const noMapa = areasNoMapa(locaisContagem.keys(), layoutSalvo === undefined ? carregarLayoutSalvo() : layoutSalvo)
+  const locaisForaPadrao = new Map([...locaisContagem].filter(([local]) => !noMapa.has(interpretarLocal(local).bloco)))
 
   const pct = n => (lidos ? (n / lidos) * 100 : 0)
   const verificacoes = [
@@ -87,12 +101,12 @@ export const conferirPlanilha = (dados, { tipo = 'Etiqueta', data = '' } = {}) =
     },
     {
       chave: 'locais',
-      titulo: 'Locais fora do padrão do mapa',
+      titulo: 'Locais fora do mapa da loja',
       nivel: locaisForaPadrao.size || semLocal ? 'aviso' : 'ok',
       resumo: locaisForaPadrao.size || semLocal
-        ? [locaisForaPadrao.size ? `${locaisForaPadrao.size} local(is) fora do padrão` : '', semLocal ? `${semLocal} item(ns) sem local` : ''].filter(Boolean).join(' · ')
-        : 'Todos os locais seguem o padrão (G05A, PL01, F01...)',
-      detalhe: locaisForaPadrao.size ? 'Não aparecem no mapa da loja até serem posicionados no modo de edição do mapa.' : '',
+        ? [locaisForaPadrao.size ? `${locaisForaPadrao.size} local(is) sem lugar no mapa` : '', semLocal ? `${semLocal} item(ns) sem local` : ''].filter(Boolean).join(' · ')
+        : 'Todos os locais têm lugar no mapa da loja',
+      detalhe: locaisForaPadrao.size ? 'Não aparecem no mapa da loja (nem na planta padrão nem no layout salvo); adicione-os no modo de edição do mapa.' : '',
       exemplos: [...locaisForaPadrao].sort((a, b) => b[1] - a[1]).slice(0, MAX_EXEMPLOS).map(([l, n]) => `${l} (${n})`)
     },
     {
