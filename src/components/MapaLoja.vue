@@ -26,7 +26,9 @@ const props = defineProps({
   itensDisponiveis: { type: Boolean, default: true }, // false no mapa consolidado (sem lista de itens)
   // Outra leitura do percentual (ex.: reincidência): limite das cores e nomes exibidos.
   metrica: { type: Object, default: null }, // { meta, rotulo, curto, pendentes, lidos }
-  modoInicial: { type: String, default: 'pendente' } // pendente | leituras | usuario
+  modoInicial: { type: String, default: 'pendente' }, // pendente | leituras | usuario
+  modos: { type: Array, default: () => ['pendente', 'leituras', 'usuario'] }, // abas de cor disponíveis
+  laterais: { type: Boolean, default: true } // cards "Áreas mais críticas" e "Usuários no mapa"
 })
 const emit = defineEmits(['ver-itens'])
 const META = props.metrica?.meta ?? META_PENDENTE_PERCENTUAL
@@ -236,7 +238,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex rounded-xl bg-slate-100 p-1 text-sm">
-          <button v-for="[v, r, i] in [['pendente', textos.rotulo, 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']]" :key="v" type="button"
+          <button v-for="[v, r, i] in [['pendente', textos.rotulo, 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m))" :key="v" type="button"
             class="rounded-lg px-3 py-1.5 font-semibold transition" :class="modo === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'" @click="modo = v">
             <i :class="[i, 'mr-1 text-xs']"></i>{{ r }}
           </button>
@@ -255,7 +257,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div class="grid grid-cols-1 gap-4" :class="laterais || areaSelecionada ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''">
       <!-- Mapa -->
       <section class="overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
         <div v-if="editando" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900">
@@ -267,7 +269,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </span>
         </div>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</span>
+          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas<template v-if="modos.includes('pendente')"> · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</template></span>
           <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores (número no meio, faces C/D no fundo e A/B na frente) da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
         </div>
         <div class="overflow-x-auto">
@@ -351,7 +353,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       </section>
 
       <!-- Painel lateral -->
-      <aside class="space-y-4">
+      <aside v-if="laterais || areaSelecionada" class="space-y-4">
         <section v-if="areaSelecionada" class="ui-fade-in rounded-2xl bg-white p-5 shadow-sm">
           <div class="flex items-start justify-between gap-2">
             <div>
@@ -413,7 +415,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <button v-else-if="editando && areaSelecionada.tipo === 'outro'" type="button" class="ui-btn-primary mt-4 w-full py-2" @click="adicionarAoMapa(areaSelecionada.bloco)"><i class="fas fa-plus"></i>Adicionar ao mapa</button>
         </section>
 
-        <section v-else class="rounded-2xl bg-white p-5 shadow-sm">
+        <section v-else-if="laterais" class="rounded-2xl bg-white p-5 shadow-sm">
           <p class="text-sm font-bold text-slate-900">Áreas mais críticas</p>
           <p class="text-xs text-slate-500">Clique para localizar no mapa.</p>
           <p v-if="!criticas.length" class="mt-3 text-sm text-slate-500">Nenhuma área com pendências.</p>
@@ -431,7 +433,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </ul>
         </section>
 
-        <section class="rounded-2xl bg-white p-5 shadow-sm">
+        <section v-if="laterais" class="rounded-2xl bg-white p-5 shadow-sm">
           <p class="text-sm font-bold text-slate-900">Usuários no mapa</p>
           <p class="text-xs text-slate-500">Escolha um para ver onde leu.</p>
           <div v-if="usuarios.length" class="relative mt-3">
