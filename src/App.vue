@@ -3,6 +3,7 @@ import Navbar from './components/Navbar.vue'
 import Toast from './components/Toast.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import AvisoBackup from './components/AvisoBackup.vue'
+import AvisoSemDados from './components/AvisoSemDados.vue'
 import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
 import ModalRelatorio from './components/ModalRelatorio.vue'
 </script>
@@ -16,6 +17,7 @@ import ModalRelatorio from './components/ModalRelatorio.vue'
     <Toast />
     <CommandPalette />
     <AvisoBackup />
+    <AvisoSemDados />
     <ModalConferenciaPlanilha />
     <ModalRelatorio />
     <main id="conteudo">
