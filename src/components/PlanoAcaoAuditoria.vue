@@ -242,6 +242,14 @@ const visiveis = computed(() => acoes.value
   .filter(a => correspondeBusca(busca.value, [a.local, a.setor, a.responsavel, a.descricao, a.observacao]))
   .sort((a, b) => (a.status === 'feita') - (b.status === 'feita') || ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade] || b.pendentes - a.pendentes))
 
+// Paginação da lista.
+const POR_PAGINA_LISTA = 15
+const paginaLista = ref(1)
+const totalPaginasLista = computed(() => Math.max(1, Math.ceil(visiveis.value.length / POR_PAGINA_LISTA)))
+const visiveisPagina = computed(() => visiveis.value.slice((paginaLista.value - 1) * POR_PAGINA_LISTA, paginaLista.value * POR_PAGINA_LISTA))
+watch([busca, filtroStatus, filtroPrioridade, rapido, filtroResponsavel], () => { paginaLista.value = 1 })
+watch(totalPaginasLista, t => { if (paginaLista.value > t) paginaLista.value = t })
+
 const resumo = computed(() => {
   const total = acoes.value.length
   const feitas = acoes.value.filter(a => a.status === 'feita').length
@@ -521,7 +529,7 @@ const imprimir = () => {
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          <tr v-for="a in visiveis" :key="a.id" :class="a.status === 'feita' ? 'bg-emerald-50/40 opacity-70' : ''">
+          <tr v-for="a in visiveisPagina" :key="a.id" :class="a.status === 'feita' ? 'bg-emerald-50/40 opacity-70' : ''">
             <td class="px-3 py-2">
               <select :value="a.prioridade" class="rounded-full border-0 px-2 py-0.5 text-xs font-bold" :class="CLASSE_PRIORIDADE[a.prioridade]" :aria-label="`Prioridade de ${a.local}`" @change="atualizar(a, { prioridade: $event.target.value })">
                 <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
@@ -556,6 +564,16 @@ const imprimir = () => {
         </tbody>
       </table>
       <p v-if="!visiveis.length" class="py-6 text-center text-sm text-slate-500">Nenhuma ação com esses filtros.</p>
+      <div v-if="visiveis.length" class="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+        <span>{{ (paginaLista - 1) * POR_PAGINA_LISTA + 1 }}–{{ Math.min(paginaLista * POR_PAGINA_LISTA, visiveis.length) }} de {{ visiveis.length }}</span>
+        <div v-if="totalPaginasLista > 1" class="flex items-center gap-1">
+          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === 1" aria-label="Primeira página" @click="paginaLista = 1"><i class="fas fa-angles-left"></i></button>
+          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === 1" aria-label="Página anterior" @click="paginaLista--"><i class="fas fa-angle-left"></i></button>
+          <span class="px-2 font-semibold text-slate-700">{{ paginaLista }} / {{ totalPaginasLista }}</span>
+          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === totalPaginasLista" aria-label="Próxima página" @click="paginaLista++"><i class="fas fa-angle-right"></i></button>
+          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === totalPaginasLista" aria-label="Última página" @click="paginaLista = totalPaginasLista"><i class="fas fa-angles-right"></i></button>
+        </div>
+      </div>
     </div>
     <transition name="aviso">
       <div v-if="removida" class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">

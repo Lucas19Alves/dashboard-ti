@@ -6,7 +6,7 @@ import { familiaDoTipo, montarEscala, nomeUnidade, perfisColaboradores, textoHor
 import { localDoItem, setorDoItem } from '../utils/itemAuditoria'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { correspondeBusca } from '../utils/busca'
-import { rotuloUsuario } from '../utils/usuario'
+import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 import { blocoTabela, escapeHtml, imprimirRelatorio, selo } from '../utils/print'
 
 // Escala para a próxima auditoria a partir do perfil de cada colaborador no histórico:
@@ -77,6 +77,32 @@ const alternar = (usuario) => {
 const incluir = (usuarios) => { selecionados.value = new Set([...selecionados.value, ...usuarios]) }
 const buscaColab = ref('')
 const colaboradoresVisiveis = computed(() => colaboradores.value.filter(c => correspondeBusca(buscaColab.value, [c.usuario, c.especialidade])))
+// Lista agrupada por perfil (família em que a pessoa mais lê), por volume de leituras.
+const leramNestaAuditoria = computed(() => new Set(Object.keys(props.auditoria?.analise?.porUsuario || {})))
+const gruposColab = computed(() => {
+  const mapa = new Map()
+  for (const c of colaboradoresVisiveis.value) {
+    const chave = c.especialidade || 'Sem perfil'
+    mapa.set(chave, [...(mapa.get(chave) || []), c])
+  }
+  return [...mapa].map(([perfil, lista]) => ({
+    perfil,
+    lista: lista.sort((a, b) => b.total - a.total),
+    escalados: lista.filter(c => selecionados.value.has(c.usuario)).length
+  })).sort((a, b) => b.lista.length - a.lista.length)
+})
+const definirGrupo = (lista, marcar) => {
+  const novo = new Set(selecionados.value)
+  for (const c of lista) marcar ? novo.add(c.usuario) : novo.delete(c.usuario)
+  selecionados.value = novo
+}
+const selecionarAtalho = (tipo) => {
+  if (tipo === 'auditoria') selecionados.value = new Set(colaboradores.value.filter(c => leramNestaAuditoria.value.has(c.usuario)).map(c => c.usuario))
+  else if (tipo === 'todos') selecionados.value = new Set(colaboradores.value.map(c => c.usuario))
+  else selecionados.value = new Set()
+}
+const nomeDe = u => separarUsuario(u).nome || u
+const matriculaDe = u => separarUsuario(u).matricula
 
 const horaInicio = ref(props.inicio)
 const horaFim = ref(props.fim)
@@ -288,19 +314,38 @@ const imprimirEscala = () => {
     </p>
 
     <!-- Colaboradores -->
-    <div class="mt-4 rounded-xl bg-slate-50 p-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs font-bold text-slate-700">Colaboradores na escala: {{ selecionados.size }}</p>
-        <input v-model="buscaColab" type="search" class="ui-input w-full py-1.5 text-xs sm:w-56" placeholder="Buscar colaborador ou perfil..." aria-label="Buscar colaborador">
+    <div class="mt-4 overflow-hidden rounded-xl ring-1 ring-slate-200">
+      <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
+        <p class="text-xs font-bold text-slate-700">Na escala: <span class="text-blue-700">{{ selecionados.size }}</span> <span class="font-medium text-slate-500">de {{ colaboradores.length }}</span></p>
+        <div class="flex flex-wrap gap-1">
+          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('auditoria')">Quem leu nesta auditoria ({{ colaboradores.filter(c => leramNestaAuditoria.has(c.usuario)).length }})</button>
+          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('todos')">Todos</button>
+          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('nenhum')">Nenhum</button>
+        </div>
+        <label class="relative ml-auto w-full sm:w-56">
+          <span class="sr-only">Buscar colaborador</span>
+          <i class="fas fa-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400" aria-hidden="true"></i>
+          <input v-model="buscaColab" type="search" class="ui-input w-full py-1.5 pl-7 text-xs" placeholder="Nome, matrícula ou perfil...">
+        </label>
       </div>
-      <p v-if="!colaboradores.length" class="mt-2 text-xs text-slate-500">Sem histórico de leituras por usuário nas auditorias salvas.</p>
-      <div class="mt-2 flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
-        <button v-for="c in colaboradoresVisiveis" :key="c.usuario" type="button" :aria-pressed="selecionados.has(c.usuario)"
-          class="rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition" :class="selecionados.has(c.usuario) ? 'bg-blue-600 text-white ring-blue-600' : 'bg-white text-slate-700 ring-slate-200 hover:ring-blue-300'"
-          :title="`${c.total.toLocaleString('pt-BR')} leituras no histórico${c.ritmo ? ` · ${Math.round(c.ritmo)}/h` : ''}`" @click="alternar(c.usuario)">
-          <i :class="selecionados.has(c.usuario) ? 'fas fa-check mr-1' : 'fas fa-plus mr-1 opacity-50'"></i>{{ rotuloUsuario(c.usuario) }}
-          <span v-if="c.especialidade" class="ml-1 font-medium opacity-75">· {{ c.especialidade }}</span>
-        </button>
+      <p v-if="!colaboradores.length" class="px-3 py-4 text-xs text-slate-500">Sem histórico de leituras por usuário nas auditorias salvas.</p>
+      <p v-else-if="!gruposColab.length" class="px-3 py-4 text-xs text-slate-500">Ninguém encontrado.</p>
+      <div v-else class="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+        <section v-for="grupo in gruposColab" :key="grupo.perfil" class="px-3 py-2">
+          <div class="mb-1 flex items-center gap-2">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ grupo.perfil }}</p>
+            <span class="text-[11px] text-slate-400">{{ grupo.escalados }}/{{ grupo.lista.length }}</span>
+            <button type="button" class="ml-auto text-[11px] font-semibold text-blue-700 hover:underline" @click="definirGrupo(grupo.lista, grupo.escalados < grupo.lista.length)">{{ grupo.escalados < grupo.lista.length ? 'Marcar grupo' : 'Desmarcar grupo' }}</button>
+          </div>
+          <div class="grid grid-cols-1 gap-x-3 sm:grid-cols-2 xl:grid-cols-3">
+            <label v-for="c in grupo.lista" :key="c.usuario" class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-slate-50" :class="selecionados.has(c.usuario) ? 'text-slate-900' : 'text-slate-500'">
+              <input type="checkbox" class="size-3.5 shrink-0 accent-blue-600" :checked="selecionados.has(c.usuario)" @change="alternar(c.usuario)">
+              <span class="min-w-0 flex-1 truncate text-xs" :class="selecionados.has(c.usuario) ? 'font-semibold' : ''">{{ nomeDe(c.usuario) }}<span v-if="matriculaDe(c.usuario)" class="ml-1 font-normal text-slate-400">{{ matriculaDe(c.usuario) }}</span></span>
+              <i v-if="leramNestaAuditoria.has(c.usuario)" class="fas fa-circle text-[5px] text-emerald-500" title="Leu nesta auditoria"></i>
+              <span class="shrink-0 text-[10px] tabular-nums text-slate-400">{{ c.ritmo ? `${Math.round(c.ritmo)}/h` : '—' }}</span>
+            </label>
+          </div>
+        </section>
       </div>
     </div>
 
