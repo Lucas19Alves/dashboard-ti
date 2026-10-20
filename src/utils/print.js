@@ -8,83 +8,103 @@ export const escapeHtml = (v) => String(v ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
-const TONS = { bom: '#059669', ruim: '#dc2626', alerta: '#d97706', neutro: '#2563eb', cinza: '#94a3b8' }
+const TONS = { bom: '#047857', ruim: '#b91c1c', alerta: '#b45309', neutro: '#1e3a8a', cinza: '#64748b' }
 const cor = tom => TONS[tom] || TONS.neutro
 const numero = v => (typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : v)
 const alinhar = col => (col.alinhamento === 'right' ? 'right' : col.alinhamento === 'center' ? 'center' : 'left')
 
+// Visual sóbrio para repassar a líderes: A4, tipografia em pt, cabeçalho com régua,
+// seções numeradas, tabelas que quebram página repetindo o cabeçalho e rodapé paginado.
 const ESTILOS = `
-  @page { size: A4 landscape; margin: 10mm; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 11px; color: #0f172a; margin: 0; }
-  .topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 14px 18px; border-radius: 12px; background: #1d4ed8; color: #fff; margin-bottom: 14px; }
-  .topo h1 { font-size: 19px; margin: 0; }
-  .topo p { margin: 3px 0 0; opacity: .85; font-size: 11px; }
-  .topo .marca { text-align: right; font-size: 10px; opacity: .85; white-space: nowrap; }
-  .topo .marca b { display: block; font-size: 12px; opacity: 1; }
-  h2 { font-size: 13px; margin: 0 0 8px; color: #0f172a; }
-  .sub { color: #64748b; font-size: 10px; margin: -4px 0 8px; }
-  .cards, .indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
-  .card, .indicador { border-radius: 10px; padding: 9px 11px; background: #f8fafc; border: 1px solid #e2e8f0; border-top: 3px solid var(--cor, #2563eb); }
-  .card-label, .indicador .rotulo { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
-  .card-value, .indicador .valor { font-size: 19px; font-weight: 800; margin-top: 2px; color: var(--cor-texto, #0f172a); }
-  .card-sub, .indicador .detalhe { font-size: 9.5px; color: #64748b; margin-top: 1px; }
-  .section, .secao { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+  html { font-size: 9.5pt; }
+  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.35; }
+  .tela { max-width: 190mm; margin: 0 auto; padding: 10mm 0; }
+  .paisagem .tela { max-width: 277mm; }
+  @media print { .tela, .paisagem .tela { max-width: none; padding: 0; } }
+  .topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-bottom: 8px; border-bottom: 2px solid #1e3a8a; margin-bottom: 10px; }
+  .topo .sistema { font-size: 7.5pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #1e3a8a; }
+  .topo h1 { font-size: 16pt; margin: 2px 0 0; letter-spacing: -.01em; }
+  .topo p { margin: 2px 0 0; color: #475569; font-size: 9pt; }
+  .topo .meta { text-align: right; font-size: 8pt; color: #475569; white-space: nowrap; }
+  .topo .meta b { color: #0f172a; }
+  .contexto { display: grid; grid-template-columns: repeat(auto-fit, minmax(42mm, 1fr)); gap: 0; border: 1px solid #cbd5e1; border-radius: 4px; margin-bottom: 10px; }
+  .contexto div { padding: 4px 8px; border-right: 1px solid #e2e8f0; }
+  .contexto div:last-child { border-right: 0; }
+  .contexto span { display: block; font-size: 6.8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+  .contexto b { font-size: 9pt; }
+  h2 { font-size: 10.5pt; margin: 0 0 4px; color: #0f172a; }
+  .sub { color: #64748b; font-size: 8pt; margin: 0 0 6px; }
+  .indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(32mm, 1fr)); gap: 6px; margin-bottom: 12px; break-inside: avoid; }
+  .indicador { border: 1px solid #cbd5e1; border-left: 3px solid var(--cor, #1e3a8a); border-radius: 3px; padding: 5px 8px; }
+  .indicador .rotulo { font-size: 6.8pt; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; }
+  .indicador .valor { font-size: 14pt; font-weight: 800; color: var(--cor-texto, #0f172a); line-height: 1.15; }
+  .indicador .detalhe { font-size: 7.5pt; color: #64748b; }
+  .secao { break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
   .secao.tabela { break-inside: auto; page-break-inside: auto; }
   .secao.tabela > h2, .secao.tabela > .sub { break-after: avoid; page-break-after: avoid; }
-  .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .grade > .secao { margin-bottom: 0; }
-  .painel { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; }
-  .barras { display: grid; gap: 5px; }
-  .barra { display: grid; grid-template-columns: 28% 1fr minmax(64px, auto); align-items: center; gap: 8px; }
+  .painel { border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px 10px; }
+  .barras { display: grid; gap: 3px; }
+  .barra { display: grid; grid-template-columns: 30% 1fr minmax(18mm, auto); align-items: center; gap: 6px; font-size: 8.5pt; }
   .barra .r { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #334155; }
-  .barra .trilho { position: relative; height: 10px; border-radius: 99px; background: #eef2f7; }
-  .barra .preenchido { position: absolute; inset: 0 auto 0 0; border-radius: 99px; }
-  .barra .meta { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed #475569; }
+  .barra .trilho { position: relative; height: 7px; border-radius: 2px; background: #eef2f7; }
+  .barra .preenchido { position: absolute; inset: 0 auto 0 0; border-radius: 2px; }
+  .barra .meta { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1.2px dashed #334155; }
   .barra .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .colunas { display: flex; align-items: flex-end; gap: 6px; height: 130px; padding: 0 44px 0 2px; border-bottom: 1px solid #cbd5e1; position: relative; }
+  .colunas { display: flex; align-items: flex-end; gap: 4px; height: 34mm; padding: 0 30px 0 2px; border-bottom: 1px solid #94a3b8; position: relative; }
   .colunas .c { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
-  .colunas .c .b { width: 70%; max-width: 34px; border-radius: 4px 4px 0 0; }
-  .colunas .c .n { font-size: 9px; font-weight: 700; margin-bottom: 2px; }
-  .colunas .linha-meta { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #475569; }
-  .colunas .linha-meta span { position: absolute; right: 0; top: -6px; font-size: 8.5px; color: #475569; background: #fff; padding: 0 2px; }
-  .rotulos { display: flex; gap: 6px; padding: 3px 44px 0 2px; }
-  .rotulos span { flex: 1; text-align: center; font-size: 8.5px; color: #64748b; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .empilhada { display: flex; height: 16px; border-radius: 99px; overflow: hidden; gap: 2px; background: #fff; }
-  .legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 7px; font-size: 10px; color: #334155; }
-  .legenda i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
-  .destaques { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
-  .destaques li { padding: 6px 9px; border-radius: 8px; background: #f8fafc; border-left: 3px solid var(--cor, #2563eb); }
-  table { width: 100%; border-collapse: collapse; margin-top: 2px; }
-  th { background: #f1f5f9; color: #475569; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; padding: 6px 7px; text-align: left; border-bottom: 1px solid #cbd5e1; }
-  td { padding: 5px 7px; border-bottom: 1px solid #eef2f7; vertical-align: middle; }
+  .colunas .c .b { width: 70%; max-width: 9mm; border-radius: 1px 1px 0 0; }
+  .colunas .c .n { font-size: 7pt; font-weight: 700; margin-bottom: 1px; }
+  .colunas .linha-meta { position: absolute; left: 0; right: 0; border-top: 1.2px dashed #334155; }
+  .colunas .linha-meta span { position: absolute; right: 0; top: -5px; font-size: 7pt; color: #334155; background: #fff; padding: 0 2px; }
+  .rotulos { display: flex; gap: 4px; padding: 2px 30px 0 2px; }
+  .rotulos span { flex: 1; text-align: center; font-size: 7pt; color: #64748b; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .empilhada { display: flex; height: 10px; border-radius: 2px; overflow: hidden; gap: 1px; }
+  .legenda { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 8pt; color: #334155; }
+  .legenda i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; margin-right: 4px; vertical-align: -1px; }
+  .destaques { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+  .destaques li { padding: 4px 8px; border-left: 3px solid var(--cor, #1e3a8a); background: #f8fafc; font-size: 8.5pt; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.3pt; }
+  th { background: #f1f5f9; color: #334155; font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; padding: 4px 5px; text-align: left; border-bottom: 1.2px solid #94a3b8; }
+  td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: top; overflow-wrap: anywhere; }
   tr:nth-child(even) td { background: #fafbfc; }
   tr { break-inside: avoid; }
-  td .mini { display: inline-block; vertical-align: middle; width: 54px; height: 6px; border-radius: 99px; background: #eef2f7; margin-right: 6px; position: relative; overflow: hidden; }
-  td .mini b { position: absolute; inset: 0 auto 0 0; border-radius: 99px; }
-  .rodape { margin-top: 10px; font-size: 9px; color: #94a3b8; text-align: right; }
+  td .mini { display: inline-block; vertical-align: middle; width: 14mm; height: 5px; border-radius: 1px; background: #eef2f7; margin-right: 5px; position: relative; overflow: hidden; }
+  td .mini b { position: absolute; inset: 0 auto 0 0; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .vazio { color: #94a3b8; font-style: italic; }
   thead { display: table-header-group; }
   .pagina { break-before: page; page-break-before: always; }
-  .capitulo { break-after: avoid; page-break-after: avoid; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 2px solid #1d4ed8; padding-bottom: 6px; margin-bottom: 12px; }
-  .capitulo h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0; }
-  .capitulo h2 .num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: #1d4ed8; color: #fff; font-size: 12px; }
-  .capitulo p { margin: 0; color: #64748b; font-size: 10px; text-align: right; max-width: 55%; }
-  .sumario { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; font-size: 10px; color: #475569; }
-  .sumario span { border: 1px solid #e2e8f0; border-radius: 99px; padding: 2px 9px; }
-  .sumario b { color: #1d4ed8; margin-right: 3px; }
-  .selo { display: inline-block; border-radius: 99px; padding: 1px 7px; font-size: 9px; font-weight: 700; white-space: nowrap; }
-  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .chips span { border-radius: 6px; padding: 3px 8px; background: #fef2f2; color: #b91c1c; font-weight: 600; font-size: 10px; }
-  .nota { font-size: 9.5px; color: #64748b; margin: 6px 0 0; }
+  .capitulo { break-after: avoid; page-break-after: avoid; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 1px solid #94a3b8; padding-bottom: 3px; margin: 4px 0 8px; }
+  .capitulo h2 { font-size: 11.5pt; margin: 0; }
+  .capitulo h2 .num { color: #1e3a8a; margin-right: 6px; }
+  .capitulo p { margin: 0; color: #64748b; font-size: 8pt; text-align: right; max-width: 60%; }
+  .selo { display: inline-block; border-radius: 2px; padding: 0 5px; font-size: 7.5pt; font-weight: 700; white-space: nowrap; border: 1px solid currentColor; }
+  .chips { display: flex; flex-wrap: wrap; gap: 3px; }
+  .chips span { border: 1px solid #cbd5e1; border-radius: 2px; padding: 1px 6px; font-weight: 600; font-size: 8pt; }
+  .nota { font-size: 8pt; color: #64748b; margin: 4px 0 0; }
+  .observacoes { border: 1px solid #cbd5e1; border-radius: 3px; padding: 6px 9px; white-space: pre-wrap; font-size: 9pt; }
+  .assinaturas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14mm; margin-top: 16mm; break-inside: avoid; }
+  .assinaturas div { border-top: 1px solid #0f172a; padding-top: 3px; font-size: 8pt; color: #475569; text-align: center; }
   svg.spark { display: block; }
+  .aviso-tela { position: sticky; top: 0; background: #1e3a8a; color: #fff; padding: 6px 12px; font-size: 9pt; text-align: center; }
+  @media print { .aviso-tela { display: none; } }
 `
 
-const cabecalho = (titulo, subtitulo) => {
-  const agora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-  return `<div class="topo"><div><h1>${escapeHtml(titulo)}</h1>${subtitulo ? `<p>${escapeHtml(subtitulo)}</p>` : ''}</div>
-    <div class="marca"><b>Dashboard TI</b>Gerado em ${escapeHtml(agora)}</div></div>`
+const agoraBR = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+
+const cabecalho = (titulo, subtitulo) => `<div class="topo"><div><div class="sistema">Dashboard TI · Relatório</div><h1>${escapeHtml(titulo)}</h1>${subtitulo ? `<p>${escapeHtml(subtitulo)}</p>` : ''}</div>
+  <div class="meta">Gerado em <b>${escapeHtml(agoraBR())}</b></div></div>`
+
+// Ficha técnica do relatório: período, filtros, loja... ([{ rotulo, valor }]).
+export const blocoContexto = (itens = []) => {
+  const validos = itens.filter(i => i && i.valor !== undefined && i.valor !== null && i.valor !== '')
+  return validos.length ? `<div class="contexto">${validos.map(i => `<div><span>${escapeHtml(i.rotulo)}</span><b>${escapeHtml(i.valor)}</b></div>`).join('')}</div>` : ''
 }
+
+export const blocoObservacoes = (texto) => (String(texto || '').trim() ? `<div class="secao"><h2>Observações</h2><div class="observacoes">${escapeHtml(texto.trim())}</div></div>` : '')
+
+export const blocoAssinaturas = (rotulos = ['Responsável', 'Liderança', 'Data']) => `<div class="assinaturas">${rotulos.map(r => `<div>${escapeHtml(r)}</div>`).join('')}</div>`
 
 // ---------- Blocos ----------
 export const blocoIndicadores = (indicadores = []) => (indicadores.length ? `<div class="indicadores">${indicadores.map(i => `
@@ -116,13 +136,6 @@ export const blocoColunas = ({ titulo, subtitulo, colunas = [], meta = null, suf
 }
 
 // Composição (partes de um todo) em uma barra empilhada com legenda.
-export const blocoComposicao = ({ titulo, partes = [] }) => {
-  const total = partes.reduce((s, p) => s + (Number(p.valor) || 0), 0)
-  if (!total) return ''
-  return `<div class="secao painel"><h2>${escapeHtml(titulo)}</h2><div class="empilhada">${partes.filter(p => p.valor > 0).map(p => `<span style="width:${(p.valor / total) * 100}%;background:${cor(p.tom)}"></span>`).join('')}</div>
-    <div class="legenda">${partes.map(p => `<span><i style="background:${cor(p.tom)}"></i>${escapeHtml(p.rotulo)}: <b>${escapeHtml(numero(p.valor))}</b> (${((p.valor / total) * 100).toFixed(1)}%)</span>`).join('')}</div></div>`
-}
-
 export const blocoDestaques = ({ titulo = 'Destaques', itens = [] }) => (itens.length ? `<div class="secao"><h2>${escapeHtml(titulo)}</h2><ul class="destaques">
   ${itens.map(i => `<li style="--cor:${cor(i.tom === 'bom' ? 'bom' : i.tom === 'ruim' ? 'ruim' : 'neutro')}">${escapeHtml(i.texto)}</li>`).join('')}</ul></div>` : '')
 
@@ -140,16 +153,15 @@ export const blocoTabela = ({ titulo, subtitulo, colunas = [], linhas = [] }) =>
   }
   return `<div class="secao tabela">${titulo ? `<h2>${escapeHtml(titulo)}</h2>` : ''}${subtitulo ? `<p class="sub">${escapeHtml(subtitulo)}</p>` : ''}<table>
     <thead><tr>${colunas.map(c => `<th style="text-align:${alinhar(c)}">${escapeHtml(c.titulo)}</th>`).join('')}</tr></thead>
-    <tbody>${linhas.map(l => `<tr>${colunas.map(c => `<td style="text-align:${alinhar(c)}">${celula(l, c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+    <tbody>${linhas.map(l => `<tr>${colunas.map(c => `<td${c.alinhamento === 'right' ? ' class="num"' : ''} style="text-align:${alinhar(c)}">${celula(l, c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
 }
 
 // Título de capítulo; `novaPagina` começa uma folha nova.
 export const blocoCapitulo = ({ numero, titulo, descricao = '', novaPagina = false }) => `<div class="capitulo${novaPagina ? ' pagina' : ''}">
-  <h2>${numero ? `<span class="num">${escapeHtml(numero)}</span>` : ''}${escapeHtml(titulo)}</h2>${descricao ? `<p>${escapeHtml(descricao)}</p>` : ''}</div>`
+  <h2>${numero ? `<span class="num">${escapeHtml(numero)}.</span>` : ''}${escapeHtml(titulo)}</h2>${descricao ? `<p>${escapeHtml(descricao)}</p>` : ''}</div>`
 
 export const selo = (texto, tom = 'neutro') => {
-  const fundo = { bom: '#ecfdf5', ruim: '#fef2f2', alerta: '#fffbeb', neutro: '#eff6ff', cinza: '#f1f5f9' }[tom] || '#eff6ff'
-  return `<span class="selo" style="background:${fundo};color:${cor(tom)}">${escapeHtml(texto)}</span>`
+  return `<span class="selo" style="color:${cor(tom)}">${escapeHtml(texto)}</span>`
 }
 
 // Mini gráfico de linha em SVG; `meta` desenha linha tracejada e o último ponto fica colorido.
@@ -167,75 +179,45 @@ export const sparkline = (valores = [], { meta = null, largura = 96, altura = 22
     <circle cx="${x(v.length - 1)}" cy="${y(ultimo)}" r="2.4" fill="${cor(tom)}"/></svg>`
 }
 
-export const grade = (...blocos) => {
-  const validos = blocos.filter(Boolean)
-  if (!validos.length) return ''
-  return validos.length === 1 ? validos[0] : `<div class="grade secao">${validos.join('')}</div>`
+const textoCss = t => `"${String(t ?? '').replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ').replace(/</g, '\\3c ')}"`
+
+// Paisagem quando alguma tabela tem muitas colunas; senão retrato.
+export const orientacaoAutomatica = (html) => {
+  const maior = Math.max(0, ...String(html).split('<thead>').slice(1).map(t => (t.split('</thead>')[0].match(/<th/g) || []).length))
+  return maior > 8 ? 'paisagem' : 'retrato'
 }
 
-// ---------- Janela de impressão ----------
-const textoCss = t => `"${String(t ?? '').replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ').replace(/</g, '\\3c ')}"`
-// Numeração das folhas no rodapé (navegadores com suporte a margens de @page).
-const estiloPaginacao = rodape => `@page { @bottom-left { content: ${textoCss(rodape)}; font: 8.5px Inter, system-ui, sans-serif; color: #94a3b8; }
-  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8.5px Inter, system-ui, sans-serif; color: #94a3b8; } }`
-
-const abrirJanela = (titulo, corpo, { rodape = null } = {}) => {
+const abrirJanela = (titulo, corpo, { orientacao = 'auto', rodape = '' } = {}) => {
   if (typeof window === 'undefined') return
+  const final = orientacao === 'auto' ? orientacaoAutomatica(corpo) : orientacao
   const win = window.open('', '_blank')
   if (!win) return
+  const textoRodape = rodape || `Dashboard TI · ${titulo}`
   win.document.open()
-  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}${rodape ? estiloPaginacao(rodape) : ''}</style></head>
-    <body>${corpo}${rodape ? '' : '<p class="rodape">Dashboard TI · dados salvos neste navegador</p>'}</body></html>`)
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}
+    @page { size: A4 ${final === 'paisagem' ? 'landscape' : 'portrait'}; margin: 14mm 12mm 16mm;
+      @bottom-left { content: ${textoCss(textoRodape)}; font: 7.5pt Inter, system-ui, sans-serif; color: #64748b; }
+      @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 7.5pt Inter, system-ui, sans-serif; color: #64748b; } }</style></head>
+    <body class="${final}"><div class="aviso-tela">Na janela de impressão, escolha “Salvar como PDF” · A4 ${final}</div><div class="tela">${corpo}</div></body></html>`)
   win.document.close()
   win.onafterprint = () => { win.close() }
-  setTimeout(() => { win.focus(); win.print() }, 350)
+  setTimeout(() => { win.focus(); win.print() }, 400)
 }
 
-// Relatório completo: cabeçalho + blocos HTML já montados.
-// `rodape` ativa a numeração "Página X de Y" com esse texto à esquerda.
-export const imprimirRelatorioVisual = ({ titulo, subtitulo = '', indicadores = [], blocos = [], antesDosIndicadores = '', rodape = null }) => {
-  abrirJanela(titulo, `${cabecalho(titulo, subtitulo)}${antesDosIndicadores}${blocoIndicadores(indicadores)}${blocos.filter(Boolean).join('')}`, { rodape })
+// Relatório padrão do sistema: cabeçalho, ficha técnica, indicadores e seções numeradas.
+// secoes: [{ titulo, descricao, html, novaPagina }] (seções sem html são ignoradas).
+export const imprimirRelatorio = ({ titulo, subtitulo = '', contexto = [], indicadores = [], secoes = [], orientacao = 'auto', observacoes = '', assinaturas = null, rodape = '' }) => {
+  const validas = secoes.filter(sec => sec && String(sec.html || '').trim())
+  const numerar = validas.filter(sec => sec.titulo).length > 1
+  let n = 0
+  const corpo = [
+    cabecalho(titulo, subtitulo),
+    blocoContexto(contexto),
+    blocoIndicadores(indicadores),
+    ...validas.map(sec => `${sec.titulo ? blocoCapitulo({ numero: numerar ? String(++n) : '', titulo: sec.titulo, descricao: sec.descricao || '', novaPagina: Boolean(sec.novaPagina) }) : ''}${sec.html}`),
+    blocoObservacoes(observacoes),
+    assinaturas ? blocoAssinaturas(assinaturas) : ''
+  ].join('')
+  abrirJanela(titulo, corpo, { orientacao, rodape })
 }
 
-// Lista de itens com resumo gráfico opcional.
-export const imprimirListaVisual = ({ titulo, subtitulo = '', indicadores = [], grafico = null, colunas, linhas }) => {
-  imprimirRelatorioVisual({
-    titulo,
-    subtitulo,
-    indicadores,
-    blocos: [grafico ? blocoBarras({ titulo: grafico.titulo, barras: grafico.barras }) : '', blocoTabela({ titulo: 'Itens', colunas, linhas })]
-  })
-}
-
-// Colunas usadas para resumir automaticamente uma tabela impressa.
-const COLUNAS_RESUMO = [['Classe de Produto Raiz', 'setor'], ['_setor', 'setor'], ['setor', 'setor'], ['Setor', 'setor'], ['_prazo', 'situação'], ['Local', 'local'], ['_fornecedor', 'fornecedor'], ['Usuário', 'usuário']]
-
-// Compatível com as chamadas existentes: tabela + gráfico automático de contagem.
-export const printTableInNewWindow = (data, columns, title = 'Relatório') => {
-  if (!Array.isArray(data) || data.length === 0 || !Array.isArray(columns) || columns.length === 0) return
-  const linhas = data.map(item => Object.fromEntries(columns.map(c => [c.chave, c.format && item?.[c.chave] != null ? c.format(item[c.chave]) : item?.[c.chave]])))
-  let grafico = null
-  const candidata = COLUNAS_RESUMO.find(([chave]) => columns.some(c => c.chave === chave) || data.some(d => d?.[chave] !== undefined && typeof d[chave] !== 'number'))
-  if (candidata && data.length > 1) {
-    const contagem = new Map()
-    for (const item of data) {
-      const v = String(item?.[candidata[0]] ?? '').trim() || 'Não informado'
-      contagem.set(v, (contagem.get(v) || 0) + 1)
-    }
-    if (contagem.size > 1 && contagem.size < data.length) {
-      grafico = { titulo: `Itens por ${candidata[1]}`, barras: [...contagem].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([rotulo, valor]) => ({ rotulo, valor })) }
-    }
-  }
-  imprimirListaVisual({
-    titulo: title,
-    indicadores: [{ rotulo: 'Registros', valor: data.length.toLocaleString('pt-BR') }],
-    grafico,
-    colunas: columns.map(c => ({ ...c, format: undefined })),
-    linhas
-  })
-}
-
-// Compatível com as chamadas existentes que montam o HTML do corpo.
-export const printHtmlInNewWindow = (title = 'Relatório', bodyHtml = '') => {
-  abrirJanela(String(title || 'Relatório').replace(/_/g, ' '), bodyHtml)
-}

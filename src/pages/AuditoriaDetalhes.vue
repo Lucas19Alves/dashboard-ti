@@ -19,7 +19,9 @@ import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import { isItemLido } from '../utils/itemLido'
-import { printTableInNewWindow, blocoBarras, blocoTabela, imprimirRelatorioVisual } from '../utils/print'
+import { blocoBarras, blocoColunas, blocoTabela } from '../utils/print'
+import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
+import { ritmosDaAuditoria } from '../utils/planoAcao'
 import { extrairDataISOPlanilha, extrairHoraPlanilha } from '../utils/auditoriaHorario'
 import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
 import { baixarCsv } from '../utils/csv'
@@ -983,36 +985,60 @@ const fecharModalItens = () => {
 
 const handlePrintCard = (dados, colunas, tituloCard) => {
   if (!dados || dados.length === 0) return
-  const titulo = `Relatório - ${tituloCard} - ${auditoria.value.tipo} - ${dataAuditoriaBR.value}`
-  printTableInNewWindow(dados, colunas, titulo)
+  abrirRelatorioTabela({
+    id: `auditoria-${String(tituloCard).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-')}`,
+    titulo: tituloCard,
+    subtitulo: `Auditoria de ${auditoria.value.tipo} · ${dataAuditoriaBR.value}`,
+    contexto: [{ rotulo: 'Auditoria', valor: `${auditoria.value.tipo} · ${dataAuditoriaBR.value}` }, { rotulo: 'Situação', valor: auditoria.value.status === 'fechada' ? 'Fechada' : 'Em andamento' }],
+    colunas,
+    itens: dados
+  })
 }
 
+// Relatório da equipe nesta auditoria (aba Usuários).
+const { abrir: abrirSeletorRelatorio } = useRelatorio()
 const handlePrintUsuarios = () => {
   const lista = usuariosFiltrados.value
   if (!lista.length) return
   const totalLeituras = lista.reduce((s, u) => s + u.totalLidos, 0)
-  imprimirRelatorioVisual({
-    titulo: `Usuários · ${auditoria.value?.tipo || 'Auditoria'}`,
-    subtitulo: `${dataAuditoriaBR.value} · ${lista.length} usuário(s)`,
+  const ritmos = new Map(ritmosDaAuditoria(auditoria.value).map(r => [r.usuario, r.ritmo]))
+  const porHora = new Map()
+  for (const item of auditoria.value?.dados || []) {
+    if (!isItemLido(item)) continue
+    const h = getItemHour(item)
+    if (h !== null && h !== undefined) porHora.set(h, (porHora.get(h) || 0) + 1)
+  }
+  const horas = [...porHora.keys()].sort((a, b) => a - b)
+  const linhas = lista.map((u, i) => ({
+    ...u,
+    posicao: i + 1,
+    matricula: separarUsuario(u.nome).matricula || '—',
+    nomeExibicao: separarUsuario(u.nome).nome || u.nome,
+    ritmo: ritmos.has(u.nome) ? Math.round(ritmos.get(u.nome)) : '—'
+  }))
+  const colunasTabela = [
+    { chave: 'posicao', titulo: '#', alinhamento: 'right' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'nomeExibicao', titulo: 'Nome' },
+    { chave: 'totalLidos', titulo: 'Leituras', alinhamento: 'right' }, { chave: 'ritmo', titulo: 'Ritmo (/h)', alinhamento: 'right' },
+    { chave: 'lidos', titulo: 'Lidos corretamente', alinhamento: 'right' }, { chave: 'comProblema', titulo: 'Com problema', alinhamento: 'right' },
+    { chave: 'percentualProblema', titulo: '% Problema', alinhamento: 'right', format: v => `${v.toFixed(1)}%` },
+    { chave: 'percentualAuditoria', titulo: '% da auditoria', alinhamento: 'right', format: v => `${v.toFixed(1)}%` }
+  ]
+  abrirSeletorRelatorio({
+    id: 'auditoria-usuarios',
+    titulo: 'Equipe da auditoria',
+    subtitulo: `Auditoria de ${auditoria.value?.tipo} · ${dataAuditoriaBR.value}`,
+    contexto: [{ rotulo: 'Auditoria', valor: `${auditoria.value?.tipo} · ${dataAuditoriaBR.value}` }, { rotulo: 'Situação', valor: auditoria.value?.status === 'fechada' ? 'Fechada' : 'Em andamento' }],
     indicadores: [
       { rotulo: 'Usuários', valor: lista.length },
       { rotulo: 'Leituras', valor: totalLeituras },
       { rotulo: 'Média por usuário', valor: Math.round(totalLeituras / lista.length) },
       { rotulo: 'Com problema', valor: lista.reduce((s, u) => s + u.comProblema, 0), tom: 'alerta' }
     ],
-    blocos: [
-      blocoBarras({ titulo: 'Leituras por usuário', barras: lista.slice(0, 20).map(u => ({ rotulo: rotuloUsuario(u.nome), valor: u.totalLidos, texto: `${u.totalLidos} · ${u.percentualAuditoria.toFixed(1)}%` })) }),
-      blocoTabela({
-        titulo: 'Detalhamento',
-        colunas: [
-          { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'nomeExibicao', titulo: 'Nome' }, { chave: 'lidos', titulo: 'Lidos corretamente', alinhamento: 'right' },
-          { chave: 'comProblema', titulo: 'Com problema', alinhamento: 'right' },
-          { chave: 'percentualProblema', titulo: '% Problemas', alinhamento: 'right', format: v => `${v.toFixed(1)}%`, barra: { max: Math.max(5, ...lista.map(u => u.percentualProblema)), tom: v => (v > 5 ? 'ruim' : v > 2 ? 'alerta' : 'bom') } },
-          { chave: 'totalLidos', titulo: 'Total lidos', alinhamento: 'right' },
-          { chave: 'percentualAuditoria', titulo: '% da auditoria', alinhamento: 'right', format: v => `${v.toFixed(1)}%` }
-        ],
-        linhas: lista.map(u => ({ ...u, matricula: separarUsuario(u.nome).matricula || '—', nomeExibicao: separarUsuario(u.nome).nome || u.nome }))
-      })
+    colunas: { lista: colunasTabela.map(c => ({ chave: c.chave, titulo: c.titulo })), padrao: colunasTabela.map(c => c.chave) },
+    secoes: [
+      { id: 'ranking', titulo: 'Leituras por usuário', descricao: 'Barras com as leituras de cada pessoa (até 25).', gerar: () => blocoBarras({ titulo: 'Leituras por usuário', barras: lista.slice(0, 25).map(u => ({ rotulo: rotuloUsuario(u.nome), valor: u.totalLidos, texto: `${u.totalLidos} · ${u.percentualAuditoria.toFixed(1)}%` })) }) },
+      { id: 'horas', titulo: 'Leituras do time por hora', descricao: 'Soma de todos por hora do dia.', padrao: horas.length > 1, gerar: () => blocoColunas({ titulo: 'Leituras por hora', colunas: horas.map(h => ({ rotulo: `${String(h).padStart(2, '0')}h`, valor: porHora.get(h) })) }) },
+      { id: 'tabela', titulo: 'Detalhamento por usuário', descricao: 'Tabela com leituras, ritmo e problemas de cada pessoa.', gerar: ({ colunas }) => blocoTabela({ colunas: colunasTabela.filter(c => colunas.includes(c.chave)), linhas }) }
     ]
   })
 }

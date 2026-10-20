@@ -10,6 +10,8 @@ import { evolucaoUsuarios } from '../utils/historicoAuditorias'
 import { duplas, mapaLeiturasColaborador, problemasColaborador, ritmoPorSetor } from '../utils/fichaColaborador'
 import { formatarDataBR } from '../utils/busca'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
+import { blocoTabela, selo } from '../utils/print'
+import { useRelatorio } from '../composables/useRelatorio'
 
 // Ficha do colaborador: tudo sobre uma pessoa ao longo das auditorias, pronta para imprimir no feedback.
 const route = useRoute()
@@ -55,18 +57,66 @@ const colunasProblemas = [
   { chave: 'local', titulo: 'Local' },
   { chave: 'motivo', titulo: 'Motivo', alinhamento: 'center', badge: v => (v === 'Estoque zero' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700') }
 ]
-const imprimir = () => window.print()
+const { abrir: abrirSeletor } = useRelatorio()
+const imprimir = () => {
+  const e = evolucao.value
+  const nome = rotuloUsuario(usuario.value)
+  abrirSeletor({
+    id: 'ficha-colaborador',
+    titulo: `Ficha do colaborador · ${pessoa.value.nome || usuario.value}`,
+    subtitulo: `Período ${periodo.value}`,
+    contexto: [
+      { rotulo: 'Colaborador', valor: pessoa.value.nome || usuario.value },
+      { rotulo: 'Matrícula', valor: pessoa.value.matricula || '—' },
+      { rotulo: 'Período', valor: periodo.value },
+      { rotulo: 'Auditorias', valor: comLeituras.value.length }
+    ],
+    indicadores: kpis.value.map(k => ({ rotulo: k.rotulo, valor: k.valor, detalhe: k.detalhe, tom: k.tom || 'neutro' })),
+    assinaturas: ['Colaborador', 'Liderança', 'Data'],
+    assinaturaPadrao: true,
+    secoes: [
+      ...(e?.serie?.length ? [{ id: 'evolucao', titulo: 'Evolução por auditoria', descricao: 'Leituras, ritmo e % com problema em cada auditoria.', gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'data', titulo: 'Data', format: v => formatarDataBR(v) }, { chave: 'tipo', titulo: 'Tipo' },
+          { chave: 'leituras', titulo: 'Leituras', alinhamento: 'right', barra: { max: Math.max(1, ...e.serie.map(x => x.leituras)) } },
+          { chave: 'ritmo', titulo: 'Ritmo (/h)', alinhamento: 'right', format: v => fmt(v) },
+          { chave: 'percProblema', titulo: '% com problema', alinhamento: 'right', html: v => selo(`${Number(v || 0).toFixed(1).replace('.', ',')}%`, v > 5 ? 'ruim' : v > 2 ? 'alerta' : 'cinza') }
+        ],
+        linhas: [...e.serie].reverse()
+      }) }] : []),
+      ...(setores.value.length ? [{ id: 'setores', titulo: 'Setores', descricao: 'Onde lê e em que ritmo.', gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'setor', titulo: 'Setor' }, { chave: 'leituras', titulo: 'Leituras', alinhamento: 'right' },
+          { chave: 'participacao', titulo: 'Participação', alinhamento: 'right', format: v => `${v.toFixed(0)}%` },
+          { chave: 'ritmo', titulo: 'Ritmo (/h)', alinhamento: 'right', format: v => fmt(v), barra: { max: maiorRitmoSetor.value } }
+        ],
+        linhas: setores.value.slice(0, 15)
+      }) }] : []),
+      ...(parceiros.value.length ? [{ id: 'parceiros', titulo: 'Com quem rende mais', descricao: 'Ritmo das duas pessoas quando leem o mesmo setor.', padrao: false, gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'nome', titulo: 'Parceiro' }, { chave: 'setoresTexto', titulo: 'Setores' }, { chave: 'juntas', titulo: 'Vezes', alinhamento: 'right' },
+          { chave: 'rendimento', titulo: 'Rendimento', alinhamento: 'right', html: v => selo(`${v >= 0 ? '+' : ''}${v.toFixed(0)}%`, v >= 0 ? 'bom' : 'ruim') }
+        ],
+        linhas: parceiros.value.slice(0, 10).map(p => ({ ...p, nome: rotuloUsuario(p.outro), setoresTexto: p.setores.slice(0, 3).join(', ') }))
+      }) }] : []),
+      ...(problemas.value.length ? [{ id: 'problemas', titulo: `Leituras com problema (${problemas.value.length})`, descricao: `Estoque zero ou fora do local, mais recentes de ${nome}.`, padrao: false, gerar: () => blocoTabela({
+        colunas: [{ chave: 'data', titulo: 'Data', format: v => formatarDataBR(v) }, { chave: 'tipo', titulo: 'Tipo' }, { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'local', titulo: 'Local' }, { chave: 'motivo', titulo: 'Motivo' }],
+        linhas: problemas.value.slice(0, 80)
+      }) }] : [])
+    ]
+  })
+}
 </script>
 
 <template>
-  <div class="ui-page ficha">
+  <div class="ui-page">
     <button type="button" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-700 print:hidden" @click="router.back()">
       <i class="fas fa-arrow-left" aria-hidden="true"></i>Voltar
     </button>
 
     <UiPageHeader :title="pessoa.nome || usuario" :subtitle="`${pessoa.matricula ? `Matrícula ${pessoa.matricula} · ` : ''}Ficha do colaborador · ${periodo}`" icon="fas fa-id-badge">
       <template #actions>
-        <button type="button" class="ui-btn-secondary print:hidden" @click="imprimir"><i class="fas fa-print" aria-hidden="true"></i>Imprimir</button>
+        <button type="button" class="ui-btn-secondary print:hidden" :disabled="!comLeituras.length" @click="imprimir"><i class="fas fa-file-pdf" aria-hidden="true"></i>Relatório</button>
       </template>
     </UiPageHeader>
 
@@ -139,9 +189,3 @@ const imprimir = () => window.print()
     </template>
   </div>
 </template>
-
-<style scoped>
-@media print {
-  .ficha :deep(section), .ficha :deep(.ui-card) { break-inside: avoid; box-shadow: none; }
-}
-</style>

@@ -4,6 +4,7 @@ import Toast from './components/Toast.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import AvisoBackup from './components/AvisoBackup.vue'
 import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
+import ModalRelatorio from './components/ModalRelatorio.vue'
 </script>
 
 <template>
@@ -16,6 +17,7 @@ import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
     <CommandPalette />
     <AvisoBackup />
     <ModalConferenciaPlanilha />
+    <ModalRelatorio />
     <main id="conteudo">
       <router-view v-slot="{ Component, route }">
         <transition name="pagina" mode="out-in">

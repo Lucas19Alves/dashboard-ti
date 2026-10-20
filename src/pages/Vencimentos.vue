@@ -4,7 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { toPng } from 'html-to-image'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
-import { printTableInNewWindow } from '../utils/print'
+import { blocoBarras, blocoTabela, selo } from '../utils/print'
+import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
+import { cruzarValidadeRuptura } from '../utils/vencimentosCruzados'
 import { baixarCsv } from '../utils/csv'
 import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
@@ -489,22 +491,86 @@ watch(() => itensSetorModalBusca.value.length, () => { paginaSetorModal.value = 
 watch(() => itensFornecedorBusca.value.length, () => { paginaFornecedorModal.value = 1 })
 
 // --- Impressao ---
-const imprimir = (alvo) => {
-  if (alvo === 'modal-fornecedor') {
-    const base = itensFornecedorOrdenados.value
-    if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Fornecedor - ${fornecedorSelecionado.value}`)
-  } else if (alvo === 'modal-setor') {
-    const base = itensSetorModalOrdenados.value
-    if (base.length) printTableInNewWindow(base, colunasItens, `Vencimentos - Setor - ${setorModalNome.value || 'Todos'}`)
-  } else if (alvo === 'filtrados') {
-    const base = itensFiltradosOrdenados.value
-    const parts = []
-    if (filtroSetor.value) parts.push(`Setor: ${filtroSetor.value}`)
-    if (filtroFornecedor.value) parts.push(`Fornecedor: ${filtroFornecedor.value}`)
-    if (filtroStatus.value) parts.push(`Status: ${filtroStatus.value}`)
-    const title = 'Vencimentos' + (parts.length ? ' - ' + parts.join(' | ') : '')
-    if (base.length) printTableInNewWindow(base, colunasItens, title)
-  }
+const { abrir: abrirSeletor } = useRelatorio()
+const colunasRelatorio = [
+  { chave: '_codigo', titulo: 'Código' }, { chave: '_produto', titulo: 'Produto' }, { chave: '_setor', titulo: 'Setor' },
+  { chave: '_fornecedor', titulo: 'Fornecedor' }, { chave: '_local', titulo: 'Local' },
+  { chave: '_validadeISO', titulo: 'Validade', valor: i => formatarDataBR(i._validadeISO) },
+  { chave: '_diasParaVencer', titulo: 'Dias', alinhamento: 'right' }, { chave: '_estoque', titulo: 'Estoque', alinhamento: 'right' },
+  { chave: '_prazo', titulo: 'Situação', valor: i => prazoBadgeLabel(i._prazo) }
+]
+const imprimirFiltrados = () => {
+  const contexto = [
+    filtroSetor.value && { rotulo: 'Setor', valor: filtroSetor.value },
+    filtroFornecedor.value && { rotulo: 'Fornecedor', valor: filtroFornecedor.value },
+    filtroStatus.value && { rotulo: 'Situação', valor: prazoBadgeLabel(filtroStatus.value) },
+    buscaItensFiltrados.value && { rotulo: 'Busca', valor: buscaItensFiltrados.value }
+  ].filter(Boolean)
+  abrirRelatorioTabela({
+    id: 'vencimentos-explorar',
+    titulo: 'Vencimentos · itens filtrados',
+    subtitulo: `${itensFiltradosOrdenados.value.length} item(ns)`,
+    contexto: contexto.length ? contexto : [{ rotulo: 'Filtros', valor: 'nenhum' }],
+    colunas: colunasRelatorio,
+    itens: itensFiltradosOrdenados.value
+  })
+}
+
+// Relatório geral de validades para a liderança.
+const imprimirRelatorio = () => {
+  const r = resumo.value
+  const itensComData = store.itens.map(i => ({ ...i, _validadeISO: i._validadeISO || formatarData(i._validadeDate) }))
+  const criticos = sortVenc(itensComData.filter(i => ['vencidos', 'hoje'].includes(i._prazo)), { coluna: '_diasParaVencer', direcao: 'asc' })
+  const proximos = sortVenc(itensComData.filter(i => i._prazo === 'ate3'), { coluna: '_diasParaVencer', direcao: 'asc' })
+  const cruzamento = cruzarValidadeRuptura(store.itens, toastStore.auditorias || [])
+  const int = v => (Number(v) || 0).toLocaleString('pt-BR')
+  const tabelaItens = (lista, colunas) => blocoTabela({
+    colunas: colunasRelatorio.filter(c => colunas.includes(c.chave)).map(c => ({ chave: c.chave, titulo: c.titulo, alinhamento: c.alinhamento })),
+    linhas: lista.map(item => Object.fromEntries(colunasRelatorio.map(c => [c.chave, c.valor ? c.valor(item) : item[c.chave] ?? '—'])))
+  })
+  const tomSetor = s => (s.vencidos ? 'ruim' : s.hoje ? 'alerta' : 'bom')
+  abrirSeletor({
+    id: 'vencimentos',
+    titulo: 'Relatório de vencimentos',
+    subtitulo: `Situação em ${new Date().toLocaleDateString('pt-BR')}`,
+    contexto: [
+      { rotulo: 'Itens monitorados', valor: int(r.total) },
+      { rotulo: 'Setores', valor: int(linhasSetores.value.length) },
+      { rotulo: 'Fornecedores', valor: int(fornecedores.value.length) },
+    ],
+    indicadores: [
+      { rotulo: 'Vencidos', valor: int(r.vencidos), detalhe: 'retirar da venda', tom: r.vencidos ? 'ruim' : 'bom' },
+      { rotulo: 'Vencem hoje', valor: int(r.hoje), detalhe: 'ação imediata', tom: r.hoje ? 'alerta' : 'bom' },
+      { rotulo: 'Até 3 dias', valor: int(r.ate3), detalhe: 'rebaixa / exposição', tom: r.ate3 ? 'alerta' : 'bom' },
+      { rotulo: 'Total', valor: int(r.total), tom: 'neutro' }
+    ],
+    assinaturaPadrao: true,
+    colunas: { lista: colunasRelatorio.map(c => ({ chave: c.chave, titulo: c.titulo })), padrao: ['_codigo', '_produto', '_setor', '_local', '_validadeISO', '_diasParaVencer', '_estoque'] },
+    secoes: [
+      { id: 'tabela', titulo: `Vencidos e vencem hoje (${criticos.length})`, descricao: 'Itens para retirar ou tratar hoje, do mais antigo ao mais recente.', gerar: ({ colunas }) => tabelaItens(criticos, colunas) || '<p class="nota">Nenhum item vencido ou vencendo hoje.</p>' },
+      { id: 'proximos', titulo: `Vencem em até 3 dias (${proximos.length})`, descricao: 'Itens para rebaixa ou reforço de exposição.', padrao: false, gerar: ({ colunas }) => tabelaItens(proximos, colunas) },
+      { id: 'setores', titulo: 'Por setor', descricao: 'Quantidade por situação em cada setor.', gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'nome', titulo: 'Setor' }, { chave: 'total', titulo: 'Itens', alinhamento: 'right' },
+          { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right', html: (v, l) => (v ? selo(int(v), tomSetor(l)) : '0') },
+          { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' }, { chave: 'ate3', titulo: 'Até 3 dias', alinhamento: 'right' }, { chave: 'futuro', titulo: 'Futuros', alinhamento: 'right' }
+        ],
+        linhas: setoresAnalise.value
+      }) },
+      ...(fornecedoresRanking.value.length ? [{ id: 'fornecedores', titulo: 'Fornecedores com itens críticos', descricao: 'Top 15 por vencidos, hoje e até 3 dias.', gerar: () => blocoBarras({
+        titulo: 'Itens críticos por fornecedor',
+        barras: fornecedoresRanking.value.map(f => ({ rotulo: f.fornecedor, valor: f.criticos, texto: `${f.criticos} · ${f.vencidos} venc. · ${f.hoje} hoje · ${f.ate3} até 3d`, tom: f.vencidos ? 'ruim' : 'alerta' }))
+      }) }] : []),
+      ...(cruzamento.length ? [{ id: 'cruzamento', titulo: 'Vence no estoque, falta na gôndola', descricao: 'Produtos com validade próxima que já faltaram na gôndola em auditorias de Presença/Ruptura.', padrao: false, gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'setor', titulo: 'Setor' },
+          { chave: 'validade', titulo: 'Validade', format: v => formatarDataBR(v) }, { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' },
+          { chave: 'vezesRuptura', titulo: 'Faltou (vezes)', alinhamento: 'right' }, { chave: 'diagnostico', titulo: 'Diagnóstico' }
+        ],
+        linhas: cruzamento.slice(0, 60)
+      }) }] : [])
+    ]
+  })
 }
 
 const exportarFiltradosCsv = () => {
@@ -526,44 +592,6 @@ const aplicarFiltrosDaRota = () => {
   abaAtiva.value = 'explorar'
 }
 watch(() => route.query, aplicarFiltrosDaRota, { immediate: true })
-
-const imprimirAnalise = (alvo) => {
-  if (alvo === 'setores') {
-    const dados = setoresAnalise.value.map(s => ({
-      nome: s.nome,
-      total: s.total,
-      vencidos: s.vencidos,
-      hoje: s.hoje,
-      ate3: s.ate3
-    }))
-    const colunas = [
-      { chave: 'nome', titulo: 'Setor' },
-      { chave: 'total', titulo: 'Total', alinhamento: 'right' },
-      { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
-      { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
-      { chave: 'ate3', titulo: 'Até 3 dias', alinhamento: 'right' }
-    ]
-    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Análise por Setor')
-  } else if (alvo === 'fornecedores') {
-    const dados = fornecedoresRanking.value.map(f => ({
-      fornecedor: f.fornecedor,
-      criticos: f.criticos,
-      vencidos: f.vencidos,
-      hoje: f.hoje,
-      ate3: f.ate3,
-      total: f.total
-    }))
-    const colunas = [
-      { chave: 'fornecedor', titulo: 'Fornecedor' },
-      { chave: 'criticos', titulo: 'Críticos', alinhamento: 'right' },
-      { chave: 'vencidos', titulo: 'Vencidos', alinhamento: 'right' },
-      { chave: 'hoje', titulo: 'Hoje', alinhamento: 'right' },
-      { chave: 'ate3', titulo: 'Até 3 dias', alinhamento: 'right' },
-      { chave: 'total', titulo: 'Total', alinhamento: 'right' }
-    ]
-    if (dados.length) printTableInNewWindow(dados, colunas, 'Vencimentos - Ranking de Fornecedores')
-  }
-}
 
 const normalizarNomeArquivo = (texto) => {
   return String(texto || 'imagem')
@@ -632,6 +660,9 @@ const exportarDetalhamentoSetor = async () => {
         <template #actions>
           <UiButton v-if="store.itens.length > 0" @click="mostrarUpload = true">
             <i class="fas fa-file-upload mr-2"></i>Nova Importação
+          </UiButton>
+          <UiButton v-if="store.itens.length > 0" variant="secondary" @click="imprimirRelatorio">
+            <i class="fas fa-file-pdf mr-2"></i>Relatório
           </UiButton>
           <UiButton v-if="store.itens.length > 0" variant="dangerSoft" @click="limparDados">
             <i class="fas fa-trash-alt mr-1"></i>Limpar
@@ -949,7 +980,7 @@ const exportarDetalhamentoSetor = async () => {
                 class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium border border-emerald-200 transition disabled:opacity-50">
                 <i class="fas fa-file-csv mr-1.5"></i>CSV
               </button>
-              <button @click="imprimir('filtrados')"
+              <button @click="imprimirFiltrados" :disabled="!itensFiltrados.length"
                 class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
                 <i class="fas fa-print mr-1.5"></i>Imprimir
               </button>
@@ -1161,18 +1192,6 @@ const exportarDetalhamentoSetor = async () => {
       <VencimentosMapaRuptura v-if="store.itens.length > 0 && abaAtiva === 'mapa'" :itens="store.itens" :auditorias="toastStore.auditorias" />
 
       <template v-if="store.itens.length > 0 && abaAtiva === 'analise'">
-
-        <!-- Print Actions Bar -->
-        <div class="flex items-center justify-end gap-2">
-          <button @click="imprimirAnalise('setores')"
-            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
-            <i class="fas fa-print mr-1.5"></i>Imprimir Setores
-          </button>
-          <button @click="imprimirAnalise('fornecedores')"
-            class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
-            <i class="fas fa-print mr-1.5"></i>Imprimir Fornecedores
-          </button>
-        </div>
 
         <!-- Sector Breakdown (List) -->
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">

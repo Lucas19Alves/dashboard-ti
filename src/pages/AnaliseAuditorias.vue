@@ -2,7 +2,9 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
-import { blocoCapitulo, blocoColunas, blocoDestaques, blocoTabela, escapeHtml, grade, imprimirRelatorioVisual, selo, sparkline } from '../utils/print'
+import { blocoBarras, blocoColunas, blocoDestaques, blocoTabela, escapeHtml, selo, sparkline } from '../utils/print'
+import { useRelatorio } from '../composables/useRelatorio'
+import { reincidenciaLocais, rupturaEmValor } from '../utils/historicoAuditorias'
 import { baixarCsv } from '../utils/csv'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
 import { consolidarParaMapa } from '../utils/mapaLoja'
@@ -284,7 +286,8 @@ const exportarCsv = () => {
 }
 
 // ---------- Relatório PDF ----------
-// Documento em folhas A4: 1 resumo executivo, 2 setores, 3 usuários, 4 auditorias e meses.
+// Antes de imprimir, o seletor deixa escolher: resumo, setores, usuários, reincidência, ruptura e auditorias.
+const { abrir: abrirSeletor } = useRelatorio()
 const gerarRelatorioPDF = () => {
   if (!linhasAuditorias.value.length) return
   const pct = (v, casas = 2) => (Number.isFinite(v) ? `${v.toFixed(casas).replace('.', ',')}%` : '—')
@@ -300,7 +303,6 @@ const gerarRelatorioPDF = () => {
     filtros.meta === 'dentro' && 'dentro da meta',
     filtros.meta === 'fora' && 'fora da meta'
   ].filter(Boolean)
-  const comparativo = ant ? ` · comparado a ${formatarDataBR(intervaloComparacao.value.inicio)} a ${formatarDataBR(intervaloComparacao.value.fim)}` : ''
 
   const setoresOrd = ordenar(setores.value, { coluna: 'percPendente', direcao: 'desc' })
   const reincidentes = setoresOrd.filter(s => s.auditorias >= 2 && s.reincidencia >= 50)
@@ -309,7 +311,9 @@ const gerarRelatorioPDF = () => {
   const maxPendSetor = Math.max(META * 2, ...setoresOrd.map(s => s.percPendente))
   const auditoriasOrd = ordenar(linhasAuditorias.value, { coluna: 'data', direcao: 'desc' })
   const maxPendAud = Math.max(META * 2, ...auditoriasOrd.map(l => l.pendente))
-  const secoes = [['1', 'Resumo'], ['2', `Setores (${setoresOrd.length})`], usuariosOrd.length && ['3', `Usuários (${usuariosOrd.length})`], [usuariosOrd.length ? '4' : '3', `Auditorias (${auditoriasOrd.length})`]].filter(Boolean)
+  const locaisCronicos = reincidenciaLocais(auditoriasFiltradas.value).filter(l => l.auditorias >= 2 && l.foraMeta >= 2).slice(0, 30)
+  const ruptura = rupturaEmValor(auditoriasFiltradas.value.filter(a => a.tipo === 'Ruptura' || a.tipo === 'Presença'))
+  const moeda = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   const comparacaoAnterior = ant ? blocoTabela({
     titulo: 'Período atual x anterior',
@@ -325,20 +329,22 @@ const gerarRelatorioPDF = () => {
     })
   }) : ''
 
-  imprimirRelatorioVisual({
-    titulo: 'Análise de Auditorias',
-    subtitulo: `${descricaoPeriodo.value} · ${r.total} auditoria(s)${filtrosTexto.length ? ` · ${filtrosTexto.join(', ')}` : ''}${comparativo}`,
-    rodape: `Análise de Auditorias · ${descricaoPeriodo.value}`,
-    antesDosIndicadores: `<div class="sumario">${secoes.map(([n, t]) => `<span><b>${n}</b>${escapeHtml(t)}</span>`).join('')}</div>`,
+  abrirSeletor({
+    id: 'analise-auditorias',
+    titulo: 'Análise de auditorias',
+    subtitulo: `${descricaoPeriodo.value} · ${r.total} auditoria(s)`,
+    contexto: [
+      { rotulo: 'Período', valor: descricaoPeriodo.value },
+      { rotulo: 'Auditorias', valor: int(r.total) },
+      { rotulo: 'Filtros', valor: filtrosTexto.length ? filtrosTexto.join(', ') : 'nenhum' },
+      { rotulo: 'Meta', valor: `até ${META}% pendente` },
+      ...(ant ? [{ rotulo: 'Comparado a', valor: `${formatarDataBR(intervaloComparacao.value.inicio)} a ${formatarDataBR(intervaloComparacao.value.fim)}` }] : [])
+    ],
     indicadores: kpis.value.map(k => ({ rotulo: k.titulo, valor: k.valor, detalhe: k.detalhe, tom: k.alerta ? 'alerta' : 'neutro' })),
-    blocos: [
-      // 1 · Resumo executivo
-      blocoCapitulo({ numero: '1', titulo: 'Resumo do período', descricao: `Meta: até ${META}% pendente por auditoria. Taxa na meta considera apenas auditorias fechadas.` }),
-      grade(
+    secoes: [
+      { id: 'resumo', titulo: 'Resumo do período', descricao: 'Conclusões, evolução mensal, tipos e comparação com o período anterior.', gerar: () => [
         insights.value.length ? blocoDestaques({ titulo: 'Principais conclusões', itens: insights.value }) : '',
-        blocoColunas({ titulo: '% pendente médio por mês', subtitulo: 'Menor é melhor · tracejado = meta', colunas: meses.value.map(m => ({ rotulo: m.rotulo, valor: m.mediaPendente ?? 0, tom: tomPend(m.mediaPendente ?? 0) })), meta: META, sufixo: '%' })
-      ),
-      grade(
+        blocoColunas({ titulo: '% pendente médio por mês', subtitulo: 'Menor é melhor · tracejado = meta', colunas: meses.value.map(m => ({ rotulo: m.rotulo, valor: m.mediaPendente ?? 0, tom: tomPend(m.mediaPendente ?? 0) })), meta: META, sufixo: '%' }),
         blocoTabela({
           titulo: 'Por tipo de auditoria',
           colunas: [
@@ -351,12 +357,10 @@ const gerarRelatorioPDF = () => {
           linhas: tipos.value
         }),
         comparacaoAnterior
-      ),
-
-      // 2 · Setores
-      blocoCapitulo({ numero: '2', titulo: 'Setores', novaPagina: true, descricao: `Ordenados pelo % pendente no período. "Acima da meta" = em quantas auditorias o setor passou de ${META}%.` }),
-      reincidentes.length ? `<div class="secao painel"><h2>Setores reincidentes (acima da meta em metade ou mais das auditorias)</h2><div class="chips">${reincidentes.map(s => `<span>${escapeHtml(s.setor)} · ${s.acimaDaMeta}/${s.auditorias}</span>`).join('')}</div></div>` : '',
-      blocoTabela({
+      ].filter(Boolean).join('') },
+      { id: 'setores', titulo: `Setores (${setoresOrd.length})`, descricao: `Ordenados pelo % pendente. "Acima da meta" = em quantas auditorias passou de ${META}%.`, novaPagina: true, gerar: () => [
+        reincidentes.length ? `<div class="secao painel"><h2>Setores reincidentes (acima da meta em metade ou mais das auditorias)</h2><div class="chips">${reincidentes.map(s => `<span>${escapeHtml(s.setor)} · ${s.acimaDaMeta}/${s.auditorias}</span>`).join('')}</div></div>` : '',
+        blocoTabela({
         colunas: [
           { chave: 'setor', titulo: 'Setor' }, { chave: 'auditorias', titulo: 'Aud.', alinhamento: 'right' },
           { chave: 'lidos', titulo: 'Lidos', alinhamento: 'right', format: int }, { chave: 'pendentes', titulo: 'Pendentes', alinhamento: 'right', format: int },
@@ -369,12 +373,9 @@ const gerarRelatorioPDF = () => {
         ],
         linhas: setoresOrd
       }),
-      totalSetores.value ? `<p class="nota">Geral do período: ${int(totalSetores.value.lidos)} lidos, ${int(totalSetores.value.pendentes)} pendentes (${pct(totalSetores.value.percPendente)}), ${pct(totalSetores.value.percProblema)} com problema.</p>` : '',
-
-      // 3 · Usuários
-      ...(usuariosOrd.length ? [
-        blocoCapitulo({ numero: '3', titulo: 'Usuários', novaPagina: true, descricao: 'Leituras = itens lidos + leituras com problema, somadas no período.' }),
-        blocoTabela({
+        totalSetores.value ? `<p class="nota">Geral do período: ${int(totalSetores.value.lidos)} lidos, ${int(totalSetores.value.pendentes)} pendentes (${pct(totalSetores.value.percPendente)}), ${pct(totalSetores.value.percProblema)} com problema.</p>` : ''
+      ].join('') },
+      ...(usuariosOrd.length ? [{ id: 'usuarios', titulo: `Usuários (${usuariosOrd.length})`, descricao: 'Leituras = itens lidos + leituras com problema, somadas no período.', novaPagina: true, gerar: () => blocoTabela({
           colunas: [
             { chave: 'posicao', titulo: '#', alinhamento: 'right' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'nome', titulo: 'Nome' },
             { chave: 'auditorias', titulo: 'Aud.', alinhamento: 'right' },
@@ -388,12 +389,25 @@ const gerarRelatorioPDF = () => {
             const { matricula, nome } = separarUsuario(u.usuario)
             return { ...u, posicao: i + 1, matricula: matricula || '—', nome: nome || u.usuario, ultima: formatarDataBR(u.ultimaData) }
           })
-        })
-      ] : []),
-
-      // 4 · Auditorias e meses
-      blocoCapitulo({ numero: usuariosOrd.length ? '4' : '3', titulo: 'Auditorias do período', novaPagina: true, descricao: 'Da mais recente para a mais antiga.' }),
-      blocoTabela({
+        }) }] : []),
+      ...(locaisCronicos.length ? [{ id: 'reincidencia', titulo: 'Locais reincidentes', descricao: 'Locais fora da meta em várias auditorias (top 30).', padrao: false, gerar: () => blocoTabela({
+        colunas: [
+          { chave: 'local', titulo: 'Local' }, { chave: 'auditorias', titulo: 'Aud.', alinhamento: 'right' },
+          { chave: 'foraMeta', titulo: 'Fora da meta', alinhamento: 'right', html: (v, l) => selo(`${v}/${l.auditorias}`, l.taxaFora >= 50 ? 'ruim' : 'alerta') },
+          { chave: 'sequencia', titulo: 'Seguidas', alinhamento: 'right' },
+          { chave: 'percMedio', titulo: '% pend. médio', alinhamento: 'right', format: v => pct(v, 1) },
+          { chave: 'historico', titulo: 'Evolução', html: v => sparkline(v.map(h => h.perc), { meta: META }) },
+          { chave: 'ultimaData', titulo: 'Última', format: v => formatarDataBR(v) }
+        ],
+        linhas: locaisCronicos
+      }) }] : []),
+      ...(ruptura.total > 0 ? [{ id: 'ruptura', titulo: 'Ruptura em valor', descricao: 'Custo dos itens pendentes por setor e fornecedor.', padrao: false, gerar: () => [
+        `<p class="nota">Total estimado: <b>${moeda(ruptura.total)}</b> em ${int(ruptura.itens)} item(ns) pendente(s).</p>`,
+        blocoBarras({ titulo: 'Por setor (top 12)', barras: ruptura.porSetor.slice(0, 12).map(x => ({ rotulo: x.chave, valor: x.valor, texto: `${moeda(x.valor)} · ${pct(x.participacao, 0)}`, tom: 'ruim' })) }),
+        blocoBarras({ titulo: 'Por fornecedor (top 12)', barras: ruptura.porFornecedor.slice(0, 12).map(x => ({ rotulo: x.chave, valor: x.valor, texto: `${moeda(x.valor)} · ${pct(x.participacao, 0)}`, tom: 'alerta' })) })
+      ].join('') }] : []),
+      { id: 'auditorias', titulo: `Auditorias do período (${auditoriasOrd.length})`, descricao: 'Da mais recente para a mais antiga, com o resumo por mês.', novaPagina: true, gerar: () => [
+        blocoTabela({
         colunas: [
           { chave: 'dataFormatada', titulo: 'Data' }, { chave: 'tipo', titulo: 'Tipo' },
           { chave: 'status', titulo: 'Status', html: (v, l) => selo(v, l.fechada ? 'cinza' : 'neutro') },
@@ -405,7 +419,7 @@ const gerarRelatorioPDF = () => {
         ],
         linhas: auditoriasOrd
       }),
-      blocoTabela({
+        blocoTabela({
         titulo: 'Resumo por mês',
         colunas: [
           { chave: 'rotulo', titulo: 'Mês' }, { chave: 'total', titulo: 'Auditorias', alinhamento: 'right' },
@@ -415,6 +429,7 @@ const gerarRelatorioPDF = () => {
         ],
         linhas: meses.value.map(m => ({ ...m, naMeta: m.taxaMeta === null ? '—' : `${m.dentroMeta}/${m.fechadas} (${pct(m.taxaMeta, 0)})` }))
       })
+      ].join('') }
     ]
   })
 }

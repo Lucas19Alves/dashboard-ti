@@ -65,20 +65,7 @@ const locaisPaginados = computed(() => {
 
 // Dados para o relatório
 
-const colunasSetoresEstat = [
-  { chave: 'nome', titulo: 'Setor', sortable: true },
-  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
-  { chave: 'lidos', titulo: 'Lidos', sortable: true, alinhamento: 'right' },
-  { chave: 'pendentes', titulo: 'Pendentes', sortable: true, alinhamento: 'right' },
-  { chave: 'comProblema', titulo: 'Problemas', sortable: true, alinhamento: 'right' },
-  { chave: 'desatualizados', titulo: 'Desatualizados', sortable: true, alinhamento: 'right' },
-  { chave: 'percentualConclusao', titulo: '% Conclusão', sortable: true, alinhamento: 'right', format: (v) => v.toFixed(2) + '%' },
-  { chave: 'classificacao', titulo: 'Classificação', sortable: true, alinhamento: 'center' }
-]
 
-const handlePrintSetores = () => {
-  handlePrintCard(setoresFiltradoOrdenado.value, colunasSetoresEstat, 'Parcial por Setor')
-}
 
 const colunasLocaisEstat = [
   { chave: 'nome', titulo: 'Local', sortable: true },
@@ -111,9 +98,7 @@ const handlePrintLocais = () => {
             <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
             <input v-model="buscaSetores" type="text" placeholder="Buscar setor..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44" @input="paginaSetores = 1" />
           </div>
-          <button v-if="setoresFiltradoOrdenado.length > 0" @click="handlePrintSetores" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-medium shadow-sm hover:bg-indigo-700 transition">
-            <i class="fas fa-print"></i> Imprimir
-          </button>
+          <!-- Setores entram no Relatório da auditoria (botão Relatório no topo). -->
         </div>
       </div>
       <div v-if="setoresFiltradoOrdenado.length === 0" class="flex flex-col items-center justify-center py-8 text-slate-400">

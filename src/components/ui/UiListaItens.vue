@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { correspondeBusca } from '../../utils/busca'
 import { baixarCsv } from '../../utils/csv'
-import { imprimirListaVisual } from '../../utils/print'
+import { abrirRelatorioTabela } from '../../composables/useRelatorio'
 
 // Lista de itens reutilizada pelos modais: busca, filtros por facetas, agrupamento,
 // ordenação, carregamento incremental, exportação CSV e impressão.
@@ -98,20 +98,25 @@ const limpar = () => { busca.value = ''; filtros.value = {} }
 
 const linhasExport = () => ordenados.value.map(item => Object.fromEntries(props.colunas.map(c => [c.chave, valorColuna(item, c)])))
 const exportarCsv = () => baixarCsv(linhasExport(), props.colunas, props.titulo.toLowerCase().replace(/[^a-z0-9]+/gi, '-'))
+// Relatório A4 da lista como está na tela (busca, filtros e ordem), com escolha de colunas.
 const imprimir = () => {
   const f = props.facetas.find(x => x.chave === agrupar.value) || props.facetas[0]
-  const resumo = f
+  const barras = f
     ? [...filtrados.value.reduce((m, i) => m.set(valorFaceta(i, f), (m.get(valorFaceta(i, f)) || 0) + 1), new Map())]
-      .sort((a, b) => b[1] - a[1]).slice(0, 12).map(([rotulo, valor]) => ({ rotulo, valor }))
+      .sort((a, b) => b[1] - a[1]).slice(0, 15).map(([rotulo, valor]) => ({ rotulo, valor }))
     : []
-  const filtrosTexto = [busca.value && `Busca: "${busca.value}"`, ...Object.entries(filtros.value).filter(([, v]) => v).map(([k, v]) => `${props.facetas.find(x => x.chave === k)?.titulo}: ${v}`)].filter(Boolean)
-  imprimirListaVisual({
+  const contexto = [
+    busca.value && { rotulo: 'Busca', valor: `"${busca.value}"` },
+    ...Object.entries(filtros.value).filter(([, v]) => v).map(([k, v]) => ({ rotulo: props.facetas.find(x => x.chave === k)?.titulo || k, valor: v })),
+    { rotulo: 'Listados', valor: `${filtrados.value.length.toLocaleString('pt-BR')} de ${props.itens.length.toLocaleString('pt-BR')}` }
+  ].filter(Boolean)
+  abrirRelatorioTabela({
+    id: props.titulo.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').slice(0, 40),
     titulo: props.titulo,
-    subtitulo: filtrosTexto.join(' · '),
-    indicadores: [{ rotulo: 'Itens listados', valor: filtrados.value.length.toLocaleString('pt-BR') }, { rotulo: 'Total', valor: props.itens.length.toLocaleString('pt-BR') }],
-    grafico: resumo.length > 1 ? { titulo: `Itens por ${f.titulo.toLowerCase()}`, barras: resumo } : null,
+    contexto,
     colunas: props.colunas,
-    linhas: linhasExport()
+    itens: ordenados.value,
+    resumo: f ? { nome: f.titulo.toLowerCase(), barras } : null
   })
 }
 
