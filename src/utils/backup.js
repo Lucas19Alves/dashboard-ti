@@ -1,6 +1,8 @@
 import { db } from '../db/appDb'
 import { limparAlteracoes, marcarBackupFeito } from './lembreteBackup'
 import { carregarLayoutSalvo, layoutValido, salvarLayout } from './mapaLoja'
+import { configuracoes as configuracoesSistema } from '../composables/useConfiguracoes'
+import { useAparencia } from '../composables/useAparencia'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 const BACKUP_VERSION = 2
@@ -195,6 +197,37 @@ export const normalizarFormatoBackup = dados => {
   return dados
 }
 
+// Preferências salvas no navegador que vão no backup: escolhas dos relatórios,
+// ajustes manuais da escala e visualização do plano.
+const PREFIXOS_PREFERENCIAS = ['dashboard_ti_relatorio_', 'dashboard_ti_escala_', 'dashboard_ti_plano_visao']
+const lerPreferencias = () => {
+  const prefs = {}
+  try {
+    for (const chave of Object.keys(localStorage)) {
+      if (PREFIXOS_PREFERENCIAS.some(p => chave.startsWith(p))) prefs[chave] = localStorage.getItem(chave)
+    }
+  } catch {}
+  return prefs
+}
+const copia = v => JSON.parse(JSON.stringify(v))
+
+// Restaura configurações, aparência e preferências trazidas pelo backup (só o que vier nele).
+const restaurarConfiguracoes = (cfg = {}) => {
+  if (cfg.sistema && typeof cfg.sistema === 'object') {
+    for (const grupo of Object.keys(configuracoesSistema)) {
+      if (cfg.sistema[grupo] && typeof cfg.sistema[grupo] === 'object') Object.assign(configuracoesSistema[grupo], cfg.sistema[grupo])
+    }
+  }
+  if (cfg.aparencia && typeof cfg.aparencia === 'object') Object.assign(useAparencia().estado, cfg.aparencia)
+  if (cfg.preferencias && typeof cfg.preferencias === 'object') {
+    try {
+      for (const [chave, valor] of Object.entries(cfg.preferencias)) {
+        if (PREFIXOS_PREFERENCIAS.some(p => chave.startsWith(p)) && typeof valor === 'string') localStorage.setItem(chave, valor)
+      }
+    } catch {}
+  }
+}
+
 // Monta o arquivo de backup (JSON compactado em gzip quando o navegador permite).
 export const gerarBackupArquivo = async () => {
   const auditorias = await db.auditorias.toArray()
@@ -207,7 +240,12 @@ export const gerarBackupArquivo = async () => {
     auditorias: auditoriasComStatus,
     vencimentos,
     planosAcao,
-    configuracoes: { mapaLoja: carregarLayoutSalvo() }
+    configuracoes: {
+      mapaLoja: carregarLayoutSalvo(),
+      sistema: copia(configuracoesSistema),
+      aparencia: copia(useAparencia().estado),
+      preferencias: lerPreferencias()
+    }
   }
 
   const jsonBlob = new Blob([JSON.stringify(payload)], {
@@ -269,6 +307,7 @@ export const importarBackupJson = async (file) => {
   limparAlteracoes()
   // Restaura o layout do mapa só quando o backup tem um; senão mantém o atual.
   if (dados.configuracoes?.mapaLoja) salvarLayout(dados.configuracoes.mapaLoja)
+  restaurarConfiguracoes(dados.configuracoes)
 
   return { auditorias, vencimentos, versao: dados.versao, origem: dados.origem || 'dashboard-ti' }
 }
