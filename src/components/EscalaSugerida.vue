@@ -1,8 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { agregarPorArea, carregarLayoutSalvo, gerarLayoutPadrao, interpretarLocal, mesclarLayout, nomeArea } from '../utils/mapaLoja'
-import { mediana, ritmosDaAuditoria, setorPorArea } from '../utils/planoAcao'
-import { familiaDoTipo, montarEscala, perfisColaboradores, textoHora } from '../utils/perfilColaborador'
+import { mediana, ritmosDaAuditoria } from '../utils/planoAcao'
+import { familiaDoTipo, montarEscala, nomeUnidade, perfisColaboradores, textoHora, unidadeDoLocal } from '../utils/perfilColaborador'
+import { localDoItem, setorDoItem } from '../utils/itemAuditoria'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { correspondeBusca } from '../utils/busca'
 import { rotuloUsuario } from '../utils/usuario'
@@ -31,12 +32,32 @@ const baseMesmoTipo = computed(() => mesmoTipo.value.length >= 2)
 const perfis = computed(() => perfisColaboradores(historicoAuditorias.value))
 const ritmoMediano = computed(() => Math.round(mediana(ritmosDaAuditoria(props.auditoria).map(r => r.ritmo)) || mediana([...perfis.value.values()].map(p => p.ritmo).filter(Boolean)) || 120))
 
-// Áreas a auditar (tamanho pela auditoria atual) e setor de cada área.
+// Locais a auditar (tamanho pela auditoria atual): cada face de corredor é um local (G05A, G05B...).
 const areasAuditoria = computed(() => agregarPorArea(props.auditoria, () => false))
-const areas = computed(() => [...areasAuditoria.value.values()]
-  .map(a => ({ bloco: a.bloco, tipo: a.tipo, numero: a.numero, itens: a.total, locais: a.locais.size }))
-  .filter(a => a.itens > 0))
-const setores = computed(() => setorPorArea(props.auditoria))
+const areas = computed(() => {
+  const mapa = new Map()
+  for (const [local, d] of Object.entries(props.auditoria?.analise?.porLocal || {})) {
+    const info = interpretarLocal(local)
+    const id = unidadeDoLocal(info)
+    const u = mapa.get(id) || { id, bloco: info.bloco, tipo: info.tipo, numero: info.numero, face: info.tipo === 'gondola' ? info.face : undefined, itens: 0, locais: 0 }
+    u.itens += (d?.lidos || 0) + (d?.pendentes || 0) + (d?.comProblema || 0)
+    u.locais++
+    mapa.set(id, u)
+  }
+  return [...mapa.values()].filter(u => u.itens > 0).map(u => ({ ...u, nome: nomeUnidade(u) }))
+})
+// Setor predominante de cada local (pelos itens da auditoria).
+const setores = computed(() => {
+  const contagem = new Map()
+  for (const item of Array.isArray(props.auditoria?.dados) ? props.auditoria.dados : []) {
+    const id = unidadeDoLocal(interpretarLocal(localDoItem(item)))
+    const m = contagem.get(id) || new Map()
+    const setor = setorDoItem(item)
+    m.set(setor, (m.get(setor) || 0) + 1)
+    contagem.set(id, m)
+  }
+  return new Map([...contagem].map(([id, m]) => [id, [...m].sort((a, b) => b[1] - a[1])[0]?.[0] || '']))
+})
 
 // Colaboradores: todos com histórico; por padrão, os que leram nesta auditoria.
 const colaboradores = computed(() => [...perfis.value.values()]
@@ -95,14 +116,42 @@ const escala = computed(() => montarEscala({
 // Cores das pessoas (sem vermelho, reservado para alertas).
 const CORES = ['#2563eb', '#f97316', '#059669', '#7c3aed', '#0891b2', '#ca8a04', '#db2777', '#475569', '#65a30d', '#0d9488', '#4f46e5', '#9333ea']
 const cor = pessoa => CORES[(pessoa - 1) % CORES.length]
-const grupoDaArea = computed(() => new Map(escala.value.grupos.flatMap(g => g.areas.map(a => [a.bloco, g]))))
-const areaDoGrupo = (bloco) => grupoDaArea.value.get(bloco)?.areas.find(a => a.bloco === bloco)
+const grupoDaArea = computed(() => new Map(escala.value.grupos.flatMap(g => g.areas.map(a => [a.id, g]))))
+const areaDoGrupo = id => grupoDaArea.value.get(id)?.areas.find(a => a.id === id)
 
-const nomeCurto = a => (a.tipo === 'gondola' ? `Corr. ${String(a.numero).padStart(2, '0')}` : nomeArea(a))
+// Locais da pessoa agrupados por área: corredor inteiro vira "G05"; parte dele, "G05 A·B".
+const facesPorBloco = computed(() => {
+  const m = new Map()
+  for (const a of areas.value) m.set(a.bloco, (m.get(a.bloco) || 0) + 1)
+  return m
+})
+const chipsDe = (g) => {
+  const blocos = new Map()
+  for (const a of g.areas) blocos.set(a.bloco, [...(blocos.get(a.bloco) || []), a])
+  return [...blocos.values()].map((lista) => {
+    const a = lista[0]
+    const inteiro = a.tipo !== 'gondola' || lista.length >= (facesPorBloco.value.get(a.bloco) || 1)
+    return {
+      chave: a.bloco,
+      texto: a.tipo !== 'gondola' ? a.nome : inteiro ? a.bloco : `${a.bloco} ${lista.map(x => x.face).sort().join('·')}`,
+      itens: lista.reduce((t, x) => t + x.itens, 0),
+      minutos: Math.round(lista.reduce((t, x) => t + x.horas, 0) * 60),
+      foraDoPerfil: lista.some(x => x.foraDoPerfil),
+      fixa: lista.some(x => x.fixa),
+      parcial: !inteiro
+    }
+  })
+}
+
+// "G05 A, B · G06 C · FLV" para a impressão.
 const resumirAreas = (lista) => {
-  const corredores = lista.filter(a => a.tipo === 'gondola').map(a => String(a.numero).padStart(2, '0'))
-  const outras = lista.filter(a => a.tipo !== 'gondola').map(a => nomeArea(a))
-  return [corredores.length ? `Corredor${corredores.length > 1 ? 'es' : ''} ${corredores.join(', ')}` : '', ...outras].filter(Boolean).join(' · ')
+  const porCorredor = new Map()
+  const outras = []
+  for (const a of lista) {
+    if (a.tipo === 'gondola' && a.face) porCorredor.set(a.bloco, [...(porCorredor.get(a.bloco) || []), a.face])
+    else outras.push(a.nome || nomeArea(a))
+  }
+  return [...[...porCorredor].map(([b, f]) => `${b} ${f.sort().join(', ')}`), ...outras].join(' · ')
 }
 const perfilTexto = (g) => {
   if (g.semHistorico) return 'Sem histórico: ritmo padrão'
@@ -113,18 +162,41 @@ const perfilTexto = (g) => {
 // Interação mapa ↔ lista: destacar a pessoa, escolher uma área para reatribuir.
 const destaque = ref(null)
 const areaEscolhida = ref(null)
-const opacidade = (p) => {
-  const g = grupoDaArea.value.get(p.id)
+const opacidade = (id) => {
+  const g = grupoDaArea.value.get(id)
   if (destaque.value) return g?.usuario === destaque.value ? 1 : 0.12
-  if (areaEscolhida.value) return p.id === areaEscolhida.value ? 1 : 0.5
+  if (areaEscolhida.value) return id === areaEscolhida.value ? 1 : 0.5
   return g ? 0.9 : 1
 }
+const corDe = id => (grupoDaArea.value.has(id) ? cor(grupoDaArea.value.get(id).pessoa) : '#e2e8f0')
+const contorno = id => (areaEscolhida.value === id ? { stroke: '#0f172a', 'stroke-width': 0.16 } : areaDoGrupo(id)?.foraDoPerfil ? { stroke: '#dc2626', 'stroke-width': 0.14, 'stroke-dasharray': '0.3 0.2' } : { stroke: '#fff', 'stroke-width': 0.06 })
+const entrar = id => { if (grupoDaArea.value.has(id) && !areaEscolhida.value) destaque.value = grupoDaArea.value.get(id).usuario }
+const dica = id => {
+  const a = areas.value.find(x => x.id === id)
+  const g = grupoDaArea.value.get(id)
+  return [a?.nome || id, a ? `${a.itens} itens` : 'sem itens', g ? rotuloUsuario(g.usuario) : '', setores.value.get(id) || '', areaDoGrupo(id)?.foraDoPerfil ? 'fora do perfil' : ''].filter(Boolean).join(' · ')
+}
+// Faces do corredor no desenho: D/B de um lado, C/A do outro (igual ao mapa da loja).
+const facesDe = (p) => {
+  const vertical = p.w < p.h
+  const m = 0.08
+  const [x, y, w, h] = [p.x + m, p.y + m, p.w - 2 * m, p.h - 2 * m]
+  if (vertical) {
+    const cw = w * 0.32
+    return [['D', x, y, cw, h / 2], ['B', x, y + h / 2, cw, h / 2], ['C', x + w - cw, y, cw, h / 2], ['A', x + w - cw, y + h / 2, cw, h / 2]]
+      .map(([f, fx, fy, fw, fh]) => ({ face: f, id: `${p.id}${f}`, x: fx, y: fy, w: fw, h: fh }))
+  }
+  const ch = h * 0.32
+  return [['D', x, y, w / 2, ch], ['B', x + w / 2, y, w / 2, ch], ['C', x, y + h - ch, w / 2, ch], ['A', x + w / 2, y + h - ch, w / 2, ch]]
+    .map(([f, fx, fy, fw, fh]) => ({ face: f, id: `${p.id}${f}`, x: fx, y: fy, w: fw, h: fh }))
+}
+const ehCorredor = p => (areasAuditoria.value.get(p.id)?.tipo || interpretarLocal(p.id).tipo) === 'gondola'
 const infoArea = computed(() => {
   if (!areaEscolhida.value) return null
-  const a = areas.value.find(x => x.bloco === areaEscolhida.value)
+  const a = areas.value.find(x => x.id === areaEscolhida.value)
   if (!a) return null
-  const g = grupoDaArea.value.get(a.bloco)
-  const atual = areaDoGrupo(a.bloco)
+  const g = grupoDaArea.value.get(a.id)
+  const atual = areaDoGrupo(a.id)
   // Quem tem a área no perfil aparece primeiro.
   const opcoes = escala.value.grupos.map(x => {
     const perfil = perfis.value.get(x.usuario)
@@ -132,10 +204,10 @@ const infoArea = computed(() => {
     const parcela = perfil?.total ? (perfil.porFamilia.get(familia) || 0) / perfil.total : 0
     return { ...x, parcela, noPerfil: parcela >= 0.08 || (perfil?.porArea.get(a.bloco) || 0) >= 10 }
   }).sort((x, y) => y.noPerfil - x.noPerfil || y.parcela - x.parcela)
-  return { ...a, nome: rotulo({ id: a.bloco }), familia: familiaDoTipo(a.tipo), setor: setores.value.get(a.bloco) || '', grupo: g, atual, fixa: fixas.value.has(a.bloco), opcoes }
+  return { ...a, familia: familiaDoTipo(a.tipo), setor: setores.value.get(a.id) || '', grupo: g, atual, fixa: fixas.value.has(a.id), opcoes }
 })
 const escolherArea = (id) => {
-  if (!areas.value.some(a => a.bloco === id)) return
+  if (!areas.value.some(a => a.id === id)) return
   areaEscolhida.value = areaEscolhida.value === id ? null : id
 }
 
@@ -240,7 +312,7 @@ const imprimirEscala = () => {
     <p class="mt-1 text-[11px] text-slate-500">O ritmo padrão vale só para quem não tem histórico com horário e para o cálculo de pessoas necessárias.</p>
 
     <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-      <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">{{ areas.length }} áreas</p></div>
+      <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">{{ areas.length }} locais</p></div>
       <div class="rounded-xl bg-slate-50 p-3">
         <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pessoas necessárias</p>
         <p class="text-xl font-black" :class="escala.pessoasNecessarias > selecionados.size ? 'text-red-700' : 'text-slate-900'">{{ escala.pessoasNecessarias }} <span class="text-sm font-semibold text-slate-500">/ {{ selecionados.size }} escaladas</span></p>
@@ -272,23 +344,36 @@ const imprimirEscala = () => {
     <div v-else class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
       <div class="min-w-0">
         <div class="overflow-x-auto rounded-xl bg-slate-50 p-3">
-          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="w-full min-w-[600px]" role="img" aria-label="Divisão das áreas por colaborador">
+          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="w-full min-w-[600px]" role="img" aria-label="Divisão dos locais por colaborador">
             <g v-for="p in posicoes" :key="p.id">
-              <rect :x="p.x + 0.08" :y="p.y + 0.08" :width="p.w - 0.16" :height="p.h - 0.16" rx="0.35" :fill="grupoDaArea.has(p.id) ? cor(grupoDaArea.get(p.id).pessoa) : '#e2e8f0'"
-                :fill-opacity="opacidade(p)" :stroke="areaEscolhida === p.id ? '#0f172a' : areaDoGrupo(p.id)?.foraDoPerfil ? '#dc2626' : '#fff'" :stroke-width="areaEscolhida === p.id || areaDoGrupo(p.id)?.foraDoPerfil ? 0.18 : 0.08"
-                :stroke-dasharray="areaDoGrupo(p.id)?.foraDoPerfil && areaEscolhida !== p.id ? '0.3 0.2' : undefined"
-                class="cursor-pointer transition-[fill-opacity,fill] duration-300" @mouseenter="grupoDaArea.has(p.id) && !areaEscolhida && (destaque = grupoDaArea.get(p.id).usuario)" @mouseleave="destaque = null" @click="destaque = null; escolherArea(p.id)">
-                <title>{{ rotulo(p) }}{{ grupoDaArea.has(p.id) ? ` · ${rotuloUsuario(grupoDaArea.get(p.id).usuario)}` : '' }}{{ setores.get(p.id) ? ` · ${setores.get(p.id)}` : '' }}{{ areaDoGrupo(p.id)?.foraDoPerfil ? ' · fora do perfil' : '' }}</title>
-              </rect>
-              <text class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 - (grupoDaArea.has(p.id) && p.h > 2 ? 0.45 : 0)" text-anchor="middle" dominant-baseline="central" font-size="0.75" font-weight="800" :fill="grupoDaArea.has(p.id) ? '#fff' : '#64748b'">{{ rotulo(p) }}</text>
-              <text v-if="fixas.has(p.id) && grupoDaArea.has(p.id)" :x="p.x + p.w - 0.45" :y="p.y + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.55" fill="#fff" class="pointer-events-none">●</text>
-              <text v-if="grupoDaArea.has(p.id) && p.h > 2" class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.62" font-weight="700" fill="#fff">{{ iniciais(grupoDaArea.get(p.id).usuario) }}</text>
+              <!-- Corredor: número no meio e as 4 faces (locais) em volta, cada uma com a sua pessoa. -->
+              <template v-if="ehCorredor(p)">
+                <rect :x="p.x + 0.08" :y="p.y + 0.08" :width="p.w - 0.16" :height="p.h - 0.16" rx="0.3" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.05" />
+                <text class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2" text-anchor="middle" dominant-baseline="central" font-size="0.7" font-weight="800" fill="#334155">{{ rotulo(p) }}</text>
+                <g v-for="f in facesDe(p)" :key="f.id">
+                  <rect :x="f.x" :y="f.y" :width="f.w" :height="f.h" rx="0.15" :fill="corDe(f.id)" :fill-opacity="opacidade(f.id)" v-bind="contorno(f.id)"
+                    class="cursor-pointer transition-[fill-opacity,fill] duration-300" @mouseenter="entrar(f.id)" @mouseleave="destaque = null" @click="destaque = null; escolherArea(f.id)">
+                    <title>{{ dica(f.id) }}</title>
+                  </rect>
+                  <text class="pointer-events-none" :x="f.x + f.w / 2" :y="f.y + f.h / 2" text-anchor="middle" dominant-baseline="central" font-size="0.5" font-weight="800" :fill="grupoDaArea.has(f.id) ? '#fff' : '#94a3b8'">{{ grupoDaArea.has(f.id) && f.h > 1.2 ? iniciais(grupoDaArea.get(f.id).usuario) : f.face }}</text>
+                  <text v-if="fixas.has(f.id) && grupoDaArea.has(f.id)" class="pointer-events-none" :x="f.x + f.w - 0.25" :y="f.y + 0.3" text-anchor="middle" dominant-baseline="central" font-size="0.4" fill="#fff">●</text>
+                </g>
+              </template>
+              <template v-else>
+                <rect :x="p.x + 0.08" :y="p.y + 0.08" :width="p.w - 0.16" :height="p.h - 0.16" rx="0.35" :fill="corDe(p.id)" :fill-opacity="opacidade(p.id)" v-bind="contorno(p.id)"
+                  class="cursor-pointer transition-[fill-opacity,fill] duration-300" @mouseenter="entrar(p.id)" @mouseleave="destaque = null" @click="destaque = null; escolherArea(p.id)">
+                  <title>{{ dica(p.id) }}</title>
+                </rect>
+                <text class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 - (grupoDaArea.has(p.id) && p.h > 2 ? 0.45 : 0)" text-anchor="middle" dominant-baseline="central" font-size="0.75" font-weight="800" :fill="grupoDaArea.has(p.id) ? '#fff' : '#64748b'">{{ rotulo(p) }}</text>
+                <text v-if="grupoDaArea.has(p.id) && p.h > 2" class="pointer-events-none" :x="p.x + p.w / 2" :y="p.y + p.h / 2 + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.62" font-weight="700" fill="#fff">{{ iniciais(grupoDaArea.get(p.id).usuario) }}</text>
+                <text v-if="fixas.has(p.id) && grupoDaArea.has(p.id)" :x="p.x + p.w - 0.45" :y="p.y + 0.55" text-anchor="middle" dominant-baseline="central" font-size="0.55" fill="#fff" class="pointer-events-none">●</text>
+              </template>
             </g>
           </svg>
         </div>
 
         <transition name="fade" mode="out-in">
-          <div v-if="infoArea" :key="infoArea.bloco" class="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+          <div v-if="infoArea" :key="infoArea.id" class="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
               <p class="text-sm font-bold text-slate-900">{{ infoArea.nome }} <span class="text-xs font-medium text-slate-500">· {{ infoArea.familia }} · {{ infoArea.itens.toLocaleString('pt-BR') }} itens{{ infoArea.setor ? ` · ${infoArea.setor}` : '' }}</span></p>
               <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @click="areaEscolhida = null"><i class="fas fa-xmark mr-1"></i>Fechar</button>
@@ -298,14 +383,14 @@ const imprimirEscala = () => {
             <div class="mt-1.5 flex flex-wrap gap-1.5">
               <button v-for="g in infoArea.opcoes" :key="g.usuario" type="button" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition"
                 :class="infoArea.grupo?.usuario === g.usuario ? 'bg-slate-900 text-white ring-slate-900' : g.noPerfil ? 'bg-white text-slate-700 ring-slate-200 hover:ring-slate-400' : 'bg-white text-slate-400 ring-slate-100 hover:ring-slate-300'"
-                :title="g.noPerfil ? `${Math.round(g.parcela * 100)}% das leituras em ${infoArea.familia}` : `Não costuma ler ${infoArea.familia}`" @click="fixar(infoArea.bloco, g.usuario)">
+                :title="g.noPerfil ? `${Math.round(g.parcela * 100)}% das leituras em ${infoArea.familia}` : `Não costuma ler ${infoArea.familia}`" @click="fixar(infoArea.id, g.usuario)">
                 <span class="size-2.5 rounded-full" :style="{ background: cor(g.pessoa) }"></span>{{ rotuloUsuario(g.usuario) }}
                 <i v-if="!g.noPerfil" class="fas fa-ban text-[10px]" aria-label="fora do perfil"></i>
               </button>
-              <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.bloco, null)"><i class="fas fa-wand-magic-sparkles mr-1"></i>Automático</button>
+              <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.id, null)"><i class="fas fa-wand-magic-sparkles mr-1"></i>Automático</button>
             </div>
           </div>
-          <p v-else class="mt-2 text-[11px] text-slate-500">Clique numa área para passá-la a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver as áreas dela · borda vermelha tracejada = fora do perfil.</p>
+          <p v-else class="mt-2 text-[11px] text-slate-500">Cada face de corredor é um local. Clique num local para passá-lo a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver os locais dela · borda vermelha tracejada = fora do perfil.</p>
         </transition>
       </div>
 
@@ -333,14 +418,15 @@ const imprimirEscala = () => {
                 </div>
 
                 <div class="mt-2 flex flex-wrap gap-1">
-                  <span v-for="a in g.areas" :key="a.bloco" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
-                    :class="a.foraDoPerfil ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'" :title="`${a.itens} itens · ${Math.round(a.horas * 60)} min${a.foraDoPerfil ? ' · fora do perfil' : ''}`">
-                    <i v-if="a.fixa" class="fas fa-thumbtack text-[9px] text-slate-400" aria-label="ajuste manual"></i>{{ nomeCurto(a) }}
+                  <span v-for="c in chipsDe(g)" :key="c.chave" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+                    :class="c.foraDoPerfil ? 'bg-red-50 text-red-700' : c.parcial ? 'bg-white text-slate-600 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-700'"
+                    :title="`${c.itens} itens · ${c.minutos} min${c.parcial ? ' · parte do corredor' : ''}${c.foraDoPerfil ? ' · fora do perfil' : ''}`">
+                    <i v-if="c.fixa" class="fas fa-thumbtack text-[9px] text-slate-400" aria-label="ajuste manual"></i>{{ c.texto }}
                   </span>
                   <span v-if="!g.areas.length" class="text-[11px] text-slate-400">Sem áreas</span>
                 </div>
                 <p class="mt-1.5 text-[11px] text-slate-500">
-                  {{ g.itens.toLocaleString('pt-BR') }} itens · {{ g.areas.length }} área(s) · {{ g.locais }} local(is) · carga {{ g.carga.toFixed(0) }}%
+                  {{ g.itens.toLocaleString('pt-BR') }} itens · {{ g.areas.length }} local(is) em {{ new Set(g.areas.map(a => a.bloco)).size }} área(s) · carga {{ g.carga.toFixed(0) }}%
                 </p>
               </div>
             </div>

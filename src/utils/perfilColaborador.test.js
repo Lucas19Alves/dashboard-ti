@@ -59,4 +59,14 @@ describe('perfil e escala', () => {
     // Áreas inteiras: o melhor possível aqui fica um pouco acima de 100% para uma das duas.
     expect(Math.max(...escala.grupos.map(g => g.carga))).toBeLessThan(105)
   })
+
+  it('escala por local (face do corredor) mantendo faces do mesmo corredor juntas', () => {
+    const faces = (n, itens) => ['A', 'B', 'C', 'D'].map(f => ({ id: `G0${n}${f}`, bloco: `G0${n}`, face: f, tipo: 'gondola', numero: n, itens }))
+    const areas = [...faces(1, 50), ...faces(3, 50)]
+    const escala = montarEscala({ areas, pessoas: [{ usuario: 'ANA' }, { usuario: 'BIA' }], perfis })
+    const ids = escala.grupos.flatMap(g => g.areas.map(a => a.id)).sort()
+    expect(ids).toEqual(areas.map(a => a.id).sort())
+    // Cada pessoa fica com um corredor inteiro, não com faces espalhadas.
+    for (const g of escala.grupos) expect(new Set(g.areas.map(a => a.bloco)).size).toBe(1)
+  })
 })
