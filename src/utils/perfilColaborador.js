@@ -119,12 +119,14 @@ export const perfisColaboradores = (auditorias) => {
 export const doPerfil = (perfil, area, setor) => {
   if (!perfil?.total) return false
   const familia = familiaDoTipo(area.tipo)
-  return (perfil.porArea.get(area.bloco) || 0) >= 10
+  return (area.id && (perfil.porUnidade.get(area.id) || 0) >= 5)
+    || (perfil.porArea.get(area.bloco) || 0) >= 10
     || (perfil.porFamilia.get(familia) || 0) / perfil.total >= MINIMO_FAMILIA
     || (setor && (perfil.porSetor.get(setor) || 0) / perfil.total >= MINIMO_SETOR && familia !== FAMILIAS.flv && familia !== FAMILIAS.acougue)
 }
 
-// Afinidade 0–1: o próprio local e a área (corredor) pesam mais, depois o setor e a família.
+// Afinidade 0–1: o próprio local pesa mais (o mesmo corredor tem faces de setores diferentes),
+// depois o setor do local, a família e, por último, o corredor como um todo.
 export const afinidadePerfil = (perfil, area, setor) => {
   if (!perfil?.total) return 0
   const familia = familiaDoTipo(area.tipo)
@@ -132,7 +134,7 @@ export const afinidadePerfil = (perfil, area, setor) => {
   const noLocal = area.id ? (perfil.porUnidade.get(area.id) || 0) / perfil.maiorUnidade : naArea
   const noSetor = setor ? (perfil.porSetor.get(setor) || 0) / perfil.maiorSetor : 0
   const naFamilia = (perfil.porFamilia.get(familia) || 0) / perfil.total
-  return 0.25 * noLocal + 0.15 * naArea + 0.35 * noSetor + 0.25 * naFamilia
+  return 0.45 * noLocal + 0.1 * naArea + 0.3 * noSetor + 0.15 * naFamilia
 }
 
 // Ritmo da pessoa naquela família (ou o geral, ou o padrão).
@@ -179,6 +181,16 @@ export const montarEscala = ({ areas = [], pessoas = [], perfis = new Map(), set
     medianaFamilia.set(f, mediana(pessoas.map(p => perfis.get(p.usuario)?.ritmoFamilia?.get(f) || perfis.get(p.usuario)?.ritmo).filter(Boolean)) || ritmoPadrao)
   }
 
+  // Parcela das leituras históricas de cada local feitas por cada pessoa escalada.
+  const leiturasLocal = new Map()
+  for (const p of pessoas) {
+    for (const [id, n] of perfis.get(p.usuario)?.porUnidade || []) leiturasLocal.set(id, (leiturasLocal.get(id) || 0) + n)
+  }
+  const parcelaNoLocal = (g, area) => {
+    const total = leiturasLocal.get(area.id) || 0
+    return total ? (g.perfil?.porUnidade.get(area.id) || 0) / total : 0
+  }
+
   const grupos = pessoas.map((p, i) => {
     const perfil = perfis.get(p.usuario) || null
     const disp = disponibilidade(perfil, inicio, fim)
@@ -198,10 +210,14 @@ export const montarEscala = ({ areas = [], pessoas = [], perfis = new Map(), set
     const ritmo = ritmoNaArea(g.perfil, area, ritmoPadrao)
     const eficiencia = Math.min(1.5, Math.max(0.6, ritmo / (medianaFamilia.get(area.familia) || ritmoPadrao)))
     const acerto = g.perfil ? 0.85 + 0.15 * g.perfil.acerto : 0.9
-    return { perfilOk, nota: afinidadePerfil(g.perfil, area, area.setor) * (0.75 + 0.25 * eficiencia) * acerto }
+    // Quem mais leu este local nas auditorias (entre os escalados) leva vantagem.
+    const dono = parcelaNoLocal(g, area)
+    return { perfilOk, nota: (afinidadePerfil(g.perfil, area, area.setor) + 0.4 * dono) * (0.75 + 0.25 * eficiencia) * acerto }
   }
-  // Mesmo corredor (outra face) conta mais que corredor vizinho: a pessoa anda menos.
-  const proximidade = (g, area) => (g.areas.some(a => a.bloco === area.bloco) ? 0.25 : g.areas.some(a => a.familia === area.familia && (a.tipo !== 'gondola' || Math.abs((a.numero || 0) - (area.numero || 0)) <= 1)) ? 0.12 : 0)
+  // Mesmo corredor e mesmo setor conta mais; mesmo corredor com outro setor ou corredor vizinho, pouco.
+  const proximidade = (g, area) => (g.areas.some(a => a.bloco === area.bloco && a.setor === area.setor) ? 0.2
+    : g.areas.some(a => a.bloco === area.bloco) ? 0.06
+      : g.areas.some(a => a.familia === area.familia && a.setor === area.setor && (a.tipo !== 'gondola' || Math.abs((a.numero || 0) - (area.numero || 0)) <= 1)) ? 0.1 : 0)
   const atribuir = (g, area, extra = {}) => {
     const { perfilOk, nota } = encaixe(g, area)
     const horas = horasDe(g, area)
@@ -236,12 +252,17 @@ export const montarEscala = ({ areas = [], pessoas = [], perfis = new Map(), set
   const itensBloco = new Map()
   for (const a of livres) itensBloco.set(a.bloco, (itensBloco.get(a.bloco) || 0) + a.itens)
   livres.sort((a, b) => elegiveis(a) - elegiveis(b) || itensBloco.get(b.bloco) - itensBloco.get(a.bloco) || String(a.id).localeCompare(String(b.id)))
-  // Primeiro tenta dar a área inteira (todas as faces do corredor) a uma pessoa; só divide
-  // face a face quando ninguém com perfil comporta a área inteira.
+  // Agrupa as faces do mesmo corredor e do mesmo setor: o grupo vai inteiro para uma pessoa
+  // quando ela tem perfil e comporta; senão, face a face. Setores diferentes no mesmo corredor
+  // formam grupos diferentes e podem ficar com pessoas diferentes.
   const porBloco = new Map()
-  for (const area of livres) porBloco.set(area.bloco, [...(porBloco.get(area.bloco) || []), area])
+  for (const area of livres) {
+    const chave = `${area.bloco}|${area.setor}`
+    porBloco.set(chave, [...(porBloco.get(chave) || []), area])
+  }
   const custoBloco = (g, unidades) => {
-    const { perfilOk, nota } = encaixe(g, unidades[0])
+    const { perfilOk } = encaixe(g, unidades[0])
+    const nota = unidades.reduce((t, a) => t + encaixe(g, a).nota * a.itens, 0) / Math.max(1, unidades.reduce((t, a) => t + a.itens, 0))
     const horas = unidades.reduce((t, a) => t + horasDe(g, a), 0)
     const depois = carga(g, horas)
     const excessoAreas = Math.max(0, blocosDe(g).size + 1 - limiteAreas)
@@ -249,7 +270,9 @@ export const montarEscala = ({ areas = [], pessoas = [], perfis = new Map(), set
   }
   for (const unidades of porBloco.values()) {
     const opcoes = grupos.map(g => ({ g, ...custoBloco(g, unidades) })).sort((a, b) => a.valor - b.valor)
-    const inteira = opcoes.find(o => o.cabe)
+    // Se os locais do grupo têm "donos" diferentes no histórico, divide face a face.
+    const donos = new Set(unidades.map(a => [...grupos].sort((x, y) => parcelaNoLocal(y, a) - parcelaNoLocal(x, a))[0]).filter((g, i) => parcelaNoLocal(g, unidades[i]) >= 0.5))
+    const inteira = donos.size > 1 ? null : opcoes.find(o => o.cabe)
     if (inteira || unidades.length === 1) {
       for (const area of unidades) atribuir((inteira || opcoes[0]).g, area)
       continue
