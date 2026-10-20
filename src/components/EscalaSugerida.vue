@@ -270,7 +270,7 @@ const imprimirEscala = () => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-people-arrows mr-2 text-blue-600"></i>Escala sugerida para a próxima auditoria</h3>
-        <p class="text-xs text-slate-500">Cada pessoa só recebe áreas do próprio perfil (onde já lê), no ritmo dela naquele tipo de área, no horário em que costuma ler e sem ficar espalhada pela loja.</p>
+        <p class="text-xs text-slate-500">Cada local (face de corredor) vai para quem costuma lê-lo nas auditorias. Faces do mesmo corredor com setores diferentes podem ficar com pessoas diferentes. Ninguém sai do próprio perfil, passa da capacidade ou fica espalhado pela loja.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <button v-if="fixas.size" type="button" class="ui-btn-secondary py-1.5 text-xs" title="Volta à divisão automática" @click="salvarFixas(new Map()); areaEscolhida = null"><i class="fas fa-rotate-left"></i>Desfazer ajustes ({{ fixasAtivas }})</button>
