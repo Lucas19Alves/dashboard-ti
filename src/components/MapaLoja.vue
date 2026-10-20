@@ -28,11 +28,14 @@ const props = defineProps({
   metrica: { type: Object, default: null }, // { meta, rotulo, curto, pendentes, lidos }
   modoInicial: { type: String, default: 'pendente' }, // pendente | leituras | usuario
   modos: { type: Array, default: () => ['pendente', 'leituras', 'usuario'] }, // abas de cor disponíveis
-  laterais: { type: Boolean, default: true } // cards "Áreas mais críticas" e "Usuários no mapa"
+  laterais: { type: Boolean, default: true }, // cards "Áreas mais críticas" e "Usuários no mapa"
+  // Pintura própria da aba principal (ex.: vencimentos), no lugar do % pendente:
+  // { rotulo, classe(d), texto(d), dica(d), resumo(d) → [{ rotulo, valor, classe }], colunasFace: [{ rotulo, valor(d), classe }], legenda: [{ classe, rotulo }], semItens }
+  pintura: { type: Object, default: null }
 })
 const emit = defineEmits(['ver-itens'])
 const META = props.metrica?.meta ?? META_PENDENTE_PERCENTUAL
-const textos = { rotulo: '% pendente', curto: 'pendente', pendentes: 'pendentes', lidos: 'lidos', ...(props.metrica || {}) }
+const textos = { rotulo: '% pendente', curto: 'pendente', pendentes: 'pendentes', lidos: 'lidos', semItens: 'Sem itens nesta auditoria', ...(props.metrica || {}), ...(props.pintura ? { rotulo: props.pintura.rotulo, semItens: props.pintura.semItens || 'Sem itens' } : {}) }
 
 const areas = computed(() => agregarPorArea(props.auditoria, props.isItemLido))
 
@@ -155,6 +158,7 @@ const TONS_AZUL = ['bg-blue-100 text-blue-900', 'bg-blue-200 text-blue-900', 'bg
 
 const classeDados = (d) => {
   if (!d || !d.total) return 'bg-slate-100 text-slate-400'
+  if (modo.value === 'pendente' && props.pintura) return props.pintura.classe(d)
   if (modo.value === 'pendente') {
     if (!props.metrica && !d.lidos && !d.comProblema) return 'bg-slate-700 text-white'
     const p = percentualPendente(d)
@@ -169,6 +173,7 @@ const classeDados = (d) => {
 const classeFace = (area, face) => classeDados(area?.faces?.[face])
 const valorTexto = (d) => {
   if (!d?.total) return ''
+  if (modo.value === 'pendente' && props.pintura) return props.pintura.texto(d)
   if (modo.value === 'pendente') return `${percentualPendente(d).toFixed(1)}%`
   return String(leiturasDe(d) || '')
 }
@@ -238,7 +243,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex rounded-xl bg-slate-100 p-1 text-sm">
-          <button v-for="[v, r, i] in [['pendente', textos.rotulo, 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m))" :key="v" type="button"
+          <button v-for="[v, r, i] in [['pendente', textos.rotulo, pintura?.icone || 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m))" :key="v" type="button"
             class="rounded-lg px-3 py-1.5 font-semibold transition" :class="modo === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'" @click="modo = v">
             <i :class="[i, 'mr-1 text-xs']"></i>{{ r }}
           </button>
@@ -269,7 +274,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </span>
         </div>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas<template v-if="modos.includes('pendente')"> · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</template></span>
+          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas<template v-if="modos.includes('pendente') && !pintura"> · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</template></span>
           <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores (número no meio, faces C/D no fundo e A/B na frente) da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
         </div>
         <div class="overflow-x-auto">
@@ -326,7 +331,10 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 
         <!-- Legenda -->
         <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
-          <template v-if="modo === 'pendente'">
+          <template v-if="modo === 'pendente' && pintura">
+            <span v-for="l in pintura.legenda" :key="l.rotulo"><i class="mr-1 inline-block size-3 rounded align-[-2px]" :class="l.classe"></i>{{ l.rotulo }}</span>
+          </template>
+          <template v-else-if="modo === 'pendente'">
             <span><i class="mr-1 inline-block size-3 rounded bg-emerald-500 align-[-2px]"></i>Até {{ META }}%</span>
             <span><i class="mr-1 inline-block size-3 rounded bg-amber-400 align-[-2px]"></i>Até {{ META * 2 }}%</span>
             <span><i class="mr-1 inline-block size-3 rounded bg-red-500 align-[-2px]"></i>Acima de {{ META * 2 }}%</span>
@@ -335,7 +343,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <template v-else>
             <span>Menos</span><span v-for="t in TONS_AZUL" :key="t" class="inline-block size-3 rounded" :class="t.split(' ')[0]"></span><span>Mais leituras{{ modo === 'usuario' ? ' do usuário' : '' }}</span>
           </template>
-          <span><i class="mr-1 inline-block size-3 rounded bg-slate-100 ring-1 ring-slate-200 align-[-2px]"></i>Sem itens nesta auditoria</span>
+          <span><i class="mr-1 inline-block size-3 rounded bg-slate-100 ring-1 ring-slate-200 align-[-2px]"></i>{{ textos.semItens }}</span>
         </div>
 
         <div v-if="outros.length" class="mt-4 rounded-xl p-3" :class="editando ? 'bg-blue-50' : 'bg-slate-50'">
@@ -364,7 +372,10 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Fechar" @click="selecionado = null"><i class="fas fa-times"></i></button>
           </div>
 
-          <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div v-if="pintura?.resumo" class="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div v-for="b in pintura.resumo(areaSelecionada)" :key="b.rotulo" class="rounded-xl py-2" :class="b.classe"><p class="text-lg font-black">{{ b.valor }}</p><p class="text-[10px]">{{ b.rotulo }}</p></div>
+          </div>
+          <div v-else class="mt-4 grid grid-cols-3 gap-2 text-center">
             <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[10px] text-slate-500">{{ textos.lidos }}</p></div>
             <div class="rounded-xl bg-amber-50 py-2"><p class="text-lg font-black text-amber-800">{{ areaSelecionada.pendentes }}</p><p class="text-[10px] text-amber-700">{{ textos.pendentes }}</p></div>
             <div class="rounded-xl py-2" :class="percentualPendente(areaSelecionada) > META ? 'bg-red-50' : 'bg-emerald-50'">
@@ -373,7 +384,16 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </div>
           </div>
 
-          <table v-if="areaSelecionada.tipo === 'gondola'" class="mt-4 w-full text-sm">
+          <table v-if="areaSelecionada.tipo === 'gondola' && pintura?.colunasFace" class="mt-4 w-full text-sm">
+            <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th v-for="c in pintura.colunasFace" :key="c.rotulo" class="text-right">{{ c.rotulo }}</th></tr></thead>
+            <tbody>
+              <tr v-for="f in faces" :key="f" class="border-t border-slate-100">
+                <td class="py-1.5 font-bold">{{ areaSelecionada.bloco }}{{ f }}</td>
+                <td v-for="c in pintura.colunasFace" :key="c.rotulo" class="text-right" :class="c.classe">{{ areaSelecionada.faces[f] ? c.valor(areaSelecionada.faces[f]) : '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table v-else-if="areaSelecionada.tipo === 'gondola'" class="mt-4 w-full text-sm">
             <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th class="text-right">Lidos</th><th class="text-right">Pend.</th><th class="text-right">%</th></tr></thead>
             <tbody>
               <tr v-for="f in faces" :key="f" class="border-t border-slate-100">
@@ -385,7 +405,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </tbody>
           </table>
 
-          <div class="mt-4">
+          <div v-if="!pintura" class="mt-4">
             <p class="text-xs font-bold text-slate-700">Quem leu aqui</p>
             <p v-if="!usuariosDaArea.length" class="mt-1 text-xs text-slate-500">Nenhuma leitura registrada.</p>
             <ul v-else class="mt-2 space-y-2">
@@ -468,7 +488,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         :style="{ left: `${dica.left}px`, top: `${dica.top}px`, transform: dica.abaixo ? 'translateX(-50%)' : 'translate(-50%, -100%)' }"
       >
         <b>{{ titulo(areaDica) }}</b><br>
-        {{ percentualPendente(areaDica).toFixed(1) }}% {{ textos.curto }} · {{ areaDica.pendentes }} {{ textos.pendentes }} · {{ areaDica.lidos }} {{ textos.lidos }}
+        <template v-if="pintura?.dica">{{ pintura.dica(areaDica) }}</template>
+        <template v-else>{{ percentualPendente(areaDica).toFixed(1) }}% {{ textos.curto }} · {{ areaDica.pendentes }} {{ textos.pendentes }} · {{ areaDica.lidos }} {{ textos.lidos }}</template>
       </div>
     </Teleport>
   </div>
