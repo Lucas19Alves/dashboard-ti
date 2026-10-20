@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { configuracoes } from '../composables/useConfiguracoes'
 import { ref, computed, toRaw, markRaw } from 'vue'
 import { db } from '../db/appDb'
 import { registrarAlteracao } from '../utils/lembreteBackup'
@@ -47,10 +48,8 @@ export const useAuditoriasStore = defineStore('auditorias', () => {
     6: [] // Domingo
   }
 
-  const horariosAuditoria = {
-    inicio: '08:00',
-    fim: '20:00'
-  }
+  // Horário das auditorias: editável em Configurações.
+  const horariosAuditoria = configuracoes.auditoria
 
   // Colunas esperadas do Excel para auditoria de Presença
   const colunasPresenca = [

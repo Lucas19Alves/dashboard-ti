@@ -1,5 +1,6 @@
 import { shallowRef } from 'vue'
 import { blocoBarras, blocoTabela, imprimirRelatorio } from '../utils/print'
+import { rotulosAssinatura } from './useConfiguracoes'
 
 // Relatórios do sistema: antes de imprimir, o modal deixa escolher seções, colunas, orientação,
 // observações e campos de assinatura. As escolhas ficam lembradas por relatório neste navegador.
@@ -36,7 +37,7 @@ export const gerarRelatorio = (config, escolhas) => {
     secoes,
     orientacao: escolhas.orientacao,
     observacoes: escolhas.observacoes,
-    assinaturas: escolhas.assinaturas ? (config.assinaturas || ['Responsável', 'Liderança', 'Data']) : null
+    assinaturas: escolhas.assinaturas ? (config.assinaturas || rotulosAssinatura()) : null
   })
 }
 

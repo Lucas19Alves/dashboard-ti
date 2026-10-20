@@ -3,10 +3,11 @@ import { computed, reactive, watch } from 'vue'
 import UiModal from './ui/UiModal.vue'
 import UiButton from './ui/UiButton.vue'
 import { gerarRelatorio, lerPreferencias, salvarPreferencias, useRelatorio } from '../composables/useRelatorio'
+import { configuracoes } from '../composables/useConfiguracoes'
 
 // Escolha do que entra no relatório antes de imprimir (seções, colunas, orientação, observações, assinatura).
 const { pendente, fechar } = useRelatorio()
-const escolhas = reactive({ secoes: [], colunas: [], orientacao: 'auto', observacoes: '', assinaturas: false })
+const escolhas = reactive({ secoes: [], colunas: [], orientacao: 'paisagem', observacoes: '', assinaturas: false })
 
 const secoesDisponiveis = computed(() => {
   const c = pendente.value
@@ -25,7 +26,7 @@ watch(pendente, (c) => {
   if (!escolhas.secoes.length) escolhas.secoes = secoesDisponiveis.value.filter(s => s.padrao !== false).map(s => s.id)
   const chaves = c.colunas?.lista.map(x => x.chave) || []
   escolhas.colunas = prefs.colunas?.filter(k => chaves.includes(k)).length ? prefs.colunas.filter(k => chaves.includes(k)) : (c.colunas?.padrao || chaves)
-  escolhas.orientacao = prefs.orientacao || 'auto'
+  escolhas.orientacao = configuracoes.relatorio.orientacao || 'paisagem'
   escolhas.assinaturas = Boolean(prefs.assinaturas ?? c.assinaturaPadrao)
   escolhas.observacoes = ''
 }, { immediate: true })
@@ -36,7 +37,7 @@ const pode = computed(() => escolhas.secoes.length > 0 && (!temTabela.value || e
 
 const gerar = () => {
   const c = pendente.value
-  salvarPreferencias(c.id, { secoes: escolhas.secoes, colunas: escolhas.colunas, orientacao: escolhas.orientacao, assinaturas: escolhas.assinaturas })
+  salvarPreferencias(c.id, { secoes: escolhas.secoes, colunas: escolhas.colunas, assinaturas: escolhas.assinaturas })
   // Mantém a ordem original das colunas.
   const ordem = c.colunas?.lista.map(x => x.chave) || []
   gerarRelatorio(c, { ...escolhas, colunas: ordem.filter(k => escolhas.colunas.includes(k)), secoes: [...escolhas.secoes] })
@@ -73,10 +74,10 @@ const gerar = () => {
         <fieldset>
           <legend class="ui-label">Orientação da folha</legend>
           <div class="flex rounded-xl bg-slate-100 p-1 text-sm" role="radiogroup" aria-label="Orientação">
-            <button v-for="[v, r] in [['auto', 'Automática'], ['retrato', 'Retrato'], ['paisagem', 'Paisagem']]" :key="v" type="button" role="radio" :aria-checked="escolhas.orientacao === v"
+            <button v-for="[v, r] in [['paisagem', 'Paisagem'], ['retrato', 'Retrato'], ['auto', 'Automática']]" :key="v" type="button" role="radio" :aria-checked="escolhas.orientacao === v"
               class="flex-1 rounded-lg px-2 py-1.5 font-semibold" :class="escolhas.orientacao === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600'" @click="escolhas.orientacao = v">{{ r }}</button>
           </div>
-          <p class="mt-1 text-[11px] text-slate-500">Automática usa paisagem só quando há tabela larga.</p>
+          <p class="mt-1 text-[11px] text-slate-500">Padrão em Configurações › Relatórios. Automática usa paisagem só quando há tabela larga.</p>
         </fieldset>
         <label class="flex cursor-pointer items-start gap-3 self-end rounded-xl border border-slate-200 px-3 py-2">
           <input v-model="escolhas.assinaturas" type="checkbox" class="mt-0.5 size-4 accent-blue-600">
