@@ -9,12 +9,14 @@ const VENDOR_CHUNKS = {
 
 // Lista dos arquivos gerados no build: o service worker baixa todos na instalação,
 // então o app abre e navega por todas as páginas mesmo sem internet.
+const VERSAO_BUILD = Date.now()
+
 const listaOffline = () => ({
   name: 'lista-offline',
   apply: 'build',
   generateBundle(_, bundle) {
     const arquivos = Object.keys(bundle).filter(nome => nome.startsWith('assets/')).map(nome => `/${nome}`)
-    this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify({ versao: Date.now(), arquivos }) })
+    this.emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify({ versao: VERSAO_BUILD, arquivos }) })
   }
 })
 
@@ -24,6 +26,8 @@ export default defineConfig(({ mode }) => ({
     vue(),
     tailwindcss(),
     listaOffline()],
+  // Versão do build: muda o endereço do service worker a cada deploy, forçando a atualização do pacote offline.
+  define: { __VERSAO_BUILD__: JSON.stringify(String(VERSAO_BUILD)) },
   // Logs de diagnóstico ficam apenas em desenvolvimento.
   esbuild: mode === 'production' ? { pure: ['console.log', 'console.debug'] } : {},
   build: {

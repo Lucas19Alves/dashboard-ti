@@ -38,7 +38,7 @@ Promise.all([
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(error => {
+    navigator.serviceWorker.register(`/sw.js?v=${__VERSAO_BUILD__}`).catch(error => {
       console.warn('Não foi possível ativar o modo offline.', error)
     })
   })
