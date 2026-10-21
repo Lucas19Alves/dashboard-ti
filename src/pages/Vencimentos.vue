@@ -371,6 +371,23 @@ const navegarSetorExplorar = (nomeSetor) => {
   abaAtiva.value = 'explorar'
 }
 
+// --- Estoque baixo (aba Explorar) ---
+// Itens com menos de 10 unidades: pouco a perder, candidatos a sair do controle de validade.
+const LIMITE_ESTOQUE_BAIXO = 10
+const itensEstoqueBaixo = computed(() => itensFiltrados.value
+  .filter(i => (Number(i._estoque) || 0) < LIMITE_ESTOQUE_BAIXO)
+  .sort((a, b) => (Number(a._estoque) || 0) - (Number(b._estoque) || 0) || (a._diasParaVencer ?? 9999) - (b._diasParaVencer ?? 9999)))
+const estoqueBaixoResumo = computed(() => {
+  const lista = itensEstoqueBaixo.value
+  return {
+    total: lista.length,
+    zerados: lista.filter(i => !(Number(i._estoque) > 0)).length,
+    unidades: lista.reduce((t, i) => t + Math.max(0, Number(i._estoque) || 0), 0),
+    parcela: itensFiltrados.value.length ? (lista.length / itensFiltrados.value.length) * 100 : 0
+  }
+})
+const modalEstoqueBaixo = ref(false)
+
 // --- Colunas ---
 const colunasItens = [
   { chave: '_codigo', titulo: 'Código', sortable: true },
@@ -924,6 +941,19 @@ const exportarDetalhamentoSetor = async () => {
       <!-- ============================================================ -->
       <template v-if="store.itens.length > 0 && abaAtiva === 'explorar'">
 
+        <!-- Estoque baixo: candidatos a sair do controle de validade -->
+        <section v-if="itensEstoqueBaixo.length" class="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:flex-row sm:items-center">
+          <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><i class="fas fa-box-open text-lg" aria-hidden="true"></i></span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-slate-900">{{ estoqueBaixoResumo.total.toLocaleString('pt-BR') }} item(ns) com menos de {{ LIMITE_ESTOQUE_BAIXO }} unidades podem sair do controle de validade</p>
+            <p class="text-xs text-slate-500">
+              {{ estoqueBaixoResumo.parcela.toFixed(0) }}% da lista atual, {{ estoqueBaixoResumo.unidades.toLocaleString('pt-BR') }} unidades no total<template v-if="estoqueBaixoResumo.zerados">, {{ estoqueBaixoResumo.zerados }} sem estoque</template>.
+              Pouco a perder: conferir na gôndola e excluir da planilha de validade.
+            </p>
+          </div>
+          <button type="button" class="ui-btn-secondary shrink-0 py-2 text-xs" @click="modalEstoqueBaixo = true"><i class="fas fa-list-check"></i>Ver itens para excluir</button>
+        </section>
+
         <!-- Smart Filter Bar -->
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
@@ -1345,6 +1375,9 @@ const exportarDetalhamentoSetor = async () => {
         </div>
       </UiModal>
 
+    <UiModal v-if="modalEstoqueBaixo" title="Itens para excluir da validade" :subtitle="`${itensEstoqueBaixo.length} item(ns) com menos de ${LIMITE_ESTOQUE_BAIXO} unidades nos filtros atuais`" width="max-w-6xl" @close="modalEstoqueBaixo = false">
+      <UiListaItens :itens="itensEstoqueBaixo" :colunas="colunasListaVenc" :facetas="facetasListaVenc" titulo="Itens para excluir da validade (estoque baixo)" :ordem-inicial="{ chave: '_estoque', direcao: 'asc' }" />
+    </UiModal>
     </div>
   </div>
 </template>

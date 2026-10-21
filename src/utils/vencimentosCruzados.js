@@ -70,14 +70,62 @@ export const mapaVencimentos = (itens, auditorias, categorias = TODAS) => {
   return { auditoria: { analise: { porLocal }, dados }, semLocal, pelaAuditoria, total: dados.length + semLocal }
 }
 
+const numero = v => {
+  const n = Number(String(v ?? '').replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+const un = n => `${n} un.`
+const diaMes = iso => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}` : '')
+
+// O que fazer com o produto, cruzando validade, estoque, ruptura e giro:
+// - sem estoque no sistema: conferir físico (vencido) ou pedido/recebimento (a vencer);
+// - vencido com estoque: retirar e registrar perda;
+// - vence hoje: rebaixar e expor;
+// - a vencer: repor já se faltou na última auditoria, senão expor na frente/rebaixar quando curto;
+// - ruptura frequente com estoque: problema de reposição, não de compra;
+// - sem venda há muito tempo: rever pedido/mix.
+export const diagnosticoVencimento = ({ categoria, dias, estoque, vezes, auditorias, faltouNaUltima, diasSemVenda, validade }) => {
+  const frequente = vezes >= 2 && (!auditorias || vezes / auditorias >= 0.5)
+  const parado = diasSemVenda !== null && diasSemVenda >= 30
+  const extras = []
+  let principal
+  if (estoque <= 0) {
+    principal = categoria === 'aVencer'
+      ? 'Sem estoque no sistema e faltando na gôndola: conferir pedido e recebimento com o fornecedor'
+      : 'Sem estoque no sistema: conferir se ainda há produto vencido no físico, retirar e ajustar o estoque'
+  } else if (categoria === 'vencidos') {
+    principal = `Retirar ${un(estoque)} vencidas da venda e registrar a perda`
+    if (faltouNaUltima) extras.push('o estoque ficou no depósito enquanto faltava na gôndola')
+    if (frequente || parado) extras.push('reduzir o pedido')
+  } else if (categoria === 'hoje') {
+    principal = faltouNaUltima ? `Repor agora e rebaixar: ${un(estoque)} vencem hoje e faltavam na gôndola` : `Rebaixar hoje e expor na frente: ${un(estoque)} vencem hoje`
+  } else if (dias <= 3) {
+    principal = faltouNaUltima
+      ? `Repor a gôndola agora: ${un(estoque)} no estoque vencem em ${dias} dia(s)`
+      : `Expor na frente e avaliar rebaixa: ${un(estoque)} vencem em ${dias} dia(s)`
+  } else if (frequente) {
+    principal = `Falta na gôndola com frequência mesmo com estoque: rever reposição e ponto de abastecimento (vence ${diaMes(validade)})`
+  } else {
+    principal = faltouNaUltima ? `Repor e girar (primeiro que vence, primeiro que sai) antes de ${diaMes(validade)}` : `Girar o estoque antes de ${diaMes(validade)}`
+  }
+  if (estoque > 0 && parado) extras.push(`sem venda há ${diasSemVenda} dias: rever pedido/mix`)
+  return [principal, ...extras].join('; ')
+}
+
 // Produtos vencidos, que vencem hoje ou a vencer que também ficaram sem presença (pendentes) em auditorias.
 export const cruzarValidadeRuptura = (itens, auditorias, { categorias = TODAS } = {}) => {
   const ruptura = new Map()
-  for (const auditoria of emOrdem(auditorias).filter(a => a.tipo === 'Presença' || a.tipo === 'Ruptura')) {
+  const presenca = emOrdem(auditorias).filter(a => a.tipo === 'Presença' || a.tipo === 'Ruptura')
+  const ultimaData = presenca.length ? dataDe(presenca.at(-1)) : ''
+  const diasSemVenda = new Map()
+  for (const auditoria of presenca) {
     const vistos = new Set()
     for (const item of Array.isArray(auditoria?.dados) ? auditoria.dados : []) {
       const codigo = codigoDoItem(item)
-      if (!codigo || vistos.has(codigo) || !itemPendente(item)) continue
+      if (!codigo) continue
+      const dsv = numero(item?.['Dias sem venda'])
+      if (dsv !== null) diasSemVenda.set(codigo, dsv)
+      if (vistos.has(codigo) || !itemPendente(item)) continue
       vistos.add(codigo)
       const r = ruptura.get(codigo) || { vezes: 0, ultima: '', custo: 0 }
       r.vezes++
@@ -86,19 +134,18 @@ export const cruzarValidadeRuptura = (itens, auditorias, { categorias = TODAS } 
       ruptura.set(codigo, r)
     }
   }
+  const PESO = { vencidos: 3, hoje: 3, aVencer: 1 }
   const linhas = []
   for (const item of itens || []) {
     const categoria = categoriaVencimento(item)
     if (!categoria || !categorias.includes(categoria)) continue
-    const dias = item?._diasParaVencer
-    const r = ruptura.get(String(item._codigo || '').trim())
+    const codigo = String(item._codigo || '').trim()
+    const r = ruptura.get(codigo)
     if (!r) continue
+    const dias = Number(item?._diasParaVencer)
     const estoque = Number(item._estoque) || 0
-    const diagnostico = r.vezes >= 2 && estoque > 0
-      ? 'Falta na gôndola com frequência e vence no estoque: rever exposição, reposição e tamanho do pedido'
-      : estoque > 0
-        ? 'Tem estoque perto do vencimento e já faltou na gôndola: repor e expor'
-        : 'Validade curta e ruptura: conferir pedido e recebimento'
+    const faltouNaUltima = r.ultima === ultimaData
+    const dsv = diasSemVenda.has(codigo) ? diasSemVenda.get(codigo) : null
     linhas.push({
       codigo: item._codigo,
       produto: item._produto,
@@ -106,13 +153,15 @@ export const cruzarValidadeRuptura = (itens, auditorias, { categorias = TODAS } 
       fornecedor: item._fornecedor,
       validade: item._validadeISO,
       categoria,
-      dias: Number(dias),
+      dias,
       estoque,
       vezesRuptura: r.vezes,
       ultimaRuptura: r.ultima,
+      faltouNaUltima,
+      diasSemVenda: dsv,
       custoRuptura: r.custo,
-      gravidade: (r.vezes >= 2 ? 2 : 1) + (Number(dias) <= 3 ? 1 : 0) + (estoque > 0 ? 1 : 0),
-      diagnostico
+      gravidade: PESO[categoria] + (categoria === 'aVencer' && dias <= 3 ? 1 : 0) + (r.vezes >= 2 ? 1 : 0) + (faltouNaUltima ? 1 : 0) + (estoque > 0 ? 1 : 0),
+      diagnostico: diagnosticoVencimento({ categoria, dias, estoque, vezes: r.vezes, auditorias: presenca.length, faltouNaUltima, diasSemVenda: dsv, validade: item._validadeISO })
     })
   }
   return linhas.sort((a, b) => b.gravidade - a.gravidade || b.vezesRuptura - a.vezesRuptura || a.dias - b.dias)

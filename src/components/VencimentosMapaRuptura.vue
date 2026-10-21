@@ -27,7 +27,8 @@ const mapa = computed(() => mapaVencimentos(props.itens, props.auditorias, categ
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`
 // No mapa: pendentes = vencidos, comProblema = vencem hoje, lidos = a vencer.
 const pintura = {
-  rotulo: 'Vencimentos',
+  id: 'situacao',
+  rotulo: 'Situação',
   icone: 'fas fa-calendar-xmark',
   semItens: 'Sem itens nas categorias escolhidas',
   classe: d => (d.pendentes ? 'bg-red-500 text-white' : d.comProblema ? 'bg-orange-400 text-orange-950' : d.lidos ? 'bg-amber-200 text-amber-900' : 'bg-slate-100 text-slate-400'),
@@ -49,6 +50,33 @@ const pintura = {
     { classe: 'bg-amber-200', rotulo: 'Só a vencer' }
   ]
 }
+
+// Aba "Quantidade": cada local do vermelho (mais itens) ao amarelo (menos itens).
+const totalDe = d => (d?.lidos || 0) + (d?.pendentes || 0) + (d?.comProblema || 0)
+const maiorLocal = computed(() => Math.max(1, ...Object.values(mapa.value.auditoria.analise.porLocal).map(totalDe)))
+const FAIXAS_QTD = [
+  { ate: 0.2, classe: 'bg-yellow-200 text-yellow-900', rotulo: 'Poucos' },
+  { ate: 0.4, classe: 'bg-amber-300 text-amber-950', rotulo: '' },
+  { ate: 0.6, classe: 'bg-orange-400 text-orange-950', rotulo: '' },
+  { ate: 0.8, classe: 'bg-red-400 text-white', rotulo: '' },
+  { ate: Infinity, classe: 'bg-red-600 text-white', rotulo: 'Muitos' }
+]
+const faixaQtd = d => FAIXAS_QTD.find(f => totalDe(d) / maiorLocal.value <= f.ate)
+const pinturaQuantidade = computed(() => ({
+  id: 'quantidade',
+  rotulo: 'Quantidade',
+  icone: 'fas fa-layer-group',
+  semItens: 'Sem itens nas categorias escolhidas',
+  classe: d => (totalDe(d) ? faixaQtd(d).classe : 'bg-slate-100 text-slate-400'),
+  texto: d => String(totalDe(d) || ''),
+  dica: d => (totalDe(d) ? plural(totalDe(d), 'item', 'itens') : 'Sem itens'),
+  resumo: pintura.resumo,
+  colunasFace: [{ rotulo: 'Itens', valor: d => totalDe(d), classe: 'font-bold' }, ...pintura.colunasFace],
+  legenda: [
+    ...FAIXAS_QTD.map((f, i) => ({ classe: f.classe.split(' ')[0], rotulo: i === 0 ? `até ${Math.max(1, Math.round(maiorLocal.value * 0.2))}` : i === FAIXAS_QTD.length - 1 ? `até ${maiorLocal.value} itens` : '' }))
+  ]
+}))
+const pinturasMapa = computed(() => [pintura, pinturaQuantidade.value])
 
 // ---------- Modal de itens do local ----------
 const modal = ref(null) // { local, itens }
@@ -113,7 +141,7 @@ const ESTILO_CHIP = { vencidos: 'bg-red-600 ring-red-600', hoje: 'bg-orange-500 
         </span>
       </div>
 
-      <MapaLoja :auditoria="mapa.auditoria" :is-item-lido="() => false" :itens-disponiveis="true" :modos="['pendente']" :laterais="false" :pintura="pintura" @ver-itens="abrirItens" />
+      <MapaLoja :auditoria="mapa.auditoria" :is-item-lido="() => false" :itens-disponiveis="true" :laterais="false" :pinturas="pinturasMapa" @ver-itens="abrirItens" />
     </section>
 
     <UiModal v-if="modal" :title="modal.local" :subtitle="`${modal.itens.length} item(ns) neste local`" width="max-w-6xl" @close="modal = null">
