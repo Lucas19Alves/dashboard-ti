@@ -57,7 +57,7 @@ watch(ativo, id => {
 
 <template>
   <div class="ui-page">
-    <UiPageHeader title="Documentação do sistema" subtitle="Como o Dashboard TI funciona: auditorias, vencimentos, análise, mapa da loja e backup." icon="fas fa-book" tone="indigo">
+    <UiPageHeader title="Documentação do sistema" subtitle="Como o Dashboard TI funciona: auditorias, vencimentos, análise, mapa da loja e backup." icon="fas fa-book" tone="blue">
       <template #actions>
         <button type="button" class="ui-btn-secondary py-2 print:hidden" @click="imprimir"><i class="fas fa-print"></i>Imprimir</button>
       </template>
@@ -76,7 +76,7 @@ watch(ativo, id => {
                 :href="`#${t.id}`"
                 :data-sumario="t.id"
                 class="block truncate rounded-lg px-2.5 py-1.5 transition"
-                :class="[t.nivel === 3 ? 'pl-6 text-xs' : 'font-semibold', ativo === t.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900']"
+                :class="[t.nivel === 3 ? 'pl-6 text-xs' : 'font-semibold', ativo === t.id ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900']"
                 @click.prevent="irPara(t.id)"
               >{{ t.texto }}</a>
             </li>
@@ -96,7 +96,7 @@ watch(ativo, id => {
 .doc :deep(h2) { margin: 2.25rem 0 0.75rem; padding-top: 1.25rem; border-top: 1px solid #e2e8f0; font-size: 1.35rem; font-weight: 800; color: #0f172a; letter-spacing: -0.01em; scroll-margin-top: 6rem; }
 .doc :deep(h2:first-of-type) { margin-top: 0; padding-top: 0; border-top: 0; }
 .doc :deep(h3) { margin: 1.75rem 0 0.5rem; font-size: 1.05rem; font-weight: 700; color: #1e293b; scroll-margin-top: 6rem; }
-.doc :deep(h4) { margin: 1.25rem 0 0.35rem; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6366f1; }
+.doc :deep(h4) { margin: 1.25rem 0 0.35rem; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #1d4ed8; }
 .doc :deep(p) { margin: 0.6rem 0; }
 .doc :deep(ul), .doc :deep(ol) { margin: 0.5rem 0; padding-left: 1.35rem; }
 .doc :deep(ul) { list-style: disc; }

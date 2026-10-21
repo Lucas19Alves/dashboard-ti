@@ -1152,7 +1152,7 @@ const fecharRelatorio = () => {
     <!-- Conteúdo -->
     <div class="ui-container py-6">
       <section v-if="abaAtiva === 'atencao'" class="space-y-5" aria-label="Pontos de atenção da auditoria">
-        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
           <h2 class="text-xl font-bold">Leituras para revisão <span class="ml-2 rounded-full bg-amber-100 px-2.5 py-1 align-middle text-xs font-semibold">{{ sinaisAuditoria.sinais.length }} alertas</span></h2>
           <p class="mt-2 text-sm leading-relaxed">Os alertas indicam registros fora do padrão; não comprovam fraude. Confira a planilha original e o contexto operacional antes de concluir.</p>
           <p class="mt-2 text-xs text-amber-800">{{ sinaisAuditoria.base }} Horários usam a data e a hora registradas na própria linha, sem presumir meia-noite para uma data sem hora.</p>
@@ -1160,19 +1160,19 @@ const fecharRelatorio = () => {
 
         <div class="grid gap-3 sm:grid-cols-4" aria-label="Cobertura da análise">
           <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Leituras</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ sinaisAuditoria.totalLeituras }}</p></div>
-          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Com data, hora e usuário</p><p class="mt-1 text-2xl font-bold text-emerald-700">{{ sinaisAuditoria.leiturasComHorario }}</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Com data, hora e usuário</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ sinaisAuditoria.leiturasComHorario }}</p></div>
           <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Sem dados para análise temporal</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ sinaisAuditoria.leiturasSemHorario }}</p></div>
-          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Auditorias anteriores comparáveis</p><p class="mt-1 text-2xl font-bold text-blue-700">{{ sinaisAuditoria.auditoriasHistoricas }}</p></div>
+          <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Auditorias anteriores comparáveis</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ sinaisAuditoria.auditoriasHistoricas }}</p></div>
         </div>
         <p v-if="!sinaisAuditoria.auditoriasHistoricas" class="text-xs text-slate-500">Sem auditorias anteriores do mesmo tipo nesta base local. Os alertas desta auditoria continuam disponíveis, mas a comparação histórica não é calculada.</p>
 
-        <div v-if="!sinaisAuditoria.sinais.length" class="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600">
+        <div v-if="!sinaisAuditoria.sinais.length" class="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-600">
           <p class="font-semibold text-slate-800">Nenhum ponto de atenção pelos critérios atuais</p>
           <p class="mt-1 text-sm">A ausência de alerta não substitui a conferência habitual.</p>
         </div>
 
         <div v-else class="grid gap-4">
-          <article v-for="(sinal, indice) in sinaisAuditoria.sinais" :key="`${sinal.tipo}-${sinal.usuario || indice}`" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <article v-for="(sinal, indice) in sinaisAuditoria.sinais" :key="`${sinal.tipo}-${sinal.usuario || indice}`" class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <div>
                 <h3 class="text-lg font-bold text-slate-900">{{ sinal.titulo }}</h3>
@@ -1256,7 +1256,7 @@ const fecharRelatorio = () => {
       <!-- Modal de Atualizar Dados (Disponível em Todas as Abas) -->
       <div
         v-if="mostrarUploadSubstituir && !readOnly"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
         @click.stop="mostrarUploadSubstituir = false"
       >
         <div
@@ -1340,15 +1340,15 @@ const fecharRelatorio = () => {
     <UiModal v-if="modalItensAberto" :title="tituloModalItens" :subtitle="`${itensModal.length} itens neste local`" width="max-w-6xl" @close="fecharModalItens">
       <div class="space-y-4">
         <div class="grid grid-cols-3 gap-3">
-          <div class="rounded-2xl bg-emerald-50 p-3">
+          <div class="rounded-xl bg-emerald-50 p-3">
             <p class="text-xs font-semibold text-emerald-700">Lidos</p>
             <p class="text-xl font-bold text-emerald-800">{{ resumoItensModal.lidos }}</p>
           </div>
-          <div class="rounded-2xl bg-amber-50 p-3">
+          <div class="rounded-xl bg-amber-50 p-3">
             <p class="text-xs font-semibold text-amber-700">Pendentes</p>
             <p class="text-xl font-bold text-amber-800">{{ resumoItensModal.pendentes }}</p>
           </div>
-          <div class="rounded-2xl p-3" :class="resumoItensModal.perc > 3 ? 'bg-red-50' : 'bg-slate-50'">
+          <div class="rounded-xl p-3" :class="resumoItensModal.perc > 3 ? 'bg-red-50' : 'bg-slate-50'">
             <p class="text-xs font-semibold text-slate-500">% pendente</p>
             <p class="text-xl font-bold" :class="resumoItensModal.perc > 3 ? 'text-red-700' : 'text-slate-800'">{{ resumoItensModal.perc.toFixed(1) }}%</p>
           </div>
@@ -1373,27 +1373,27 @@ const fecharRelatorio = () => {
           <router-link :to="`/colaborador/${encodeURIComponent(usuarioDetalhes.nome)}`" class="ui-btn-secondary py-2" @click="fecharModalUsuario"><i class="fas fa-id-badge"></i>Ficha do colaborador</router-link>
         </div>
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div class="rounded-2xl bg-slate-50 p-3">
+          <div class="rounded-xl bg-slate-50 p-3">
             <p class="text-xs font-semibold text-slate-500">Lidos</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.lidos.toLocaleString('pt-BR') }}</p>
           </div>
-          <div class="rounded-2xl p-3" :class="usuarioDetalhes.comProblema ? 'bg-red-50' : 'bg-slate-50'">
+          <div class="rounded-xl p-3" :class="usuarioDetalhes.comProblema ? 'bg-red-50' : 'bg-slate-50'">
             <p class="text-xs font-semibold text-slate-500">Com problema</p>
             <p class="text-xl font-bold" :class="usuarioDetalhes.comProblema ? 'text-red-700' : 'text-slate-900'">{{ usuarioDetalhes.comProblema }}</p>
           </div>
-          <div class="rounded-2xl bg-slate-50 p-3">
+          <div class="rounded-xl bg-slate-50 p-3">
             <p class="text-xs font-semibold text-slate-500">Pico</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.picoHora || '—' }}</p>
             <p v-if="usuarioDetalhes.picoHora" class="text-[11px] text-slate-500">{{ usuarioDetalhes.picoQtd }} leituras</p>
           </div>
-          <div class="rounded-2xl bg-slate-50 p-3">
+          <div class="rounded-xl bg-slate-50 p-3">
             <p class="text-xs font-semibold text-slate-500">Locais lidos</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.qtdLocais }}</p>
           </div>
         </div>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <section class="rounded-2xl bg-slate-50 p-4">
+          <section class="rounded-xl bg-slate-50 p-4">
             <p class="text-xs font-bold text-slate-700">Leituras por hora</p>
             <div class="mt-3 flex h-28 items-end gap-1">
               <div v-for="(v, i) in usuarioDetalhes.horas" :key="i" class="group relative flex h-full flex-1 flex-col justify-end">
@@ -1403,7 +1403,7 @@ const fecharRelatorio = () => {
             </div>
             <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>{{ usuarioDetalhes.rotulosHoras[0] }}</span><span>{{ usuarioDetalhes.rotulosHoras.at(-1) }}</span></div>
           </section>
-          <section class="rounded-2xl bg-slate-50 p-4">
+          <section class="rounded-xl bg-slate-50 p-4">
             <p class="text-xs font-bold text-slate-700">Locais mais lidos</p>
             <p v-if="!usuarioDetalhes.locaisTop.length" class="mt-3 text-xs text-slate-500">Nenhum local com leitura registrada.</p>
             <ul v-else class="mt-3 space-y-2">

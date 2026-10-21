@@ -42,9 +42,9 @@ const importar = async (e) => {
 
 <template>
   <transition name="aviso-dados">
-    <div v-if="visivel" class="fixed bottom-4 right-4 z-50 w-[calc(100%-2rem)] max-w-sm rounded-2xl bg-white p-4 shadow-xl ring-1 ring-slate-200 print:hidden" role="dialog" aria-labelledby="aviso-sem-dados-titulo">
+    <div v-if="visivel" class="fixed bottom-4 right-4 z-50 w-[calc(100%-2rem)] max-w-sm rounded-xl bg-white p-4 shadow-xl ring-1 ring-slate-200 print:hidden" role="dialog" aria-labelledby="aviso-sem-dados-titulo">
       <div class="flex items-start gap-3">
-        <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><i class="fas fa-box-archive" aria-hidden="true"></i></span>
+        <i class="fas fa-box-archive shrink-0 text-slate-400" aria-hidden="true"></i>
         <div class="min-w-0 flex-1">
           <p id="aviso-sem-dados-titulo" class="text-sm font-bold text-slate-900">Nenhum dado neste navegador</p>
           <p class="mt-0.5 text-xs text-slate-600">Tem um backup do Dashboard TI? Importe para recuperar auditorias, vencimentos e planos. Os dados ficam só neste computador.</p>

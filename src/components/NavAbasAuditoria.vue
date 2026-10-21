@@ -35,7 +35,7 @@ const aoTeclar = async (evento, itens) => {
 
 <template>
   <div ref="sentinela" class="h-px"></div>
-  <div class="sticky top-16 z-30 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur print:hidden">
+  <div class="sticky top-16 z-30 border-b border-slate-200 bg-white shadow-sm print:hidden">
     <div class="ui-container flex items-center gap-4">
       <transition name="resumo">
         <div v-if="fixa && resumo" class="hidden shrink-0 items-center gap-3 border-r border-slate-200 py-2 pr-4 lg:flex">

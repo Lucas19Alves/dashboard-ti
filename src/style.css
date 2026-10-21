@@ -107,6 +107,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 /* ---------- Modo escuro: o que não vem das variáveis do Tailwind ---------- */
 html.dark {
+  --ui-paper: #0b1220;
   --ui-ink: #e6ebf2;
   --ui-muted: #97a3b6;
   --ui-surface: rgba(18, 27, 45, 0.88);

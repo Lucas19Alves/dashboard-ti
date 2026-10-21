@@ -50,11 +50,9 @@ const fazerBackup = async () => {
   <!-- Flutuante no canto: não empurra o conteúdo nem separa a barra dos cabeçalhos das páginas. -->
   <Transition name="aviso-backup">
     <aside v-if="visivel" class="fixed inset-x-3 bottom-3 z-40 print:hidden sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[26rem]" aria-label="Lembrete de backup">
-      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-xl shadow-slate-900/10" role="status" aria-live="polite">
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-xl shadow-slate-900/10" role="status" aria-live="polite">
         <div class="flex items-start gap-3">
-          <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
-            <i class="fas fa-shield-halved"></i>
-          </span>
+          <i class="fas fa-shield-halved shrink-0 text-slate-400" aria-hidden="true"></i>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-bold text-amber-900">{{ titulo }}</p>
             <p class="mt-0.5 text-xs text-amber-800">

@@ -52,10 +52,10 @@ const ticksY = computed(() => [0, 0.5, 1].map(r => Math.round((yMax.value / 1.08
 </script>
 
 <template>
-  <section v-if="p" class="rounded-2xl bg-white p-5 shadow-sm">
+  <section v-if="p" class="rounded-xl bg-white p-5 shadow-sm">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h3 class="text-base font-bold text-slate-900"><i class="fas fa-wand-magic-sparkles mr-2 text-blue-600"></i>Previsão de fechamento</h3>
+        <h3 class="text-base font-bold text-slate-900"><i class="fas fa-list-check mr-2 text-blue-600"></i>Previsão de fechamento</h3>
         <p class="text-xs text-slate-500">Ritmo da última hora de leituras aplicado até o fim do expediente ({{ fim }}).</p>
       </div>
       <div v-if="estado" class="flex items-start gap-2 rounded-xl px-3 py-2 text-sm ring-1" :class="estado.classe" role="status">

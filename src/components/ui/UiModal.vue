@@ -37,7 +37,7 @@ onBeforeUnmount(() => {
       <section
         ref="painel"
         tabindex="-1"
-        class="ui-pop-in flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:rounded-2xl"
+        class="ui-pop-in flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:rounded-xl"
         :class="width"
         role="dialog"
         aria-modal="true"

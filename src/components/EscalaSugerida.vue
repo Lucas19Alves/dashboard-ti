@@ -292,7 +292,7 @@ const imprimirEscala = () => {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white p-5 shadow-sm">
+  <section class="rounded-xl bg-white p-5 shadow-sm">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-people-arrows mr-2 text-blue-600"></i>Escala sugerida para a próxima auditoria</h3>
@@ -432,7 +432,7 @@ const imprimirEscala = () => {
                 <span class="size-2.5 rounded-full" :style="{ background: cor(g.pessoa) }"></span>{{ rotuloUsuario(g.usuario) }}
                 <i v-if="!g.noPerfil" class="fas fa-ban text-[10px]" aria-label="fora do perfil"></i>
               </button>
-              <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.id, null)"><i class="fas fa-wand-magic-sparkles mr-1"></i>Automático</button>
+              <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.id, null)"><i class="fas fa-list-check mr-1"></i>Automático</button>
             </div>
           </div>
           <p v-else class="mt-2 text-[11px] text-slate-500">Cada face de corredor é um local. Clique num local para passá-lo a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver os locais dela · borda vermelha tracejada = fora do perfil.</p>

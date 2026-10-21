@@ -85,18 +85,16 @@ const handlePrintLocais = () => {
 <template>
   <div class="space-y-6">
     <!-- Setores -->
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
       <div class="flex items-center gap-2 flex-wrap">
-        <div class="h-8 w-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-          <i class="fas fa-chart-pie text-indigo-600 text-sm"></i>
-        </div>
+        <i class="fas fa-chart-pie  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
         <h2 class="text-sm font-bold text-slate-800">Parcial por Setor</h2>
         <span v-if="setoresComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ setoresComAnalise.length }} setor(es)</span>
         <span v-if="setoresComAnalise.filter(s => s.percentualPendente > 3).length" class="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium border border-orange-100">{{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta</span>
         <div class="ml-auto flex items-center gap-2">
           <div class="relative">
             <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
-            <input v-model="buscaSetores" type="text" placeholder="Buscar setor..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-44" @input="paginaSetores = 1" />
+            <input v-model="buscaSetores" type="text" placeholder="Buscar setor..." class="pl-7 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44" @input="paginaSetores = 1" />
           </div>
           <!-- Setores entram no Relatório da auditoria (botão Relatório no topo). -->
         </div>
@@ -109,29 +107,29 @@ const handlePrintLocais = () => {
         <table class="w-full text-xs">
           <thead>
             <tr class="border-b-2 border-slate-100">
-              <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'nome'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Setor <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'nome' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-left font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'nome'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Setor <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'nome' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'total'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Total <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'total' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'total'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Total <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'total' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'lidos'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Lidos <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'lidos'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Lidos <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'lidos' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'pendentes'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'pendentes' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'pendentes'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Pendentes <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'pendentes' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'comProblema'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Problemas <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'comProblema'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Problemas <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'comProblema' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'desatualizados'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Desatualiz. <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'desatualizados' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'desatualizados'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Desatualiz. <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'desatualizados' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'percentualConclusao'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Conclusão <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percentualConclusao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-right font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'percentualConclusao'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Conclusão <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'percentualConclusao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
-              <th class="px-3 py-2.5 text-center font-semibold text-slate-600 cursor-pointer select-none hover:text-indigo-600 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'classificacao'); paginaSetores = 1">
-                <span class="inline-flex items-center gap-1">Classificação <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'classificacao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600') : 'fa-sort text-slate-300'" /></span>
+              <th class="px-3 py-2.5 text-center font-semibold text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors" @click="atualizarOrdenacaoDados(ordenacaoSetores, 'classificacao'); paginaSetores = 1">
+                <span class="inline-flex items-center gap-1">Classificação <i class="fas text-[10px]" :class="ordenacaoSetores.coluna === 'classificacao' ? (ordenacaoSetores.direcao === 'asc' ? 'fa-sort-up text-blue-700' : 'fa-sort-down text-blue-700') : 'fa-sort text-slate-300'" /></span>
               </th>
             </tr>
           </thead>
@@ -140,7 +138,7 @@ const handlePrintLocais = () => {
               v-for="(s, idx) in setoresPaginados"
               :key="s.nome"
               class="transition-colors cursor-pointer"
-              :class="idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'"
+              :class="idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-slate-50'"
               @click="abrirModalSetorLocal('setor', [s])"
             >
               <td class="px-3 py-2.5 text-slate-700 font-medium">{{ s.nome }}</td>
@@ -171,7 +169,7 @@ const handlePrintLocais = () => {
           <button @click="paginaSetores = 1" :disabled="paginaSetores === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-double-left"></i></button>
           <button @click="paginaSetores--" :disabled="paginaSetores === 1" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-left"></i></button>
           <template v-for="p in totalPaginasSetores" :key="p">
-            <button v-if="p === 1 || p === totalPaginasSetores || (p >= paginaSetores - 1 && p <= paginaSetores + 1)" @click="paginaSetores = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaSetores ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
+            <button v-if="p === 1 || p === totalPaginasSetores || (p >= paginaSetores - 1 && p <= paginaSetores + 1)" @click="paginaSetores = p" class="min-w-[28px] px-2 py-1 rounded text-[11px] font-semibold transition" :class="p === paginaSetores ? 'bg-blue-700 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-600'">{{ p }}</button>
             <span v-else-if="p === paginaSetores - 2 || p === paginaSetores + 2" class="text-slate-400 text-[11px] px-1">...</span>
           </template>
           <button @click="paginaSetores++" :disabled="paginaSetores === totalPaginasSetores" class="px-2 py-1 rounded text-[11px] font-medium transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 text-slate-600"><i class="fas fa-angle-right"></i></button>
@@ -181,11 +179,9 @@ const handlePrintLocais = () => {
     </div>
 
     <!-- Locais -->
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
       <div class="flex items-center gap-2 flex-wrap">
-        <div class="h-8 w-8 rounded-lg bg-rose-50 flex items-center justify-center">
-          <i class="fas fa-map-marker-alt text-rose-600 text-sm"></i>
-        </div>
+        <i class="fas fa-map-marker-alt  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
         <h2 class="text-sm font-bold text-slate-800">Locais</h2>
         <span v-if="locaisComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ locaisComAnalise.length }} local(is)</span>
         <span v-if="locaisComAnalise.filter(l => l.pendentes > 0).length" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium border border-amber-100">{{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência</span>

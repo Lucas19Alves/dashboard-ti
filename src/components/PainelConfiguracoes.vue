@@ -29,7 +29,7 @@ const restaurarAba = () => {
   else restaurarGrupo({ auditorias: 'auditoria', relatorios: 'relatorio', dados: 'backup' }[aba.value])
 }
 
-const ORIENTACOES = [['paisagem', 'Paisagem', 'fas fa-image'], ['retrato', 'Retrato', 'fas fa-file'], ['auto', 'Automática', 'fas fa-wand-magic-sparkles']]
+const ORIENTACOES = [['paisagem', 'Paisagem', 'fas fa-image'], ['retrato', 'Retrato', 'fas fa-file'], ['auto', 'Automática', 'fas fa-list-check']]
 
 // Escolhas lembradas de cada relatório (seções, colunas, assinatura).
 const PREFIXO = 'dashboard_ti_relatorio_'

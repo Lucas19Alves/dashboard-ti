@@ -399,12 +399,12 @@ const itensFornecedorFormatados = computed(() => {
           v-for="(setor, nome) in mapaSeteores"
           :key="nome"
           @click="abrirModalSetorLocal('setor', [setor])"
-          class="group bg-white rounded-xl p-5 cursor-pointer transition-all duration-200 hover:shadow-lg border border-gray-100 hover:border-gray-200"
+          class="group bg-white rounded-xl p-5 cursor-pointer transition-all duration-200 border border-gray-100 hover:border-gray-200"
         >
           <!-- Nome e seta -->
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold text-gray-800 text-[15px] truncate mr-2">{{ setor.nome }}</h3>
-            <i class="fas fa-arrow-right text-xs text-gray-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all"></i>
+            <i class="fas fa-chevron-right text-xs text-gray-300 group-hover:text-blue-700" aria-hidden="true"></i>
           </div>
 
           <!-- Progresso circular + métricas -->
@@ -578,11 +578,9 @@ const itensFornecedorFormatados = computed(() => {
     <div class="space-y-6">
 
       <!-- 1. Lidos com Estoque Zero -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
         <div class="flex items-center gap-2 flex-wrap">
-          <div class="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center">
-            <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
-          </div>
+          <i class="fas fa-exclamation-triangle  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           <h2 class="text-sm font-bold text-slate-800">Lidos com Estoque Zero</h2>
           <span v-if="itensLidosEstoqueZeroFiltrados.length" class="text-[10px] text-slate-400 font-medium">{{ itensLidosEstoqueZeroFiltrados.length }} item(ns)</span>
           <div class="ml-auto flex items-center gap-2 flex-wrap">
@@ -652,11 +650,9 @@ const itensFornecedorFormatados = computed(() => {
       </div>
 
       <!-- 2. Lido no Local Errado -->
-      <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+      <div v-if="(auditoria.analise?.itensLidoNaoPertence || 0) > 0" class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
         <div class="flex items-center gap-2 flex-wrap">
-          <div class="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
-            <i class="fas fa-map-marker-alt text-amber-600 text-sm"></i>
-          </div>
+          <i class="fas fa-map-marker-alt  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           <h2 class="text-sm font-bold text-slate-800">Lido no Local Errado</h2>
           <span v-if="itensLidoNaoPertenceFiltrados.length" class="text-[10px] text-slate-400 font-medium">{{ itensLidoNaoPertenceFiltrados.length }} item(ns)</span>
           <div class="ml-auto flex items-center gap-2 flex-wrap">
@@ -726,11 +722,9 @@ const itensFornecedorFormatados = computed(() => {
       </div>
 
       <!-- 3. Grande Estoque Não Lido -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
         <div class="flex items-center gap-2 flex-wrap">
-          <div class="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center">
-            <i class="fas fa-boxes text-orange-600 text-sm"></i>
-          </div>
+          <i class="fas fa-boxes  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           <h2 class="text-sm font-bold text-slate-800">Grande Estoque Não Lido</h2>
           <span v-if="itensGrandeEstoqueFormatados.length" class="text-[10px] text-slate-400 font-medium">{{ itensGrandeEstoqueFormatados.length }} item(ns)</span>
           <div class="ml-auto flex items-center gap-2 flex-wrap">
@@ -793,11 +787,9 @@ const itensFornecedorFormatados = computed(() => {
     </div>
 
     <!-- 4. Itens Ruptura Menor Custo -->
-    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-3">
       <div class="flex items-center gap-2 flex-wrap">
-        <div class="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
-          <i class="fas fa-coins text-blue-600 text-sm"></i>
-        </div>
+        <i class="fas fa-coins  text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
         <h2 class="text-sm font-bold text-slate-800">Itens de Ruptura - Menor Custo</h2>
         <span v-if="itensRupturaFormatados.length" class="text-[10px] text-slate-400 font-medium">{{ itensRupturaFormatados.length }} item(ns)</span>
         <div class="ml-auto flex items-center gap-2 flex-wrap">

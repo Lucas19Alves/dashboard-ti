@@ -10,6 +10,7 @@ import { cruzarValidadeRuptura } from '../utils/vencimentosCruzados'
 import { baixarCsv } from '../utils/csv'
 import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
+import StatCard from '../components/ui/StatCard.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
@@ -733,83 +734,27 @@ const exportarDetalhamentoSetor = async () => {
       <template v-if="store.itens.length > 0 && abaAtiva === 'visao'">
         <div ref="detalhamentoSetorExportRef" class="space-y-4">
           <!-- Alert Banner -->
-          <div class="rounded-2xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
+          <div class="rounded-xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
             <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" :class="alertaBanner.iconeCor">
               <i :class="alertaBanner.icone" class="text-xl"></i>
             </div>
             <p class="text-sm font-medium flex-1">{{ alertaBanner.texto }}</p>
             <button v-if="resumo.vencidos > 0" @click="verCriticos"
-              class="px-3 py-1.5 rounded-lg bg-white/80 text-sm font-semibold shadow-sm hover:bg-white transition shrink-0 border border-red-300 text-red-700">
-              Ver itens <i class="fas fa-arrow-right ml-1 text-xs"></i>
+              class="px-3 py-1.5 rounded-lg bg-white text-sm font-semibold shadow-sm hover:bg-white transition shrink-0 border border-red-300 text-red-700">
+              Ver itens
             </button>
           </div>
   
-          <!-- Hero Metrics Row -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Total -->
-            <div
-              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <div class="flex items-start justify-between">
-                <div>
-                  <p class="text-xs font-semibold text-slate-500">Total de Itens</p>
-                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-blue-700 tabular-nums">{{ resumo.total }}</p>
-                  <p class="mt-1.5 text-xs text-slate-400">Itens com validade monitorada</p>
-                </div>
-                <div
-                  class="h-11 w-11 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <i class="fas fa-boxes text-lg text-blue-500"></i>
-                </div>
-              </div>
-            </div>
-            <!-- Vencidos -->
-            <div
-              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <div class="flex items-start justify-between">
-                <div>
-                  <p class="text-xs font-semibold text-red-600">Vencidos</p>
-                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
-                  <p class="mt-1.5 text-xs text-red-400">Requer ação imediata</p>
-                </div>
-                <div
-                  class="h-11 w-11 rounded-xl bg-red-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <i class="fas fa-exclamation-triangle text-lg text-red-500"></i>
-                </div>
-              </div>
-            </div>
-            <!-- Hoje -->
-            <div
-              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <div class="flex items-start justify-between">
-                <div>
-                  <p class="text-xs font-semibold text-orange-600">Vencem Hoje</p>
-                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-orange-600 tabular-nums">{{ resumo.hoje }}</p>
-                  <p class="mt-1.5 text-xs text-orange-400">Planejar acoes promocionais</p>
-                </div>
-                <div
-                  class="h-11 w-11 rounded-xl bg-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <i class="fas fa-sun text-lg text-orange-500"></i>
-                </div>
-              </div>
-            </div>
-            <!-- Ate 3 dias -->
-            <div
-              class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-              <div class="flex items-start justify-between">
-                <div>
-                  <p class="text-xs font-semibold text-yellow-600">Até 3 Dias</p>
-                  <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
-                  <p class="mt-1.5 text-xs text-yellow-500">Remarcação e giro de estoque</p>
-                </div>
-                <div
-                  class="h-11 w-11 rounded-xl bg-yellow-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <i class="fas fa-hourglass-half text-lg text-yellow-500"></i>
-                </div>
-              </div>
-            </div>
+          <!-- Números do dia -->
+          <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard title="Itens monitorados" :value="resumo.total" description="Com validade cadastrada." icon="fas fa-boxes" tone="blue" />
+            <StatCard title="Vencidos" :value="resumo.vencidos" description="Retirar da venda hoje." icon="fas fa-triangle-exclamation" tone="red" :critical="resumo.vencidos > 0" />
+            <StatCard title="Vencem hoje" :value="resumo.hoje" description="Rebaixar e expor na frente." icon="fas fa-sun" tone="amber" />
+            <StatCard title="Vencem em até 3 dias" :value="resumo.ate3" description="Planejar rebaixa e giro." icon="fas fa-hourglass-half" tone="amber" />
           </div>
-  
+
           <!-- Sector Breakdown (Table) -->
-          <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div class="px-5 pt-5 md:px-6 md:pt-6 pb-3 flex items-center justify-between gap-3">
               <div>
                 <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
@@ -886,15 +831,15 @@ const exportarDetalhamentoSetor = async () => {
       </div>
 
         <!-- Critical Items (Timeline Style) -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6">
           <div class="flex items-center justify-between mb-5">
             <div>
-              <h2 class="text-base font-bold text-gray-900">Itens Mais Críticos</h2>
-              <p class="text-xs text-slate-500">Top 10 itens com validade mais urgente</p>
+              <h2 class="text-base font-bold text-gray-900">Itens mais urgentes</h2>
+              <p class="text-xs text-slate-500">Os 10 com validade mais próxima.</p>
             </div>
             <button @click="verCriticos"
               class="text-xs text-orange-600 hover:text-orange-800 font-semibold flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-orange-50 transition">
-              Ver todos <i class="fas fa-arrow-right"></i>
+              Ver todos
             </button>
           </div>
 
@@ -903,35 +848,21 @@ const exportarDetalhamentoSetor = async () => {
             <p class="text-sm font-medium">Nenhum item critico encontrado</p>
           </div>
 
-          <div v-else class="space-y-2.5">
-            <div v-for="(item, idx) in itensCriticosPainel" :key="item._codigo + item._validadeISO + idx"
-              class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs transition-shadow hover:shadow-sm">
-              <span class="px-2.5 py-1 text-xs rounded-lg border font-semibold shrink-0"
-                :class="prazoBadgeClasses(item._prazo)">
-                {{ prazoBadgeLabel(item._prazo) }}
-              </span>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-gray-900 truncate">{{ item._produto }}</p>
-                <p class="text-[11px] text-gray-500 mt-0.5">
-                  <span class="font-medium text-gray-600">{{ item._codigo }}</span>
-                  <span class="mx-1.5 text-slate-300">|</span>
-                  {{ item._setor }}
-                  <span v-if="item._fornecedor" class="mx-1.5 text-slate-300">|</span>
-                  <span v-if="item._fornecedor">{{ item._fornecedor }}</span>
+          <ul v-else class="-mx-5 divide-y divide-slate-100 border-t border-slate-100 md:-mx-6">
+            <li v-for="(item, idx) in itensCriticosPainel" :key="item._codigo + item._validadeISO + idx" class="flex items-center gap-3 px-5 py-2.5 md:px-6">
+              <span class="w-20 shrink-0 rounded-md border px-2 py-0.5 text-center text-xs font-semibold" :class="prazoBadgeClasses(item._prazo)">{{ prazoBadgeLabel(item._prazo) }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-slate-900">{{ item._produto }}</p>
+                <p class="truncate text-xs text-slate-500">{{ item._codigo }}, {{ item._setor }}<template v-if="item._fornecedor">, {{ item._fornecedor }}</template></p>
+              </div>
+              <div class="shrink-0 text-right">
+                <p class="text-sm font-semibold tabular-nums" :class="item._prazo === 'vencidos' ? 'text-red-700' : item._prazo === 'hoje' ? 'text-orange-700' : 'text-amber-700'">
+                  {{ item._diasParaVencer === 0 ? 'Hoje' : item._diasParaVencer < 0 ? `há ${Math.abs(item._diasParaVencer)} dia(s)` : `em ${item._diasParaVencer} dia(s)` }}
                 </p>
+                <p class="text-xs text-slate-400">{{ formatarData(item._validadeDate) }}</p>
               </div>
-              <div class="text-right shrink-0">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold" :class="{
-                  'bg-red-100 text-red-700': item._prazo === 'vencidos',
-                  'bg-orange-100 text-orange-700': item._prazo === 'hoje',
-                  'bg-yellow-100 text-yellow-700': item._prazo === 'ate3'
-                }">
-                  {{ item._diasParaVencer === 0 ? 'HOJE' : item._diasParaVencer < 0 ?
-                    `${Math.abs(item._diasParaVencer)}d atras` : `${item._diasParaVencer}d` }} </span>
-                    <p class="text-[10px] text-gray-400 mt-1">{{ formatarData(item._validadeDate) }}</p>
-              </div>
-            </div>
-          </div>
+            </li>
+          </ul>
         </div>
 
       </template>
@@ -942,7 +873,7 @@ const exportarDetalhamentoSetor = async () => {
       <template v-if="store.itens.length > 0 && abaAtiva === 'explorar'">
 
         <!-- Estoque baixo: candidatos a sair do controle de validade -->
-        <section v-if="itensEstoqueBaixo.length" class="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:flex-row sm:items-center">
+        <section v-if="itensEstoqueBaixo.length" class="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:flex-row sm:items-center">
           <span class="inline-flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><i class="fas fa-box-open text-lg" aria-hidden="true"></i></span>
           <div class="min-w-0 flex-1">
             <p class="text-sm font-bold text-slate-900">{{ estoqueBaixoResumo.total.toLocaleString('pt-BR') }} item(ns) com menos de {{ LIMITE_ESTOQUE_BAIXO }} unidades podem sair do controle de validade</p>
@@ -954,8 +885,8 @@ const exportarDetalhamentoSetor = async () => {
           <button type="button" class="ui-btn-secondary shrink-0 py-2 text-xs" @click="modalEstoqueBaixo = true"><i class="fas fa-list-check"></i>Ver itens para excluir</button>
         </section>
 
-        <!-- Smart Filter Bar -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
+        <!-- Filtros -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs font-semibold text-slate-500 mr-2">Status:</span>
             <button v-for="pill in statusPills" :key="pill.valor" @click="filtroStatus = pill.valor"
@@ -1000,7 +931,7 @@ const exportarDetalhamentoSetor = async () => {
         </div>
 
         <!-- Data Table -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <div class="p-4 border-b border-slate-100 flex items-center justify-between">
             <p class="text-sm text-slate-600">
               <span class="font-bold text-gray-900">{{ itensFiltrados.length }}</span> itens encontrados
@@ -1022,7 +953,7 @@ const exportarDetalhamentoSetor = async () => {
             <div class="relative">
               <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
               <input v-model="buscaItensFiltrados" placeholder="Buscar na tabela..."
-                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition bg-white" />
             </div>
           </div>
 
@@ -1033,15 +964,15 @@ const exportarDetalhamentoSetor = async () => {
                 <tr class="border-b-2 border-slate-100">
                   <th v-for="col in colunasItens" :key="col.chave"
                     class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
-                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-blue-600 transition-colors' : '']"
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoItensFiltrados, col.chave)">
                     {{ col.titulo }}
                     <template v-if="col.sortable">
                       <i v-if="ordenacaoItensFiltrados.coluna !== col.chave"
                         class="fas fa-sort text-slate-300 ml-1"></i>
                       <i v-else-if="ordenacaoItensFiltrados.direcao === 'asc'"
-                        class="fas fa-sort-up text-indigo-600 ml-1"></i>
-                      <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                        class="fas fa-sort-up text-blue-600 ml-1"></i>
+                      <i v-else class="fas fa-sort-down text-blue-600 ml-1"></i>
                     </template>
                   </th>
                   <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Ação</th>
@@ -1055,7 +986,7 @@ const exportarDetalhamentoSetor = async () => {
                   </td>
                 </tr>
                 <tr v-for="(item, idx) in itensFiltradosPaginados" :key="item._codigo + item._validadeISO + idx"
-                  :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-indigo-50/40' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-indigo-50/40' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                  :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-slate-50' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-slate-50' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-slate-50' : idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-slate-50'">
                   <td class="px-3 py-2">{{ item._codigo }}</td>
                   <td class="px-3 py-2">{{ item._produto }}</td>
                   <td class="px-3 py-2">{{ item._setor }}</td>
@@ -1102,7 +1033,7 @@ const exportarDetalhamentoSetor = async () => {
                 <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                 <button v-else @click="paginaItensFiltrados = p"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                  :class="p === Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                  :class="p === Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
                   {{ p }}
                 </button>
               </template>
@@ -1116,7 +1047,7 @@ const exportarDetalhamentoSetor = async () => {
         </div>
 
         <!-- Supplier Summary with Drill-Down -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <div class="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h2 class="text-base font-bold text-gray-900">Resumo por Fornecedor</h2>
@@ -1128,7 +1059,7 @@ const exportarDetalhamentoSetor = async () => {
             <div class="relative">
               <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
               <input v-model="buscaFornecedoresTab" placeholder="Buscar fornecedor..."
-                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition bg-white" />
+                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition bg-white" />
             </div>
           </div>
 
@@ -1139,15 +1070,15 @@ const exportarDetalhamentoSetor = async () => {
                 <tr class="border-b-2 border-slate-100">
                   <th v-for="col in colunasFornecedores" :key="col.chave"
                     class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
-                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
+                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-blue-600 transition-colors' : '']"
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedoresTab, col.chave)">
                     {{ col.titulo }}
                     <template v-if="col.sortable">
                       <i v-if="ordenacaoFornecedoresTab.coluna !== col.chave"
                         class="fas fa-sort text-slate-300 ml-1"></i>
                       <i v-else-if="ordenacaoFornecedoresTab.direcao === 'asc'"
-                        class="fas fa-sort-up text-indigo-600 ml-1"></i>
-                      <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
+                        class="fas fa-sort-up text-blue-600 ml-1"></i>
+                      <i v-else class="fas fa-sort-down text-blue-600 ml-1"></i>
                     </template>
                   </th>
                 </tr>
@@ -1161,7 +1092,7 @@ const exportarDetalhamentoSetor = async () => {
                 </tr>
                 <tr v-for="(item, idx) in fornecedoresTabPaginados" :key="item.fornecedor"
                   @click="abrirItensFornecedor(item)" class="cursor-pointer transition-colors"
-                  :class="(item.vencidos > 0 || item.hoje > 0) ? 'bg-red-50/60 hover:bg-indigo-50/40' : item.ate3 > 0 ? 'bg-yellow-50/60 hover:bg-indigo-50/40' : idx % 2 === 0 ? 'bg-white hover:bg-indigo-50/40' : 'bg-slate-50/60 hover:bg-indigo-50/40'">
+                  :class="(item.vencidos > 0 || item.hoje > 0) ? 'bg-red-50/60 hover:bg-slate-50' : item.ate3 > 0 ? 'bg-yellow-50/60 hover:bg-slate-50' : idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-slate-50'">
                   <td class="px-3 py-2 font-medium">{{ item.fornecedor }}</td>
                   <td class="px-3 py-2 text-right tabular-nums">{{ item.total }}</td>
                   <td class="px-3 py-2 text-right">
@@ -1202,7 +1133,7 @@ const exportarDetalhamentoSetor = async () => {
                 <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
                 <button v-else @click="paginaFornecedoresTab = p"
                   class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                  :class="p === Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
+                  :class="p === Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
                   {{ p }}
                 </button>
               </template>
@@ -1224,7 +1155,7 @@ const exportarDetalhamentoSetor = async () => {
       <template v-if="store.itens.length > 0 && abaAtiva === 'analise'">
 
         <!-- Sector Breakdown (List) -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6">
           <div class="flex items-center justify-between mb-5">
             <div>
               <h2 class="text-base font-bold text-gray-900">Detalhamento por Setor</h2>
@@ -1270,7 +1201,7 @@ const exportarDetalhamentoSetor = async () => {
         </div>
 
         <!-- Supplier Ranking (Leaderboard) -->
-        <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 md:p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6">
           <div class="flex items-center justify-between mb-5">
             <div>
               <h2 class="text-base font-bold text-gray-900">Ranking de Fornecedores</h2>
@@ -1322,7 +1253,7 @@ const exportarDetalhamentoSetor = async () => {
       <UiModal v-if="modalSetorAberto" :title="setorModalNome === 'Todos' ? 'Todos os setores' : setorModalNome" :subtitle="`${itensSetorModal.length} itens com validade monitorada`" width="max-w-6xl" @close="fecharModalSetor">
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div v-for="f in resumoPrazos(itensSetorModal)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
+            <div v-for="f in resumoPrazos(itensSetorModal)" :key="f.chave" class="rounded-xl p-3" :class="f.fundo">
               <p class="text-xs font-semibold opacity-80">{{ f.rotulo }}</p>
               <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
@@ -1366,7 +1297,7 @@ const exportarDetalhamentoSetor = async () => {
       <UiModal v-if="modalFornecedorAberto && fornecedorSelecionado" :title="fornecedorSelecionado" :subtitle="`${itensFornecedor.length} itens deste fornecedor`" width="max-w-6xl" @close="limparFornecedor">
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div v-for="f in resumoPrazos(itensFornecedor)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
+            <div v-for="f in resumoPrazos(itensFornecedor)" :key="f.chave" class="rounded-xl p-3" :class="f.fundo">
               <p class="text-xs font-semibold opacity-80">{{ f.rotulo }}</p>
               <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
