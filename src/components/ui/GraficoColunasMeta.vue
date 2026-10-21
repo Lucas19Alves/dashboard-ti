@@ -26,15 +26,15 @@ const formatar = v => `${v.toFixed(1)}${props.sufixo}`
 <template>
   <div>
     <div class="relative flex h-52 gap-2 pl-9">
-      <!-- Grade e eixo Y -->
+      <!-- Grade e eixo Y: cada linha tem altura 0 para ficar exatamente na altura do valor. -->
       <div class="pointer-events-none absolute inset-y-0 left-0 right-0">
-        <div v-for="g in grade" :key="g" class="absolute left-0 right-0 flex items-center" :style="{ bottom: altura(g) }">
-          <span class="w-8 -translate-y-px pr-1 text-right text-[10px] text-slate-400">{{ g }}{{ sufixo }}</span>
+        <div v-for="g in grade" :key="g" class="absolute left-0 right-0 flex h-0 items-center" :style="{ bottom: altura(g) }">
+          <span class="w-8 pr-1 text-right text-[10px] leading-none text-slate-400">{{ g }}{{ sufixo }}</span>
           <span class="h-px flex-1 bg-slate-100"></span>
         </div>
-        <div class="absolute left-9 right-0 flex items-center" :style="{ bottom: altura(meta) }">
+        <div class="absolute left-9 right-0 flex h-0 items-center" :style="{ bottom: altura(meta) }">
           <span class="h-0 flex-1 border-t border-dashed border-slate-400"></span>
-          <span class="ml-1 rounded bg-white px-1 text-[10px] font-semibold text-slate-500">meta {{ meta }}{{ sufixo }}</span>
+          <span class="ml-1 rounded bg-white px-1 text-[10px] font-semibold leading-none text-slate-500">meta {{ meta }}{{ sufixo }}</span>
         </div>
       </div>
 
