@@ -3,19 +3,19 @@
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div class="rounded-2xl bg-slate-50 p-3">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ tipo === 'setor' ? 'Setores' : 'Locais' }}</p>
+          <p class="text-xs font-semibold text-slate-500">{{ tipo === 'setor' ? 'Setores' : 'Locais' }}</p>
           <p class="text-xl font-bold text-slate-900">{{ (items || []).length }}</p>
         </div>
         <div class="rounded-2xl bg-slate-50 p-3">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Itens</p>
+          <p class="text-xs font-semibold text-slate-500">Itens</p>
           <p class="text-xl font-bold text-slate-900">{{ totais.total.toLocaleString('pt-BR') }}</p>
         </div>
         <div class="rounded-2xl bg-slate-50 p-3">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pendentes</p>
+          <p class="text-xs font-semibold text-slate-500">Pendentes</p>
           <p class="text-xl font-bold text-amber-700">{{ totais.pendentes.toLocaleString('pt-BR') }}</p>
         </div>
         <div class="rounded-2xl p-3" :class="acimaDaMeta ? 'bg-red-50' : 'bg-emerald-50'">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Acima de {{ META }}%</p>
+          <p class="text-xs font-semibold text-slate-500">Acima de {{ META }}%</p>
           <p class="text-xl font-bold" :class="acimaDaMeta ? 'text-red-700' : 'text-emerald-700'">{{ acimaDaMeta }}</p>
         </div>
       </div>

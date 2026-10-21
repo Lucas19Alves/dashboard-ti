@@ -128,7 +128,7 @@ const imprimir = () => {
     <template v-else>
       <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div v-for="k in kpis" :key="k.rotulo" class="ui-card p-4">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ k.rotulo }}</p>
+          <p class="text-xs font-semibold text-slate-500">{{ k.rotulo }}</p>
           <p class="mt-1 text-2xl font-black" :class="k.tom === 'bom' ? 'text-emerald-700' : k.tom === 'ruim' ? 'text-red-700' : 'text-slate-900'">{{ k.valor }}</p>
           <p class="truncate text-xs text-slate-500" :title="k.detalhe">{{ k.detalhe }}</p>
         </div>

@@ -354,7 +354,7 @@ const imprimir = () => {
       <template v-if="sugestoesAbertas">
         <div class="max-h-72 overflow-y-auto">
           <table class="w-full text-sm">
-            <thead class="sticky top-0 z-10 bg-white text-[11px] uppercase tracking-wider text-slate-500 shadow-[0_1px_0_#f1f5f9]">
+            <thead class="sticky top-0 z-10 bg-white text-xs text-slate-500 shadow-[0_1px_0_#f1f5f9]">
               <tr>
                 <th scope="col" class="w-10 px-4 py-2 text-left">
                   <input type="checkbox" class="size-3.5 accent-blue-600" :checked="marcadas.size === novas.length" :indeterminate.prop="marcadas.size > 0 && marcadas.size < novas.length" aria-label="Marcar todas" @change="marcarPor(() => !(marcadas.size === novas.length))">
@@ -399,7 +399,7 @@ const imprimir = () => {
     <div v-if="acoes.length" class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
       <div class="rounded-xl bg-slate-50 p-3 md:col-span-2">
         <div class="flex items-baseline justify-between">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Progresso</p>
+          <p class="text-xs font-semibold text-slate-500">Progresso</p>
           <p class="text-sm font-black text-slate-900">{{ resumo.feitas }}/{{ resumo.total }}</p>
         </div>
         <div class="mt-2 flex h-2.5 overflow-hidden rounded-full bg-white ring-1 ring-slate-200" role="progressbar" :aria-valuenow="Math.round(resumo.progresso)" aria-valuemin="0" aria-valuemax="100" aria-label="Ações resolvidas">
@@ -408,14 +408,14 @@ const imprimir = () => {
         </div>
         <p class="mt-1 text-[10px] text-slate-500"><span class="mr-1 inline-block size-2 rounded-full bg-emerald-500"></span>resolvidas <span class="ml-2 mr-1 inline-block size-2 rounded-full bg-blue-400"></span>em andamento</p>
       </div>
-      <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em andamento</p><p class="text-xl font-black text-slate-900">{{ resumo.andamento }}</p></div>
-      <div class="rounded-xl p-3" :class="resumo.atrasadas ? 'bg-red-50' : 'bg-slate-50'"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Atrasadas</p><p class="text-xl font-black" :class="resumo.atrasadas ? 'text-red-700' : 'text-slate-900'">{{ resumo.atrasadas }}</p></div>
-      <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Itens em aberto</p><p class="text-xl font-black text-amber-800">{{ resumo.itensAbertos.toLocaleString('pt-BR') }}</p></div>
+      <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Em andamento</p><p class="text-xl font-black text-slate-900">{{ resumo.andamento }}</p></div>
+      <div class="rounded-xl p-3" :class="resumo.atrasadas ? 'bg-red-50' : 'bg-slate-50'"><p class="text-xs font-semibold text-slate-500">Atrasadas</p><p class="text-xl font-black" :class="resumo.atrasadas ? 'text-red-700' : 'text-slate-900'">{{ resumo.atrasadas }}</p></div>
+      <div class="rounded-xl bg-amber-50 p-3"><p class="text-xs font-semibold text-amber-700">Itens em aberto</p><p class="text-xl font-black text-amber-800">{{ resumo.itensAbertos.toLocaleString('pt-BR') }}</p></div>
     </div>
 
     <div v-if="cargaResponsaveis.length > 1 || (cargaResponsaveis.length === 1 && cargaResponsaveis[0].responsavel)" class="mt-4 rounded-xl ring-1 ring-slate-200">
       <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em aberto por responsável</p>
+        <p class="text-xs font-semibold text-slate-500">Em aberto por responsável</p>
         <button v-if="filtroResponsavel" type="button" class="text-[11px] font-semibold text-blue-700 hover:underline" @click="filtroResponsavel = ''">Mostrar todos</button>
         <span v-else class="text-[11px] text-slate-400">clique para filtrar</span>
       </div>

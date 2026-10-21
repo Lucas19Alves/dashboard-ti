@@ -169,27 +169,27 @@ const exportarCsv = () => {
       <!-- Resumo do time -->
       <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <div class="rounded-2xl bg-white p-4 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Usuários</p>
+          <p class="text-xs font-semibold text-slate-500">Usuários</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.total }}</p>
           <p class="text-xs text-slate-500">participaram da contagem</p>
         </div>
         <div class="rounded-2xl bg-white p-4 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Leituras</p>
+          <p class="text-xs font-semibold text-slate-500">Leituras</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.leituras.toLocaleString('pt-BR') }}</p>
           <p class="text-xs text-slate-500">média {{ Math.round(resumo.media).toLocaleString('pt-BR') }} por usuário</p>
         </div>
         <div class="rounded-2xl bg-white p-4 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Ritmo médio</p>
+          <p class="text-xs font-semibold text-slate-500">Ritmo médio</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ Math.round(resumo.ritmoMedio).toLocaleString('pt-BR') }}<span class="text-sm font-semibold text-slate-500">/h</span></p>
           <p class="text-xs text-slate-500">leituras por hora ativa</p>
         </div>
         <div class="rounded-2xl bg-white p-4 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Leituras com problema</p>
+          <p class="text-xs font-semibold text-slate-500">Leituras com problema</p>
           <p class="mt-1 text-2xl font-bold" :class="resumo.percProblema > 5 ? 'text-red-700' : 'text-slate-900'">{{ resumo.percProblema.toFixed(1) }}%</p>
           <p class="text-xs text-slate-500">sem estoque ou fora do local</p>
         </div>
         <div class="col-span-2 rounded-2xl bg-white p-4 shadow-sm md:col-span-1">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pico do time</p>
+          <p class="text-xs font-semibold text-slate-500">Pico do time</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.picoHora === null ? '—' : formatarHora(resumo.picoHora) }}</p>
           <p class="text-xs text-slate-500">{{ resumo.picoQtd.toLocaleString('pt-BR') }} leituras na hora</p>
         </div>

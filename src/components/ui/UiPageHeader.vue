@@ -6,24 +6,15 @@ defineProps({
   tone: { type: String, default: 'blue' }
 })
 
-const tones = {
-  blue: 'bg-blue-50 text-blue-600',
-  indigo: 'bg-indigo-50 text-indigo-600',
-  orange: 'bg-orange-50 text-orange-600',
-  emerald: 'bg-emerald-50 text-emerald-600'
-}
+// Título da página sem ícone em caixa: o nome da tela já diz onde a pessoa está.
+// `icon` e `tone` continuam aceitos para não quebrar quem passa.
 </script>
 
 <template>
-  <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-    <div class="flex min-w-0 items-center gap-3.5">
-      <span class="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl" :class="tones[tone] || tones.blue">
-        <i :class="[icon, 'text-xl']"></i>
-      </span>
-      <div class="min-w-0">
-        <h1 class="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{{ title }}</h1>
-        <p v-if="subtitle" class="mt-1 text-sm leading-relaxed text-slate-500">{{ subtitle }}</p>
-      </div>
+  <header class="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
+    <div class="min-w-0">
+      <h1 class="text-[1.75rem] font-semibold leading-tight tracking-tight text-slate-950 md:text-[2rem]">{{ title }}</h1>
+      <p v-if="subtitle" class="mt-1 max-w-[72ch] text-sm leading-relaxed text-slate-500">{{ subtitle }}</p>
     </div>
     <div v-if="$slots.actions" class="flex flex-wrap items-center gap-2 md:justify-end">
       <slot name="actions" />

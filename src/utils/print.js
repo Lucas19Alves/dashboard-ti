@@ -19,7 +19,7 @@ const alinhar = col => (col.alinhamento === 'right' ? 'right' : col.alinhamento 
 const ESTILOS = `
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html { font-size: 9.5pt; }
-  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.35; }
+  body { font-family: "IBM Plex Sans", Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif; color: #0f172a; margin: 0; line-height: 1.35; }
   .tela { max-width: 190mm; margin: 0 auto; padding: 10mm 0; }
   .paisagem .tela { max-width: 277mm; }
   @media print { .tela, .paisagem .tela { max-width: none; padding: 0; } }
@@ -202,8 +202,8 @@ const abrirJanela = (titulo, corpo, { orientacao = 'auto', rodape = '' } = {}) =
   win.document.open()
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}
     @page { size: A4 ${final === 'paisagem' ? 'landscape' : 'portrait'}; margin: 14mm 12mm 16mm;
-      @bottom-left { content: ${textoCss(textoRodape)}; font: 7.5pt Inter, system-ui, sans-serif; color: #64748b; }
-      @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 7.5pt Inter, system-ui, sans-serif; color: #64748b; } }</style></head>
+      @bottom-left { content: ${textoCss(textoRodape)}; font: 7.5pt "IBM Plex Sans", Inter, system-ui, sans-serif; color: #64748b; }
+      @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 7.5pt "IBM Plex Sans", Inter, system-ui, sans-serif; color: #64748b; } }</style></head>
     <body class="${final}"><div class="aviso-tela">Na janela de impressão, escolha “Salvar como PDF” · A4 ${final}</div><div class="tela">${corpo}</div></body></html>`)
   win.document.close()
   win.onafterprint = () => { win.close() }

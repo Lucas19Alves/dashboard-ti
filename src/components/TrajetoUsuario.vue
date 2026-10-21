@@ -177,7 +177,7 @@ const indicadores = computed(() => {
       <!-- Indicadores -->
       <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div v-for="k in indicadores" :key="k.rotulo" class="rounded-xl bg-slate-50 p-3">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ k.rotulo }}</p>
+          <p class="text-xs font-semibold text-slate-500">{{ k.rotulo }}</p>
           <p class="mt-0.5 text-xl font-black text-slate-900">{{ k.valor }}</p>
           <p v-if="k.detalhe" class="truncate text-[11px] text-slate-500" :title="k.detalhe">{{ k.detalhe }}</p>
         </div>
@@ -252,7 +252,7 @@ const indicadores = computed(() => {
 
         <!-- Paradas -->
         <div class="flex max-h-[560px] flex-col rounded-xl ring-1 ring-slate-200">
-          <p class="border-b border-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500">Paradas na ordem</p>
+          <p class="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">Paradas na ordem</p>
           <ol ref="listaParadas" class="flex-1 overflow-y-auto">
             <li v-for="(p, i) in paradas" :key="i" :data-parada="i">
               <p v-if="p.aposPausa" class="bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700"><i class="fas fa-mug-hot mr-1"></i>Pausa de {{ formatarDuracao(p.pausaAntes) }}</p>

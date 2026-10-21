@@ -369,7 +369,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         <section v-if="areaSelecionada" class="ui-fade-in rounded-2xl bg-white p-5 shadow-sm">
           <div class="flex items-start justify-between gap-2">
             <div>
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500"><i :class="[TIPOS_AREA[areaSelecionada.tipo]?.icone, 'mr-1']"></i>{{ TIPOS_AREA[areaSelecionada.tipo]?.nome }}</p>
+              <p class="text-xs font-semibold text-slate-500"><i :class="[TIPOS_AREA[areaSelecionada.tipo]?.icone, 'mr-1']"></i>{{ TIPOS_AREA[areaSelecionada.tipo]?.nome }}</p>
               <p class="text-xl font-black text-slate-900">{{ titulo(areaSelecionada) }}</p>
               <p class="text-xs text-slate-500">{{ areaSelecionada.bloco }}</p>
             </div>
@@ -389,7 +389,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </div>
 
           <table v-if="areaSelecionada.tipo === 'gondola' && pinturaAtiva?.colunasFace" class="mt-4 w-full text-sm">
-            <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th v-for="c in pinturaAtiva.colunasFace" :key="c.rotulo" class="text-right">{{ c.rotulo }}</th></tr></thead>
+            <thead class="text-xs text-slate-500"><tr><th class="py-1 text-left">Face</th><th v-for="c in pinturaAtiva.colunasFace" :key="c.rotulo" class="text-right">{{ c.rotulo }}</th></tr></thead>
             <tbody>
               <tr v-for="f in faces" :key="f" class="border-t border-slate-100">
                 <td class="py-1.5 font-bold">{{ areaSelecionada.bloco }}{{ f }}</td>
@@ -398,7 +398,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </tbody>
           </table>
           <table v-else-if="areaSelecionada.tipo === 'gondola'" class="mt-4 w-full text-sm">
-            <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th class="text-right">Lidos</th><th class="text-right">Pend.</th><th class="text-right">%</th></tr></thead>
+            <thead class="text-xs text-slate-500"><tr><th class="py-1 text-left">Face</th><th class="text-right">Lidos</th><th class="text-right">Pend.</th><th class="text-right">%</th></tr></thead>
             <tbody>
               <tr v-for="f in faces" :key="f" class="border-t border-slate-100">
                 <td class="py-1.5 font-bold">{{ areaSelecionada.bloco }}{{ f }}</td>

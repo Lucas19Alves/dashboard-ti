@@ -718,11 +718,11 @@ const classesCardDia = (d) => {
             
             <div class="px-4 py-1 text-center min-w-[180px]">
               <span class="text-sm font-bold text-slate-700 block leading-tight">{{ labelSemanaSelecionada }}</span>
-              <span v-if="semanaOffset !== 0" class="text-[9px] text-blue-600 font-bold uppercase tracking-wider">
+              <span v-if="semanaOffset !== 0" class="text-[9px] text-blue-600 font-semibold">
                 {{ semanaOffset > 0 ? 'Semana Futura' : 'Semana Passada' }}
               </span>
-              <span v-else class="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">
-                Semana Atual
+              <span v-else class="text-[9px] text-emerald-600 font-semibold">
+                Semana atual
               </span>
             </div>
             
@@ -756,7 +756,7 @@ const classesCardDia = (d) => {
           >
             <div class="flex justify-between items-center mb-3">
               <div class="flex flex-col">
-                <span class="text-[11px] uppercase tracking-wide text-gray-400">
+                <span class="text-xs capitalize text-gray-500">
                   {{ d.label.split(',')[0] }}
                 </span>
                 <span class="font-bold text-gray-900 text-lg leading-tight">
@@ -1070,15 +1070,15 @@ const classesCardDia = (d) => {
               <div v-if="getMetricasCard(auditoria).total > 0" class="mt-4 grid grid-cols-3 gap-2 text-center">
                 <div class="rounded-xl bg-slate-50 py-2">
                   <p class="text-base font-bold text-slate-900">{{ getMetricasCard(auditoria).lidos.toLocaleString('pt-BR') }}</p>
-                  <p class="text-[10px] font-semibold uppercase text-slate-400">Lidos</p>
+                  <p class="text-xs text-slate-500">Lidos</p>
                 </div>
                 <div class="rounded-xl bg-slate-50 py-2">
                   <p class="text-base font-bold text-slate-900">{{ getMetricasCard(auditoria).pendentes.toLocaleString('pt-BR') }}</p>
-                  <p class="text-[10px] font-semibold uppercase text-slate-400">Pendentes</p>
+                  <p class="text-xs text-slate-500">Pendentes</p>
                 </div>
                 <div class="rounded-xl py-2" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'bg-emerald-50' : 'bg-red-50'">
                   <p class="text-base font-bold" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ getMetricasCard(auditoria).percentualPendente.toFixed(1) }}%</p>
-                  <p class="text-[10px] font-semibold uppercase text-slate-400">Pendente</p>
+                  <p class="text-xs text-slate-500">Pendente</p>
                 </div>
               </div>
               <p v-else class="mt-4 rounded-xl bg-slate-50 py-4 text-center text-xs text-slate-500"><i class="fas fa-inbox mr-1"></i>Sem dados importados</p>
@@ -1108,22 +1108,22 @@ const classesCardDia = (d) => {
         <!-- Resumo do tipo -->
         <div v-if="resumoTipo?.total" class="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,2fr)]">
           <div class="rounded-2xl bg-white p-4 shadow-sm">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Auditorias</p>
+            <p class="text-xs font-semibold text-slate-500">Auditorias</p>
             <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumoTipo.total }}</p>
             <p class="text-xs text-slate-500">{{ resumoTipo.fechadas }} fechadas</p>
           </div>
           <div class="rounded-2xl bg-white p-4 shadow-sm">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Na meta</p>
+            <p class="text-xs font-semibold text-slate-500">Na meta</p>
             <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.taxaMeta ?? 100) < 70 ? 'text-amber-700' : 'text-emerald-700'">{{ resumoTipo.taxaMeta === null ? '—' : resumoTipo.taxaMeta.toFixed(0) + '%' }}</p>
             <p class="text-xs text-slate-500">{{ resumoTipo.dentroMeta }} de {{ resumoTipo.fechadas }} fechadas</p>
           </div>
           <div class="rounded-2xl bg-white p-4 shadow-sm">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pendente médio</p>
+            <p class="text-xs font-semibold text-slate-500">Pendente médio</p>
             <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ resumoTipo.mediaPendente === null ? '—' : resumoTipo.mediaPendente.toFixed(2) + '%' }}</p>
             <p class="text-xs text-slate-500">Meta: até {{ META }}%</p>
           </div>
           <div class="col-span-2 rounded-2xl bg-white p-4 shadow-sm lg:col-span-1">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Últimas {{ resumoTipo.serie.length }} · % pendente</p>
+            <p class="text-xs font-semibold text-slate-500">Últimas {{ resumoTipo.serie.length }} · % pendente</p>
             <SparklineMeta v-if="resumoTipo.serie.length > 1" class="mt-2" altura-classe="h-12" :pontos="resumoTipo.serie" :meta="META" @selecionar="p => router.push(`/auditoria/${p.id}`)" />
             <p v-else class="mt-4 text-xs text-slate-400">Poucos dados para o gráfico.</p>
           </div>

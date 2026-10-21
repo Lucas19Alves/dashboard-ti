@@ -1341,15 +1341,15 @@ const fecharRelatorio = () => {
       <div class="space-y-4">
         <div class="grid grid-cols-3 gap-3">
           <div class="rounded-2xl bg-emerald-50 p-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Lidos</p>
+            <p class="text-xs font-semibold text-emerald-700">Lidos</p>
             <p class="text-xl font-bold text-emerald-800">{{ resumoItensModal.lidos }}</p>
           </div>
           <div class="rounded-2xl bg-amber-50 p-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Pendentes</p>
+            <p class="text-xs font-semibold text-amber-700">Pendentes</p>
             <p class="text-xl font-bold text-amber-800">{{ resumoItensModal.pendentes }}</p>
           </div>
           <div class="rounded-2xl p-3" :class="resumoItensModal.perc > 3 ? 'bg-red-50' : 'bg-slate-50'">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">% pendente</p>
+            <p class="text-xs font-semibold text-slate-500">% pendente</p>
             <p class="text-xl font-bold" :class="resumoItensModal.perc > 3 ? 'text-red-700' : 'text-slate-800'">{{ resumoItensModal.perc.toFixed(1) }}%</p>
           </div>
         </div>
@@ -1374,20 +1374,20 @@ const fecharRelatorio = () => {
         </div>
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div class="rounded-2xl bg-slate-50 p-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Lidos</p>
+            <p class="text-xs font-semibold text-slate-500">Lidos</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.lidos.toLocaleString('pt-BR') }}</p>
           </div>
           <div class="rounded-2xl p-3" :class="usuarioDetalhes.comProblema ? 'bg-red-50' : 'bg-slate-50'">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Com problema</p>
+            <p class="text-xs font-semibold text-slate-500">Com problema</p>
             <p class="text-xl font-bold" :class="usuarioDetalhes.comProblema ? 'text-red-700' : 'text-slate-900'">{{ usuarioDetalhes.comProblema }}</p>
           </div>
           <div class="rounded-2xl bg-slate-50 p-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pico</p>
+            <p class="text-xs font-semibold text-slate-500">Pico</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.picoHora || '—' }}</p>
             <p v-if="usuarioDetalhes.picoHora" class="text-[11px] text-slate-500">{{ usuarioDetalhes.picoQtd }} leituras</p>
           </div>
           <div class="rounded-2xl bg-slate-50 p-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Locais lidos</p>
+            <p class="text-xs font-semibold text-slate-500">Locais lidos</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.qtdLocais }}</p>
           </div>
         </div>

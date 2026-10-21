@@ -61,22 +61,22 @@ const exportarMeses = () => baixarCsv(r.value.meses.map(m => ({ mes: rotuloMes(m
 
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div class="ui-card p-4">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Valor em ruptura</p>
+          <p class="text-xs font-semibold text-slate-500">Valor em ruptura</p>
           <p class="mt-1 text-2xl font-black text-red-700">{{ moeda(r.total) }}</p>
           <p class="text-xs text-slate-500">soma no período</p>
         </div>
         <div class="ui-card p-4">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Média por auditoria</p>
+          <p class="text-xs font-semibold text-slate-500">Média por auditoria</p>
           <p class="mt-1 text-2xl font-black text-slate-900">{{ moeda(media) }}</p>
           <p class="text-xs text-slate-500">{{ r.itens.toLocaleString('pt-BR') }} itens com custo</p>
         </div>
         <div class="ui-card p-4">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Maior fornecedor</p>
+          <p class="text-xs font-semibold text-slate-500">Maior fornecedor</p>
           <p class="mt-1 truncate text-lg font-black text-slate-900" :title="r.porFornecedor[0]?.chave">{{ r.porFornecedor[0]?.chave || '—' }}</p>
           <p class="text-xs text-slate-500">{{ r.porFornecedor[0] ? `${moeda(r.porFornecedor[0].valor)} · ${r.porFornecedor[0].participacao.toFixed(1)}%` : '' }}</p>
         </div>
         <div class="ui-card p-4">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tendência mensal</p>
+          <p class="text-xs font-semibold text-slate-500">Tendência mensal</p>
           <p class="mt-1 text-2xl font-black" :class="rotuloTendencia[r.tendencia][1]"><i :class="['fas', rotuloTendencia[r.tendencia][2], 'mr-1 text-lg']"></i>{{ rotuloTendencia[r.tendencia][0] }}</p>
           <p class="text-xs text-slate-500">média por auditoria, mês a mês</p>
         </div>

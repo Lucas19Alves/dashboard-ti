@@ -193,12 +193,12 @@ onBeforeUnmount(() => {
         </p>
 
         <div class="rounded-lg bg-slate-50 px-4 py-3">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Criado por</p>
+          <p class="text-xs font-semibold text-slate-500">Criado por</p>
           <p class="mt-1 font-semibold text-slate-900">Lucas Alves</p>
         </div>
 
         <div class="rounded-lg border border-slate-100 px-4 py-3">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Atalhos</p>
+          <p class="text-xs font-semibold text-slate-500">Atalhos</p>
           <ul class="mt-2 space-y-1.5 text-xs">
             <li class="flex justify-between"><span>Busca rápida</span><kbd class="rounded bg-slate-100 px-1.5 font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd></li>
             <li class="flex justify-between"><span>Busca rápida (fora de campos)</span><kbd class="rounded bg-slate-100 px-1.5 font-semibold">/</kbd></li>
