@@ -168,12 +168,12 @@ const copiar = async (texto) => {
       itens<template v-if="ordenados.length > limite"> · mostrando {{ limite }}</template>
     </p>
 
-    <div v-if="!filtrados.length" class="rounded-2xl bg-slate-50 py-12 text-center">
+    <div v-if="!filtrados.length" class="rounded-xl bg-slate-50 py-12 text-center">
       <i class="fas fa-inbox text-2xl text-slate-300"></i>
       <p class="mt-2 text-sm font-medium text-slate-600">{{ itens.length ? 'Nenhum item com esses filtros.' : 'Nenhum item nesta lista.' }}</p>
     </div>
 
-    <div v-else class="overflow-hidden rounded-2xl ring-1 ring-slate-200">
+    <div v-else class="overflow-hidden rounded-xl ring-1 ring-slate-200">
       <div class="max-h-[55vh] overflow-auto">
         <table class="w-full text-sm">
           <thead class="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500 shadow-[0_1px_0_#e2e8f0]">

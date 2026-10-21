@@ -189,7 +189,7 @@ const alternarOrdem = (estado, coluna, padraoDesc = true) => {
   if (estado.coluna === coluna) estado.direcao = estado.direcao === 'asc' ? 'desc' : 'asc'
   else Object.assign(estado, { coluna, direcao: padraoDesc ? 'desc' : 'asc' })
 }
-const iconeOrdem = (estado, coluna) => (estado.coluna !== coluna ? 'fa-sort text-slate-300' : estado.direcao === 'asc' ? 'fa-sort-up text-indigo-600' : 'fa-sort-down text-indigo-600')
+const iconeOrdem = (estado, coluna) => (estado.coluna !== coluna ? 'fa-sort text-slate-300' : estado.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600')
 
 // ---------- Setores ----------
 const buscaSetor = ref('')
@@ -437,7 +437,7 @@ const gerarRelatorioPDF = () => {
 
 <template>
   <div class="ui-page">
-    <UiPageHeader title="Análise de Auditorias" :subtitle="`Desempenho histórico · ${descricaoPeriodo}`" icon="fas fa-chart-line" tone="indigo">
+    <UiPageHeader title="Análise de Auditorias" :subtitle="`Desempenho histórico · ${descricaoPeriodo}`" icon="fas fa-chart-line" tone="blue">
       <template #actions>
         <UiButton variant="secondary" :disabled="!linhasAuditorias.length" @click="exportarCsv">
           <i class="fas fa-file-csv"></i>CSV
@@ -459,13 +459,13 @@ const gerarRelatorioPDF = () => {
               :key="p.valor"
               type="button"
               class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-              :class="filtros.periodoTipo === 'rapido' && filtros.periodo === p.valor ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              :class="filtros.periodoTipo === 'rapido' && filtros.periodo === p.valor ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
               @click="filtros.periodoTipo = 'rapido'; filtros.periodo = p.valor"
             >{{ p.rotulo }}</button>
             <button
               type="button"
               class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-              :class="filtros.periodoTipo === 'personalizado' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
+              :class="filtros.periodoTipo === 'personalizado' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'"
               @click="filtros.periodoTipo = 'personalizado'"
             ><i class="fas fa-calendar-days mr-1"></i>Datas</button>
           </div>
@@ -509,7 +509,7 @@ const gerarRelatorioPDF = () => {
           <button v-if="filtrosAlterados" type="button" class="text-xs font-semibold text-slate-500 hover:text-red-600" @click="limparFiltros">
             <i class="fas fa-rotate-left mr-1"></i>Limpar
           </button>
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
             <i class="fas fa-filter text-[10px]"></i>{{ auditoriasFiltradas.length }} auditoria(s)
           </span>
         </div>
@@ -521,11 +521,9 @@ const gerarRelatorioPDF = () => {
       <article v-for="k in kpis" :key="k.titulo" class="ui-card p-4">
         <div class="flex items-center justify-between gap-2">
           <p class="text-xs font-semibold text-slate-500">{{ k.titulo }}</p>
-          <span class="inline-flex size-8 items-center justify-center rounded-xl" :class="k.alerta ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'">
-            <i :class="[k.icone, 'text-xs']"></i>
-          </span>
+          <i :class="[k.icone, 'text-xs', k.alerta ? 'text-amber-500' : 'text-slate-300']" aria-hidden="true"></i>
         </div>
-        <p class="mt-2 text-2xl font-bold tracking-tight md:text-3xl" :class="k.alerta ? 'text-amber-700' : 'text-slate-900'">{{ k.valor }}</p>
+        <p class="mt-2 text-2xl font-semibold tracking-tight tabular-nums md:text-3xl" :class="k.alerta ? 'text-amber-700' : 'text-slate-900'">{{ k.valor }}</p>
         <p class="mt-1 text-xs text-slate-500">{{ k.detalhe }}</p>
         <p v-if="k.delta !== null && resumoAnterior" class="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="classeDelta(k)" :title="`Período anterior: ${formatarDataBR(intervaloComparacao.inicio)} a ${formatarDataBR(intervaloComparacao.fim)}`">
           <i :class="k.delta > 0 ? 'fas fa-arrow-up' : k.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="text-[9px]"></i>
@@ -546,7 +544,7 @@ const gerarRelatorioPDF = () => {
     <!-- ===== VISÃO GERAL ===== -->
     <template v-else-if="aba === 'visao'">
       <section v-if="insights.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div v-for="(i, idx) in insights" :key="idx" class="flex items-start gap-3 rounded-2xl border p-4" :class="tomInsight[i.tom]">
+        <div v-for="(i, idx) in insights" :key="idx" class="flex items-start gap-3 rounded-xl border p-4" :class="tomInsight[i.tom]">
           <i :class="[i.icone, 'mt-0.5']"></i>
           <p class="text-sm font-medium leading-snug">{{ i.texto }}</p>
         </div>
@@ -558,7 +556,7 @@ const gerarRelatorioPDF = () => {
             <h2 class="text-base font-bold text-slate-900">% pendente médio por mês</h2>
             <p class="text-xs text-slate-500">Menor é melhor. Clique em um mês para ver as auditorias dele.</p>
           </div>
-          <button type="button" class="text-xs font-semibold text-indigo-600 hover:underline" @click="mostrarTabelaMeses = !mostrarTabelaMeses">
+          <button type="button" class="text-xs font-semibold text-blue-600 hover:underline" @click="mostrarTabelaMeses = !mostrarTabelaMeses">
             <i :class="mostrarTabelaMeses ? 'fas fa-chart-column' : 'fas fa-table'" class="mr-1"></i>{{ mostrarTabelaMeses ? 'Ver gráfico' : 'Ver tabela' }}
           </button>
         </div>
@@ -636,7 +634,7 @@ const gerarRelatorioPDF = () => {
           <thead>
             <tr class="border-b-2 border-slate-100 text-slate-600">
               <th v-for="[col, titulo, dir] in [['setor', 'Setor', 'left'], ['auditorias', 'Auditorias', 'right'], ['lidos', 'Lidos', 'right'], ['pendentes', 'Pendentes', 'right'], ['percPendente', '% Pendente', 'right'], ['percProblema', '% Problema', 'right'], ['reincidencia', 'Acima da meta', 'right'], ['ultimo', 'Última', 'right']]" :key="col"
-                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
                 @click="alternarOrdem(ordemSetores, col, col !== 'setor')">
                 {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemSetores, col)"></i>
               </th>
@@ -655,7 +653,7 @@ const gerarRelatorioPDF = () => {
               <td class="px-3 py-2.5 text-right">—</td>
               <td></td>
             </tr>
-            <tr v-for="s in setoresVisiveis" :key="s.setor" class="hover:bg-indigo-50/40">
+            <tr v-for="s in setoresVisiveis" :key="s.setor" class="hover:bg-slate-50">
               <td class="max-w-56 truncate px-3 py-2.5 font-medium text-slate-800" :title="s.setor">{{ s.setor }}</td>
               <td class="px-3 py-2.5 text-right text-slate-600">{{ s.auditorias }}</td>
               <td class="px-3 py-2.5 text-right text-slate-600">{{ s.lidos.toLocaleString('pt-BR') }}</td>
@@ -700,26 +698,26 @@ const gerarRelatorioPDF = () => {
             <tr class="border-b-2 border-slate-100 text-slate-600">
               <th class="w-10 px-3 py-2.5 text-left font-semibold">#</th>
               <th v-for="[col, titulo, dir] in [['usuario', 'Usuário', 'left'], ['auditorias', 'Auditorias', 'right'], ['leituras', 'Leituras', 'left'], ['mediaPorAuditoria', 'Média/auditoria', 'right'], ['comProblema', 'Com problema', 'right'], ['percProblema', '% Problema', 'right'], ['ultimaData', 'Última', 'right']]" :key="col"
-                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
                 @click="alternarOrdem(ordemUsuarios, col, col !== 'usuario')">
                 {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemUsuarios, col)"></i>
               </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-50">
-            <tr v-for="u in usuariosPagina" :key="u.usuario" class="hover:bg-indigo-50/40">
+            <tr v-for="u in usuariosPagina" :key="u.usuario" class="hover:bg-slate-50">
               <td class="px-3 py-2.5">
-                <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
+                <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
               </td>
               <td class="px-3 py-2.5">
-                <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-indigo-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
+                <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-blue-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
                 <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
               </td>
               <td class="px-3 py-2.5 text-right text-slate-600">{{ u.auditorias }}</td>
               <td class="px-3 py-2.5">
                 <div class="flex items-center gap-2">
                   <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                    <div class="h-full rounded-full bg-indigo-500" :style="{ width: `${(u.leituras / maiorLeitura) * 100}%` }"></div>
+                    <div class="h-full rounded-full bg-blue-500" :style="{ width: `${(u.leituras / maiorLeitura) * 100}%` }"></div>
                   </div>
                   <span class="font-semibold text-slate-800">{{ u.leituras.toLocaleString('pt-BR') }}</span>
                 </div>
@@ -749,7 +747,7 @@ const gerarRelatorioPDF = () => {
     <!-- ===== REINCIDÊNCIA ===== -->
     <template v-else-if="aba === 'reincidencia'">
       <p class="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-        <i class="fas fa-circle-info text-indigo-500"></i>
+        <i class="fas fa-circle-info text-blue-500"></i>
         Base: <b class="text-slate-700">{{ auditoriasMapa.length }}</b> auditoria(s) do período ({{ descricaoPeriodo }}).
         <span v-if="auditoriasMapa.length < auditoriasFiltradas.length">Rupturas ficam de fora (repetem os pendentes da presença); filtre por Ruptura para vê-las.</span>
       </p>
@@ -762,7 +760,7 @@ const gerarRelatorioPDF = () => {
     <!-- ===== MAPA DA LOJA ===== -->
     <template v-else-if="aba === 'mapa'">
       <p class="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-        <i class="fas fa-circle-info text-indigo-500"></i>
+        <i class="fas fa-circle-info text-blue-500"></i>
         Soma de <b class="text-slate-700">{{ auditoriasMapa.length }}</b> auditoria(s) do período ({{ descricaoPeriodo }}). Cores pelo % pendente acumulado e leituras de todo o período.
         <span v-if="auditoriasMapa.length < auditoriasFiltradas.length">Rupturas ficam de fora (repetem os pendentes da presença); filtre por Ruptura para vê-las.</span>
       </p>
@@ -772,7 +770,7 @@ const gerarRelatorioPDF = () => {
     <!-- ===== AUDITORIAS ===== -->
     <template v-else-if="aba === 'auditorias'">
       <!-- Comparação -->
-      <section v-if="comparacao" class="ui-card ui-fade-in border-indigo-200 p-5 md:p-6">
+      <section v-if="comparacao" class="ui-card ui-fade-in border-blue-200 p-5 md:p-6">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 class="text-base font-bold text-slate-900">Comparação de auditorias</h2>
@@ -833,7 +831,7 @@ const gerarRelatorioPDF = () => {
             <h2 class="text-base font-bold text-slate-900">Auditorias do período</h2>
             <p class="text-xs text-slate-500">
               Marque duas para comparar.
-              <span v-if="selecionadas.length === 1" class="font-semibold text-indigo-600">Selecione mais uma.</span>
+              <span v-if="selecionadas.length === 1" class="font-semibold text-blue-600">Selecione mais uma.</span>
             </p>
           </div>
           <div class="relative w-full sm:w-64">
@@ -847,7 +845,7 @@ const gerarRelatorioPDF = () => {
               <tr class="border-b-2 border-slate-100 text-slate-600">
                 <th class="w-8 px-3 py-2.5"><span class="sr-only">Comparar</span></th>
                 <th v-for="[col, titulo, dir] in [['data', 'Data', 'left'], ['tipo', 'Tipo', 'left'], ['status', 'Status', 'left'], ['meta', 'Meta', 'left'], ['pendente', '% Pendente', 'right'], ['total', 'Itens', 'right'], ['pendentes', 'Pendentes', 'right'], ['lidos', 'Lidos', 'right']]" :key="col"
-                  class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-indigo-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
+                  class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
                   @click="alternarOrdem(ordemAuditorias, col)">
                   {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemAuditorias, col)"></i>
                 </th>
@@ -855,9 +853,9 @@ const gerarRelatorioPDF = () => {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
-              <tr v-for="l in auditoriasPagina" :key="l.id" class="group" :class="selecionadas.includes(l.id) ? 'bg-indigo-50/70' : 'hover:bg-slate-50'">
+              <tr v-for="l in auditoriasPagina" :key="l.id" class="group" :class="selecionadas.includes(l.id) ? 'bg-blue-50/70' : 'hover:bg-slate-50'">
                 <td class="px-3 py-2.5">
-                  <input type="checkbox" class="size-4 cursor-pointer rounded accent-indigo-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
+                  <input type="checkbox" class="size-4 cursor-pointer rounded accent-blue-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
                 </td>
                 <td class="px-3 py-2.5 font-medium text-slate-800">{{ l.dataFormatada }} <span class="text-[10px] text-slate-400">#{{ l.id }}</span></td>
                 <td class="px-3 py-2.5">
@@ -880,7 +878,7 @@ const gerarRelatorioPDF = () => {
                 <td class="px-3 py-2.5 text-right text-slate-600">{{ l.pendentes.toLocaleString('pt-BR') }}</td>
                 <td class="px-3 py-2.5 text-right text-slate-600">{{ l.lidos.toLocaleString('pt-BR') }}</td>
                 <td class="px-3 py-2.5 text-right">
-                  <button type="button" class="rounded-lg px-2 py-1 font-semibold text-indigo-600 hover:bg-indigo-50" @click="abrirAuditoria(l.id)">Abrir <i class="fas fa-arrow-right text-[9px]"></i></button>
+                  <button type="button" class="rounded-lg px-2 py-1 font-semibold text-blue-600 hover:bg-blue-50" @click="abrirAuditoria(l.id)">Abrir</button>
                 </td>
               </tr>
             </tbody>

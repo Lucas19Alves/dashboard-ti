@@ -244,9 +244,9 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 <template>
   <div class="space-y-4" tabindex="-1" @keydown="aoTeclar">
     <!-- Barra de ferramentas -->
-    <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+    <div class="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
       <div class="flex flex-wrap items-center gap-2">
-        <div class="flex rounded-xl bg-slate-100 p-1 text-sm">
+        <div v-if="(pinturas?.length || modos.length) > 1" class="flex rounded-xl bg-slate-100 p-1 text-sm">
           <button v-for="[v, r, i] in (pinturas?.length ? pinturas.map(p => [p.id, p.rotulo, p.icone || 'fas fa-palette']) : [['pendente', textos.rotulo, pintura?.icone || 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m)))" :key="v" type="button"
             class="rounded-lg px-3 py-1.5 font-semibold transition" :class="modo === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'" @click="modo = v">
             <i :class="[i, 'mr-1 text-xs']"></i>{{ r }}
@@ -268,7 +268,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 
     <div class="grid grid-cols-1 gap-4" :class="laterais || areaSelecionada ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''">
       <!-- Mapa -->
-      <section class="overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
+      <section class="overflow-hidden rounded-xl bg-white p-4 shadow-sm">
         <div v-if="editando" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900">
           <span class="font-bold"><i class="fas fa-expand mr-1"></i>Tamanho do mapa <span class="font-normal text-blue-700">{{ layout.colunas }} × {{ layout.linhas }}</span></span>
           <span v-for="[lado, rotulo, icone] in LADOS" :key="lado" class="inline-flex items-center gap-1">
@@ -366,7 +366,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 
       <!-- Painel lateral -->
       <aside v-if="laterais || areaSelecionada" class="space-y-4">
-        <section v-if="areaSelecionada" class="ui-fade-in rounded-2xl bg-white p-5 shadow-sm">
+        <section v-if="areaSelecionada" class="ui-fade-in rounded-xl bg-white p-5 shadow-sm">
           <div class="flex items-start justify-between gap-2">
             <div>
               <p class="text-xs font-semibold text-slate-500"><i :class="[TIPOS_AREA[areaSelecionada.tipo]?.icone, 'mr-1']"></i>{{ TIPOS_AREA[areaSelecionada.tipo]?.nome }}</p>
@@ -440,7 +440,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <button v-else-if="editando && areaSelecionada.tipo === 'outro'" type="button" class="ui-btn-primary mt-4 w-full py-2" @click="adicionarAoMapa(areaSelecionada.bloco)"><i class="fas fa-plus"></i>Adicionar ao mapa</button>
         </section>
 
-        <section v-else-if="laterais" class="rounded-2xl bg-white p-5 shadow-sm">
+        <section v-else-if="laterais" class="rounded-xl bg-white p-5 shadow-sm">
           <p class="text-sm font-bold text-slate-900">Áreas mais críticas</p>
           <p class="text-xs text-slate-500">Clique para localizar no mapa.</p>
           <p v-if="!criticas.length" class="mt-3 text-sm text-slate-500">Nenhuma área com pendências.</p>
@@ -458,7 +458,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </ul>
         </section>
 
-        <section v-if="laterais" class="rounded-2xl bg-white p-5 shadow-sm">
+        <section v-if="laterais" class="rounded-xl bg-white p-5 shadow-sm">
           <p class="text-sm font-bold text-slate-900">Usuários no mapa</p>
           <p class="text-xs text-slate-500">Escolha um para ver onde leu.</p>
           <div v-if="usuarios.length" class="relative mt-3">

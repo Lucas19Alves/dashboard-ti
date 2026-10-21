@@ -3,14 +3,14 @@
     <div class="space-y-5">
       <!-- Resumo -->
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <div class="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
-          <span class="inline-flex size-12 items-center justify-center rounded-2xl bg-white shadow-sm" :class="classeValor"><i :class="[icone, 'text-lg']"></i></span>
+        <div class="flex items-center gap-4 rounded-xl bg-slate-50 p-4">
+          <span class="inline-flex size-12 items-center justify-center rounded-xl bg-white shadow-sm" :class="classeValor"><i :class="[icone, 'text-lg']"></i></span>
           <div>
             <p :class="['text-3xl font-bold tracking-tight', classeValor]">{{ Number(valor).toLocaleString('pt-BR') }}</p>
             <p class="text-xs text-slate-500">de {{ composicao.total.toLocaleString('pt-BR') }} auditáveis</p>
           </div>
         </div>
-        <div class="rounded-2xl bg-slate-50 p-4">
+        <div class="rounded-xl bg-slate-50 p-4">
           <div class="flex items-center justify-between text-xs">
             <span class="font-semibold text-slate-600">Composição da auditoria</span>
             <span class="font-bold text-slate-800">{{ composicao.conclusao.toFixed(1) }}% concluído</span>

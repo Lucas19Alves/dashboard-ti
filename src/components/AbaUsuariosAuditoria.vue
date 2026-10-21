@@ -159,7 +159,7 @@ const exportarCsv = () => {
 
 <template>
   <div class="space-y-6">
-    <div v-if="!usuarios.length" class="rounded-2xl bg-white px-6 py-14 text-center shadow-sm">
+    <div v-if="!usuarios.length" class="rounded-xl bg-white px-6 py-14 text-center shadow-sm">
       <i class="fas fa-users text-3xl text-slate-300"></i>
       <p class="mt-3 font-semibold text-slate-700">Nenhuma informação de usuários nesta auditoria</p>
       <p class="mt-1 text-sm text-slate-500">A planilha importada não tem a coluna "Usuário" preenchida.</p>
@@ -168,27 +168,27 @@ const exportarCsv = () => {
     <template v-else>
       <!-- Resumo do time -->
       <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <div class="rounded-2xl bg-white p-4 shadow-sm">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
           <p class="text-xs font-semibold text-slate-500">Usuários</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.total }}</p>
           <p class="text-xs text-slate-500">participaram da contagem</p>
         </div>
-        <div class="rounded-2xl bg-white p-4 shadow-sm">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
           <p class="text-xs font-semibold text-slate-500">Leituras</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.leituras.toLocaleString('pt-BR') }}</p>
           <p class="text-xs text-slate-500">média {{ Math.round(resumo.media).toLocaleString('pt-BR') }} por usuário</p>
         </div>
-        <div class="rounded-2xl bg-white p-4 shadow-sm">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
           <p class="text-xs font-semibold text-slate-500">Ritmo médio</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ Math.round(resumo.ritmoMedio).toLocaleString('pt-BR') }}<span class="text-sm font-semibold text-slate-500">/h</span></p>
           <p class="text-xs text-slate-500">leituras por hora ativa</p>
         </div>
-        <div class="rounded-2xl bg-white p-4 shadow-sm">
+        <div class="rounded-xl bg-white p-4 shadow-sm">
           <p class="text-xs font-semibold text-slate-500">Leituras com problema</p>
           <p class="mt-1 text-2xl font-bold" :class="resumo.percProblema > 5 ? 'text-red-700' : 'text-slate-900'">{{ resumo.percProblema.toFixed(1) }}%</p>
           <p class="text-xs text-slate-500">sem estoque ou fora do local</p>
         </div>
-        <div class="col-span-2 rounded-2xl bg-white p-4 shadow-sm md:col-span-1">
+        <div class="col-span-2 rounded-xl bg-white p-4 shadow-sm md:col-span-1">
           <p class="text-xs font-semibold text-slate-500">Pico do time</p>
           <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumo.picoHora === null ? '—' : formatarHora(resumo.picoHora) }}</p>
           <p class="text-xs text-slate-500">{{ resumo.picoQtd.toLocaleString('pt-BR') }} leituras na hora</p>
@@ -197,7 +197,7 @@ const exportarCsv = () => {
 
       <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <!-- Pódio -->
-        <section class="rounded-2xl bg-white p-5 shadow-sm">
+        <section class="rounded-xl bg-white p-5 shadow-sm">
           <div class="flex items-center justify-between">
             <h3 class="text-base font-bold text-slate-900">Destaques da contagem</h3>
             <i class="fas fa-trophy text-amber-500"></i>
@@ -222,7 +222,7 @@ const exportarCsv = () => {
         </section>
 
         <!-- Ritmo do time por hora -->
-        <section class="rounded-2xl bg-white p-5 shadow-sm">
+        <section class="rounded-xl bg-white p-5 shadow-sm">
           <h3 class="text-base font-bold text-slate-900">Leituras do time por hora</h3>
           <p class="text-xs text-slate-500">Soma de todos os usuários, das 08h às 20h.</p>
           <div class="mt-4 flex h-40 items-end gap-1.5">
@@ -266,7 +266,7 @@ const exportarCsv = () => {
         </div>
       </div>
 
-      <p v-if="!listaVisivel.length" class="rounded-2xl bg-white py-10 text-center text-sm text-slate-500 shadow-sm">Nenhum usuário encontrado.</p>
+      <p v-if="!listaVisivel.length" class="rounded-xl bg-white py-10 text-center text-sm text-slate-500 shadow-sm">Nenhum usuário encontrado.</p>
 
       <!-- Cartões -->
       <div v-else-if="visao === 'cards'" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -274,7 +274,7 @@ const exportarCsv = () => {
           v-for="u in listaVisivel"
           :key="u.nome"
           type="button"
-          class="group flex flex-col rounded-2xl bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+          class="group flex flex-col rounded-xl bg-white p-5 text-left shadow-sm transition"
           @click="emit('detalhes', u.nome)"
         >
           <div class="flex items-center gap-3">
@@ -324,7 +324,7 @@ const exportarCsv = () => {
       </div>
 
       <!-- Tabela -->
-      <div v-else-if="visao === 'tabela'" class="overflow-x-auto rounded-2xl bg-white shadow-sm">
+      <div v-else-if="visao === 'tabela'" class="overflow-x-auto rounded-xl bg-white shadow-sm">
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-xs text-slate-500">
             <tr>
@@ -361,7 +361,7 @@ const exportarCsv = () => {
       </div>
 
       <!-- Mapa de calor usuário × hora -->
-      <div v-else class="overflow-x-auto rounded-2xl bg-white p-5 shadow-sm">
+      <div v-else class="overflow-x-auto rounded-xl bg-white p-5 shadow-sm">
         <table class="w-full border-separate" style="border-spacing: 3px">
           <thead>
             <tr>
@@ -387,7 +387,7 @@ const exportarCsv = () => {
       </div>
 
       <!-- Cobertura por setor -->
-      <section v-if="cobertura.length" class="rounded-2xl bg-white p-5 shadow-sm">
+      <section v-if="cobertura.length" class="rounded-xl bg-white p-5 shadow-sm">
         <div class="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 class="text-base font-bold text-slate-900">Quem leu cada setor</h3>

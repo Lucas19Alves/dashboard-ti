@@ -193,7 +193,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
 
     <div class="relatorio space-y-5 bg-white">
       <!-- % pendente -->
-      <div class="flex flex-col gap-4 rounded-2xl bg-blue-700 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-4 rounded-xl bg-blue-700 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="text-xs font-semibold text-blue-200">Relatório de auditoria</p>
           <p class="mt-1 text-2xl font-bold">{{ auditoria.tipo }} · {{ dataBR }}</p>
@@ -210,7 +210,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
 
       <!-- Indicadores -->
       <div class="grid grid-cols-2 gap-3" :class="cards.length === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4'">
-        <div v-for="c in cards" :key="c.rotulo" class="rounded-2xl p-4" :class="c.classe">
+        <div v-for="c in cards" :key="c.rotulo" class="rounded-xl p-4" :class="c.classe">
           <p class="text-xs font-semibold text-slate-500">{{ c.rotulo }}</p>
           <p class="text-2xl font-bold" :class="c.texto">{{ c.valor.toLocaleString('pt-BR') }}</p>
           <p class="text-xs text-slate-500">{{ c.detalhe }}</p>
@@ -218,7 +218,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
       </div>
 
       <!-- % pendente por setor (destaque) -->
-      <section class="rounded-2xl p-5 ring-1 ring-slate-200">
+      <section class="rounded-xl p-5 ring-1 ring-slate-200">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-store-alt mr-2 text-blue-600"></i>% pendente por setor</h3>
           <p class="text-xs text-slate-500">
@@ -258,7 +258,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
 
       <div class="grid grid-cols-1 gap-5" :class="locaisSemLeitura.length ? 'lg:grid-cols-2' : ''">
         <!-- Top 10 locais (destaque) -->
-        <section class="rounded-2xl p-5 ring-1 ring-slate-200">
+        <section class="rounded-xl p-5 ring-1 ring-slate-200">
           <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-map-marker-alt mr-2 text-amber-600"></i>Top 10 locais com mais pendentes</h3>
           <p v-if="!topLocais.length" class="mt-4 text-sm text-slate-500">Nenhum local com pendências.</p>
           <ol v-else class="mt-4 space-y-3">
@@ -272,7 +272,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
         </section>
 
         <!-- Locais sem leitura (só quando houver) -->
-        <section v-if="locaisSemLeitura.length" class="rounded-2xl bg-red-50 p-5">
+        <section v-if="locaisSemLeitura.length" class="rounded-xl bg-red-50 p-5">
           <div class="flex items-baseline justify-between gap-2">
             <h3 class="text-lg font-bold text-red-800"><i class="fas fa-ban mr-2"></i>Locais sem leitura</h3>
             <span class="text-3xl font-black text-red-700">{{ locaisSemLeitura.length }}</span>

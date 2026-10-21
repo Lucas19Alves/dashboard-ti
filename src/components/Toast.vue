@@ -5,7 +5,7 @@
         v-for="toast in store.toasts"
         :key="toast.id"
         role="status"
-        class="pointer-events-auto relative w-full overflow-hidden rounded-xl border bg-white/95 shadow-xl shadow-slate-900/10 backdrop-blur"
+        class="pointer-events-auto relative w-full overflow-hidden rounded-xl border bg-white shadow-xl shadow-slate-900/10"
         :class="estilos[toast.tipo]?.borda || estilos.info.borda"
       >
         <div class="flex items-start gap-3 p-3.5">

@@ -151,7 +151,7 @@ const indicadores = computed(() => {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white p-5 shadow-sm">
+  <section class="rounded-xl bg-white p-5 shadow-sm">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-route mr-2 text-blue-600"></i>Mapa histórico do usuário</h3>

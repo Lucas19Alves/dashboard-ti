@@ -156,8 +156,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', atalhoGlobal))
 
 <template>
   <Teleport to="body">
-    <div v-if="aberta" class="ui-fade-in fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/40 px-4 pt-[12vh] backdrop-blur-sm" @click.self="fechar">
-      <section class="ui-pop-in w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Busca rápida">
+    <div v-if="aberta" class="ui-fade-in fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/40 px-4 pt-[12vh]" @click.self="fechar">
+      <section class="ui-pop-in w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl" role="dialog" aria-modal="true" aria-label="Busca rápida">
         <div class="flex items-center gap-3 border-b border-slate-100 px-4">
           <i class="fas fa-search text-slate-400"></i>
           <input

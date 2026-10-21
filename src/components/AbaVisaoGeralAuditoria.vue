@@ -303,39 +303,33 @@ const graficoAndamento = computed(() => {
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           @click="abrirModalMetrica('total')"
-          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+          class="bg-white rounded-xl p-5 shadow-sm cursor-pointer transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Total Auditável</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
-              <i class="fas fa-clipboard-list text-sm"></i>
-            </span>
+            <i class="fas fa-clipboard-list text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
-          <p class="text-3xl font-bold text-blue-700">{{ metricasGerais?.totalItens }}</p>
+          <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.totalItens }}</p>
           <p class="text-[11px] text-slate-400">Itens para auditar</p>
         </div>
         <div
           @click="abrirModalMetrica('lidos')"
-          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+          class="bg-white rounded-xl p-5 shadow-sm cursor-pointer transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Total Lidos</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
-              <i class="fas fa-check-circle text-sm"></i>
-            </span>
+            <i class="fas fa-check-circle text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
-          <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.totalLidos }}</p>
+          <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.totalLidos }}</p>
           <p class="text-[11px] text-slate-400">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído  |  Meta: {{ metricasGerais?.metaConclusao }}%</p>
         </div>
         <div
           @click="abrirModalMetrica('pendentes')"
-          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+          class="bg-white rounded-xl p-5 shadow-sm cursor-pointer transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Pendentes</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-amber-50 text-amber-600">
-              <i class="fas fa-hourglass-half text-sm"></i>
-            </span>
+            <i class="fas fa-hourglass-half text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-amber-700">{{ metricasGerais?.pendentes }}</p>
           <p class="text-[11px]" :class="metricasGerais?.percentualPendente <= 3 ? 'text-emerald-500' : 'text-red-500'">
@@ -345,13 +339,11 @@ const graficoAndamento = computed(() => {
         </div>
         <div
           @click="abrirModalMetrica('problema')"
-          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+          class="bg-white rounded-xl p-5 shadow-sm cursor-pointer transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Com Problema</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-50 text-red-600">
-              <i class="fas fa-exclamation-triangle text-sm"></i>
-            </span>
+            <i class="fas fa-exclamation-triangle text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-red-700">{{ metricasGerais?.comProblema }}</p>
           <p class="text-[11px] text-slate-400">Requer atenção</p>
@@ -361,25 +353,21 @@ const graficoAndamento = computed(() => {
       <ComparativoAnterior :auditoria="auditoria" :historico="store.auditorias" />
 
       <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm flex flex-col gap-2">
+        <div class="bg-white rounded-xl p-5 shadow-sm flex flex-col gap-2">
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Atualizado</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
-              <i class="fas fa-sync-alt text-sm"></i>
-            </span>
+            <i class="fas fa-sync-alt text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
-          <p class="text-3xl font-bold text-emerald-700">{{ metricasGerais?.atualizados || 0 }}</p>
+          <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.atualizados || 0 }}</p>
           <p class="text-[11px] text-slate-400">Lidos e corretos</p>
         </div>
         <div
           @click="abrirModalMetrica('desatualizado')"
-          class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
+          class="bg-white rounded-xl p-5 shadow-sm cursor-pointer transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
             <p class="text-xs font-semibold text-slate-500">Desatualizado</p>
-            <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-yellow-50 text-yellow-600">
-              <i class="fas fa-history text-sm"></i>
-            </span>
+            <i class="fas fa-history text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-yellow-600">{{ metricasGerais?.desatualizados || 0 }}</p>
           <p class="text-[11px] text-slate-400">Lidos mas desatualizados</p>
@@ -387,13 +375,11 @@ const graficoAndamento = computed(() => {
       </div>
 
       <!-- Andamento acumulado da auditoria completa por horário -->
-      <div v-if="auditoria?.dados?.length" class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+      <div v-if="auditoria?.dados?.length" class="bg-white rounded-xl p-6 shadow-sm">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
           <div>
             <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
-              <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-violet-50 text-violet-600">
-                <i class="fas fa-chart-line text-sm"></i>
-              </span>
+              <i class="fas fa-chart-line text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
               Andamento da Auditoria por Horário
             </h3>
             <p class="text-xs text-slate-400 mt-1">Percentual acumulado ao longo do dia{{ filtroAndamentoSetor === 'todos' ? ' na auditoria completa' : ` no setor ${filtroAndamentoSetor}` }}.</p>
@@ -407,9 +393,9 @@ const graficoAndamento = computed(() => {
               <option value="todos">Todos os setores</option>
               <option v-for="s in Object.keys(auditoria?.analise?.porSetor || {})" :key="s" :value="s">{{ s }}</option>
             </select>
-            <div v-if="andamentoAuditoriaPorHora" class="rounded-xl bg-violet-50 px-4 py-2 text-right shrink-0">
-              <p class="text-xs font-semibold text-violet-500">Progresso atual</p>
-              <p class="text-xl font-bold text-violet-700">{{ andamentoAuditoriaPorHora.percentualFinal.toFixed(2) }}%</p>
+            <div v-if="andamentoAuditoriaPorHora" class="rounded-lg bg-slate-50 px-4 py-2 text-right shrink-0">
+              <p class="text-xs font-semibold text-slate-500">Progresso atual</p>
+              <p class="text-xl font-semibold text-slate-900">{{ andamentoAuditoriaPorHora.percentualFinal.toFixed(2) }}%</p>
             </div>
           </div>
         </div>
@@ -424,8 +410,8 @@ const graficoAndamento = computed(() => {
             >
               <defs>
                 <linearGradient id="andamento-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28" />
-                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02" />
+                  <stop offset="0%" stop-color="#1d4ed8" stop-opacity="0.10" />
+                  <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.10" />
                 </linearGradient>
               </defs>
 
@@ -450,7 +436,7 @@ const graficoAndamento = computed(() => {
               <polyline
                 :points="graficoAndamento.linha"
                 fill="none"
-                stroke="#7c3aed"
+                stroke="#1d4ed8"
                 stroke-width="4"
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -466,8 +452,8 @@ const graficoAndamento = computed(() => {
                   stroke-width="1"
                   stroke-dasharray="3 4"
                 />
-                <circle :cx="p.x" :cy="p.y" r="6" fill="#ffffff" stroke="#7c3aed" stroke-width="4" />
-                <text :x="p.x" :y="Math.max(14, p.y - 13)" text-anchor="middle" class="fill-violet-700 text-[11px] font-bold">
+                <circle :cx="p.x" :cy="p.y" r="6" fill="#ffffff" stroke="#1d4ed8" stroke-width="4" />
+                <text :x="p.x" :y="Math.max(14, p.y - 13)" text-anchor="middle" class="fill-slate-700 text-[11px] font-bold">
                   {{ p.percentual.toFixed(1) }}%
                 </text>
                 <text :x="p.x" :y="graficoAndamento.altura - 22" text-anchor="middle" class="fill-slate-500 text-[11px] font-medium">
@@ -487,7 +473,7 @@ const graficoAndamento = computed(() => {
       </div>
 
       <!-- Progress Geral -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+      <div class="bg-white rounded-xl p-6 shadow-sm">
         <h3 class="font-bold text-lg text-gray-800 mb-4">Progresso Geral da Auditoria</h3>
         <div class="space-y-3">
           <div class="space-y-4">
@@ -534,7 +520,7 @@ const graficoAndamento = computed(() => {
       </div>
 
       <!-- Mapa de Leituras por Horário -->
-      <div class="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm">
+      <div class="bg-white rounded-xl p-6 shadow-sm">
         <div>
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <h3 class="font-bold text-lg text-gray-800">
@@ -561,20 +547,20 @@ const graficoAndamento = computed(() => {
           <div v-if="leituraPorHoraFiltrada && leituraPorHoraFiltrada.totalLeituras > 0">
             <!-- Cards Resumo -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <div class="rounded-2xl bg-blue-50/70 p-3 text-center">
+              <div class="rounded-xl bg-blue-50/70 p-3 text-center">
                 <p class="text-xs font-semibold text-blue-500">Total Leituras</p>
-                <p class="text-2xl font-bold text-blue-700 mt-1">{{ leituraPorHoraFiltrada.totalLeituras.toLocaleString() }}</p>
+                <p class="text-2xl font-bold text-slate-900 mt-1">{{ leituraPorHoraFiltrada.totalLeituras.toLocaleString() }}</p>
               </div>
-              <div class="rounded-2xl bg-emerald-50/70 p-3 text-center">
+              <div class="rounded-xl bg-emerald-50/70 p-3 text-center">
                 <p class="text-xs font-semibold text-emerald-500">Horário de Pico</p>
-                <p class="text-2xl font-bold text-emerald-700 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
+                <p class="text-2xl font-bold text-slate-900 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
                 <p class="text-[10px] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
               </div>
-              <div class="rounded-2xl bg-indigo-50/70 p-3 text-center">
-                <p class="text-xs font-semibold text-indigo-500">Média/Hora</p>
-                <p class="text-2xl font-bold text-indigo-700 mt-1">{{ leituraPorHoraFiltrada.media }}</p>
+              <div class="rounded-xl bg-slate-50 p-3 text-center">
+                <p class="text-xs font-semibold text-slate-500">Média/Hora</p>
+                <p class="text-2xl font-bold text-slate-900 mt-1">{{ leituraPorHoraFiltrada.media }}</p>
               </div>
-              <div class="rounded-2xl bg-amber-50/70 p-3 text-center">
+              <div class="rounded-xl bg-amber-50/70 p-3 text-center">
                 <p class="text-xs font-semibold text-amber-500">Horário de Baixa</p>
                 <p class="text-2xl font-bold text-amber-700 mt-1">{{ leituraPorHoraFiltrada.baixa?.hora || '--' }}</p>
                 <p class="text-[10px] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
@@ -582,7 +568,7 @@ const graficoAndamento = computed(() => {
             </div>
 
             <!-- Quantidade de leituras em cada hora -->
-            <div class="rounded-2xl border border-slate-100 bg-white/70 p-4">
+            <div class="rounded-xl border border-slate-100 bg-white p-4">
                 <div class="mb-3">
                   <p class="text-sm font-semibold text-slate-800">Leituras por horário</p>
                   <p class="text-[11px] text-slate-400">Quantidade registrada em cada faixa horária</p>
@@ -619,10 +605,8 @@ const graficoAndamento = computed(() => {
 
             <!-- Insights de Variação -->
             <div v-if="leituraPorHoraFiltrada.maiorSubida || leituraPorHoraFiltrada.maiorQueda" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-if="leituraPorHoraFiltrada.maiorSubida" class="flex items-center gap-3 rounded-2xl bg-emerald-50/70 p-3">
-                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 text-emerald-600 shrink-0">
-                  <i class="fas fa-arrow-up text-sm"></i>
-                </span>
+              <div v-if="leituraPorHoraFiltrada.maiorSubida" class="flex items-center gap-3 rounded-xl bg-emerald-50/70 p-3">
+                <i class="fas fa-arrow-up text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
                 <div>
                   <p class="text-xs font-semibold text-emerald-500">Maior Subida</p>
                   <p class="text-xs text-emerald-700 font-medium">
@@ -631,10 +615,8 @@ const graficoAndamento = computed(() => {
                   </p>
                 </div>
               </div>
-              <div v-if="leituraPorHoraFiltrada.maiorQueda" class="flex items-center gap-3 rounded-2xl bg-red-50/70 p-3">
-                <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-100 text-red-600 shrink-0">
-                  <i class="fas fa-arrow-down text-sm"></i>
-                </span>
+              <div v-if="leituraPorHoraFiltrada.maiorQueda" class="flex items-center gap-3 rounded-xl bg-red-50/70 p-3">
+                <i class="fas fa-arrow-down text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
                 <div>
                   <p class="text-xs font-semibold text-red-500">Maior Queda</p>
                   <p class="text-xs text-red-700 font-medium">

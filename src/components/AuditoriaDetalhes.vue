@@ -2,7 +2,7 @@
   <!-- Modal Background -->
   <div 
     v-if="auditoria"
-    class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40 flex items-center justify-center p-4"
+    class="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
     @click.stop="fechar"
   >
     <!-- Modal Content -->
@@ -62,21 +62,21 @@
           <!-- Cards de Métricas (se houver dados) -->
           <template v-else>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Total de Itens</p>
-                <p class="text-4xl font-bold text-blue-600 mt-2">{{ analise?.totalItens || 0 }}</p>
+                <p class="text-4xl font-bold text-slate-900 mt-2">{{ analise?.totalItens || 0 }}</p>
               </div>
-              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Itens Lidos</p>
-                <p class="text-4xl font-bold text-green-600 mt-2">{{ analise?.itensLidos || 0 }}</p>
+                <p class="text-4xl font-bold text-slate-900 mt-2">{{ analise?.itensLidos || 0 }}</p>
               </div>
-              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Itens NÃO Lidos</p>
                 <p class="text-4xl font-bold text-orange-600 mt-2">{{ analise?.itensPendentes || 0 }}</p>
               </div>
-              <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                 <p class="text-gray-600 text-sm font-medium">Parcial (%)</p>
-                <p class="text-4xl font-bold text-purple-600 mt-2">{{ analise?.parcialPercentual || 0 }}%</p>
+                <p class="text-4xl font-bold text-slate-900 mt-2">{{ analise?.parcialPercentual || 0 }}%</p>
               </div>
             </div>
 
@@ -149,7 +149,7 @@
                   <td class="px-6 py-3 font-medium text-gray-800">{{ usuario }}</td>
                   <td class="px-6 py-3 text-right text-green-600 font-semibold">{{ analise?.porUsuario[usuario]?.lidos || 0 }}</td>
                   <td class="px-6 py-3 text-right text-orange-600 font-semibold">{{ analise?.porUsuario[usuario]?.pendentes || 0 }}</td>
-                  <td class="px-6 py-3 text-right text-purple-600 font-semibold">
+                  <td class="px-6 py-3 text-right text-slate-900 font-semibold">
                     {{ calcularPorcentagem(analise?.porUsuario[usuario]) }}%
                   </td>
                 </tr>

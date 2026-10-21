@@ -678,7 +678,7 @@ const classesCardDia = (d) => {
 
     <UiModal v-if="mostrarModalExclusao" title="Excluir auditoria" subtitle="Esta ação não pode ser desfeita." width="max-w-md" @close="fecharModalExclusao">
       <div class="flex items-start gap-3">
-        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600"><i class="fas fa-trash"></i></span>
+        <i class="fas fa-trash shrink-0 text-slate-400" aria-hidden="true"></i>
         <p class="text-sm text-slate-600">Todos os dados importados e a análise desta auditoria serão apagados deste navegador. Considere exportar um backup antes.</p>
       </div>
       <template #footer>
@@ -689,7 +689,7 @@ const classesCardDia = (d) => {
 
     <UiModal v-if="mostrarModalFechamento" title="Fechar auditoria" subtitle="Ela sai das ativas e fica no histórico." width="max-w-md" @close="fecharModalFechamento">
       <div class="flex items-start gap-3">
-        <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><i class="fas fa-lock"></i></span>
+        <i class="fas fa-lock shrink-0 text-slate-400" aria-hidden="true"></i>
         <p class="text-sm text-slate-600">Depois de fechada, a auditoria fica somente para consulta e entra nos indicadores de meta.</p>
       </div>
       <template #footer>
@@ -789,7 +789,7 @@ const classesCardDia = (d) => {
                 <button
                   v-else-if="!auditoriasPorDiaTipo[d.data] && (tiposPlanejados[d.dayIndex] || []).includes(tipo)"
                   @click.stop="criarAPartirCalendario(d.data, tipo, d.label)"
-                  class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white/80 border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
+                  class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
                   title="Criar auditoria e iniciar acompanhamento"
                 >
                   <i class="fas fa-plus text-[10px]"></i>
@@ -799,7 +799,7 @@ const classesCardDia = (d) => {
               <button
                 v-if="!auditoriasPorDiaTipo[d.data] && !(tiposPlanejados[d.dayIndex] || []).length"
                 @click.stop="criarAPartirCalendario(d.data, formulario.tipo, d.label)"
-                class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white/80 border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
+                class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
               >
                 <i class="fas fa-plus text-[10px]"></i>
                 Criar Auditoria
@@ -1001,7 +1001,7 @@ const classesCardDia = (d) => {
               <i class="fas fa-chevron-down text-[10px] opacity-60"></i>
             </button>
             <div v-if="mostrarFiltroData" class="fixed inset-0 z-40" @click="mostrarFiltroData = false"></div>
-            <div v-if="mostrarFiltroData" class="ui-pop-in absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-slate-900/5">
+            <div v-if="mostrarFiltroData" class="ui-pop-in absolute right-0 top-full z-50 mt-2 w-72 rounded-xl bg-white p-4 shadow-2xl ring-1 ring-slate-900/5">
               <p class="mb-3 text-sm font-bold text-slate-800">Filtrar por data</p>
               <div class="space-y-3">
                 <select v-model="filtroDataTipo" class="ui-input py-2 text-sm">
@@ -1034,8 +1034,8 @@ const classesCardDia = (d) => {
 
       <!-- ===== Ativas (calendário) ===== -->
       <template v-if="abaAtiva === 'calendario'">
-        <div v-if="auditoriasFiltradas.length === 0" class="rounded-2xl bg-white px-6 py-12 text-center shadow-sm">
-          <span class="mx-auto inline-flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><i class="fas fa-check-double text-lg"></i></span>
+        <div v-if="auditoriasFiltradas.length === 0" class="rounded-xl bg-white px-6 py-12 text-center shadow-sm">
+          <span class="mx-auto inline-flex size-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><i class="fas fa-check-double text-lg"></i></span>
           <p class="mt-3 font-semibold text-slate-800">Nenhuma auditoria em andamento</p>
           <p class="mt-1 text-sm text-slate-500">Use o calendário acima para iniciar a próxima.</p>
         </div>
@@ -1044,7 +1044,7 @@ const classesCardDia = (d) => {
           <article
             v-for="auditoria in auditoriasFiltradas"
             :key="auditoria.id"
-            class="group relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm shadow-slate-900/5 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            class="group relative flex flex-col overflow-hidden rounded-xl bg-white shadow-sm shadow-slate-900/5 transition duration-200"
           >
             <router-link :to="`/auditoria/${auditoria.id}`" class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
@@ -1090,7 +1090,7 @@ const classesCardDia = (d) => {
             </router-link>
             <div class="flex items-center gap-1 bg-slate-50/80 px-3 py-2">
               <router-link :to="`/auditoria/${auditoria.id}`" class="mr-auto rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50">
-                Abrir painel <i class="fas fa-arrow-right text-[10px]"></i>
+                Abrir painel
               </router-link>
               <button type="button" class="rounded-lg px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50" title="Fechar auditoria" @click="fecharAuditoria(auditoria.id)">
                 <i class="fas fa-lock mr-1"></i>Fechar
@@ -1107,22 +1107,22 @@ const classesCardDia = (d) => {
       <template v-else>
         <!-- Resumo do tipo -->
         <div v-if="resumoTipo?.total" class="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,2fr)]">
-          <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="rounded-xl bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold text-slate-500">Auditorias</p>
             <p class="mt-1 text-2xl font-bold text-slate-900">{{ resumoTipo.total }}</p>
             <p class="text-xs text-slate-500">{{ resumoTipo.fechadas }} fechadas</p>
           </div>
-          <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="rounded-xl bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold text-slate-500">Na meta</p>
             <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.taxaMeta ?? 100) < 70 ? 'text-amber-700' : 'text-emerald-700'">{{ resumoTipo.taxaMeta === null ? '—' : resumoTipo.taxaMeta.toFixed(0) + '%' }}</p>
             <p class="text-xs text-slate-500">{{ resumoTipo.dentroMeta }} de {{ resumoTipo.fechadas }} fechadas</p>
           </div>
-          <div class="rounded-2xl bg-white p-4 shadow-sm">
+          <div class="rounded-xl bg-white p-4 shadow-sm">
             <p class="text-xs font-semibold text-slate-500">Pendente médio</p>
             <p class="mt-1 text-2xl font-bold" :class="(resumoTipo.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ resumoTipo.mediaPendente === null ? '—' : resumoTipo.mediaPendente.toFixed(2) + '%' }}</p>
             <p class="text-xs text-slate-500">Meta: até {{ META }}%</p>
           </div>
-          <div class="col-span-2 rounded-2xl bg-white p-4 shadow-sm lg:col-span-1">
+          <div class="col-span-2 rounded-xl bg-white p-4 shadow-sm lg:col-span-1">
             <p class="text-xs font-semibold text-slate-500">Últimas {{ resumoTipo.serie.length }} · % pendente</p>
             <SparklineMeta v-if="resumoTipo.serie.length > 1" class="mt-2" altura-classe="h-12" :pontos="resumoTipo.serie" :meta="META" @selecionar="p => router.push(`/auditoria/${p.id}`)" />
             <p v-else class="mt-4 text-xs text-slate-400">Poucos dados para o gráfico.</p>
@@ -1141,14 +1141,14 @@ const classesCardDia = (d) => {
           >{{ s.rotulo }}</button>
         </div>
 
-        <div v-if="historicoFiltrado.length === 0" class="rounded-2xl bg-white px-6 py-12 text-center shadow-sm">
+        <div v-if="historicoFiltrado.length === 0" class="rounded-xl bg-white px-6 py-12 text-center shadow-sm">
           <i class="fas fa-search text-2xl text-slate-300"></i>
           <p class="mt-3 font-semibold text-slate-800">Nenhuma auditoria encontrada</p>
           <p class="mt-1 text-sm text-slate-500">Ajuste a busca ou os filtros.</p>
         </div>
 
         <div v-else class="space-y-5">
-          <section v-for="grupo in gruposHistorico" :key="grupo.chave" class="overflow-hidden rounded-2xl bg-white shadow-sm">
+          <section v-for="grupo in gruposHistorico" :key="grupo.chave" class="overflow-hidden rounded-xl bg-white shadow-sm">
             <header class="flex flex-wrap items-center justify-between gap-2 bg-slate-50/80 px-5 py-3">
               <h3 class="text-sm font-bold text-slate-800">{{ grupo.rotulo }}</h3>
               <p class="text-xs text-slate-500">

@@ -20,7 +20,6 @@ import {
   precisaLembrarBackup,
   solicitarArmazenamentoPersistente
 } from '../utils/saudeDados'
-import { usePaleta } from '../composables/usePaleta'
 import { estadoBackup } from '../utils/lembreteBackup'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
@@ -30,7 +29,6 @@ import SparklineMeta from '../components/ui/SparklineMeta.vue'
 const router = useRouter()
 const auditoriasStore = useAuditoriasStore()
 const vencStore = useVencimentosStore()
-const { abrir: abrirBusca } = usePaleta()
 
 const auditorias = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(Boolean) : []))
 const totalAuditorias = computed(() => auditorias.value.length)
@@ -47,7 +45,6 @@ const totalCriticosPrazo = computed(() => resumoVenc.value.vencidos + resumoVenc
 
 // ---------- Saudação ----------
 const agora = new Date()
-const saudacao = agora.getHours() < 12 ? 'Bom dia' : agora.getHours() < 18 ? 'Boa tarde' : 'Boa noite'
 const dataExtenso = (texto => texto.charAt(0).toUpperCase() + texto.slice(1))(agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }))
 const tiposHoje = computed(() => auditoriasStore.tiposAuditoriaPorDia[agora.getDay()] || [])
 
@@ -201,22 +198,18 @@ const handleArquivoBackup = async (e) => {
 
 <template>
   <div class="ui-page">
-    <!-- Cabeçalho -->
-    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <!-- Cabeçalho: o dia e o que está planejado para ele -->
+    <header class="flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p class="text-sm font-semibold text-blue-600">{{ dataExtenso }}</p>
-        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">{{ saudacao }}! Painel operacional</h1>
+        <h1 class="text-[1.75rem] font-semibold leading-tight tracking-tight text-slate-950 first-letter:uppercase md:text-[2rem]">{{ dataExtenso }}</h1>
         <p class="mt-1 text-sm text-slate-500">
-          <template v-if="tiposHoje.length">Hoje é dia de auditoria de <span class="font-semibold text-slate-700">{{ tiposHoje.join(', ') }}</span>.</template>
-          <template v-else>Sem auditorias planejadas para hoje.</template>
+          <template v-if="tiposHoje.length">Auditoria de hoje: <span class="font-semibold text-slate-800">{{ tiposHoje.join(', ') }}</span>.</template>
+          <template v-else>Nenhuma auditoria planejada para hoje.</template>
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <UiButton variant="secondary" @click="abrirBusca">
-          <i class="fas fa-search"></i>Buscar
-        </UiButton>
         <UiButton v-for="tipo in tiposHoje" :key="tipo" :to="{ path: '/auditorias', query: { data: paraISOLocal(agora), tipo } }">
-          <i class="fas fa-plus"></i>Nova {{ tipo }}
+          <i class="fas fa-plus"></i>Nova auditoria de {{ tipo }}
         </UiButton>
         <UiButton to="/vencimentos" variant="warning">
           <i class="fas fa-clock"></i>Validades
@@ -234,7 +227,7 @@ const handleArquivoBackup = async (e) => {
         :value="taxaMeta === null ? '—' : `${taxaMeta}%`"
         :description="`Fechadas com até ${META_PENDENTE_PERCENTUAL}% pendente.`"
         icon="fas fa-bullseye"
-        :tone="taxaMeta === null || taxaMeta >= 80 ? 'indigo' : 'amber'"
+        :tone="taxaMeta === null || taxaMeta >= 80 ? 'blue' : 'amber'"
       />
     </div>
 
@@ -264,7 +257,7 @@ const handleArquivoBackup = async (e) => {
                 v-for="item in dia.itens"
                 :key="item.tipo"
                 type="button"
-                class="mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm"
+                class="mt-2 flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition hover:shadow-sm"
                 :class="estadosAgenda[item.estado].classe"
                 @click="abrirItemAgenda(dia, item)"
               >
@@ -344,7 +337,6 @@ const handleArquivoBackup = async (e) => {
               <p class="mt-2 text-3xl font-bold">{{ faixa.valor }}</p>
               <p class="mt-1 flex items-center justify-between text-[11px] opacity-80">
                 {{ faixa.dica }}
-                <i class="fas fa-arrow-right opacity-0 transition group-hover:opacity-100"></i>
               </p>
             </RouterLink>
           </div>

@@ -57,27 +57,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <nav class="sticky top-0 z-40 border-b border-white/10 bg-blue-700 text-white shadow-lg shadow-blue-950/10 print:hidden">
+  <nav class="sticky top-0 z-40 bg-blue-700 text-white print:hidden">
     <div class="ui-container">
       <div class="flex h-16 items-center justify-between gap-3">
-        <router-link to="/" class="flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight">
-          <span class="inline-flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
-            <i class="fas fa-chart-pie text-sm"></i>
-          </span>
-          <span>Dashboard <span class="text-blue-200">TI</span></span>
+        <router-link to="/" class="flex shrink-0 items-center gap-2 text-[17px] font-semibold tracking-tight">
+          <i class="fas fa-chart-pie text-blue-200" aria-hidden="true"></i>
+          <span>Dashboard TI</span>
         </router-link>
 
-        <div class="hidden items-center gap-1 rounded-2xl bg-white/10 p-1 ring-1 ring-white/10 md:flex">
+        <!-- Navegação principal: abas com marcador embaixo da aba atual. -->
+        <div class="hidden h-full items-stretch gap-1 self-stretch md:flex">
           <router-link
             v-for="link in links"
             :key="link.to"
             :to="link.to"
-            class="flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition"
-            :class="isActive(link.to) ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-50 hover:bg-white/10'"
+            class="relative flex items-center gap-2 px-3.5 text-sm font-medium transition-colors"
+            :class="isActive(link.to) ? 'text-white' : 'text-blue-100 hover:text-white'"
             :aria-current="isActive(link.to) ? 'page' : undefined"
           >
-            <i :class="[link.icon, 'text-xs']"></i>
+            <i :class="[link.icon, 'text-xs opacity-80']"></i>
             {{ link.label }}
+            <span v-if="isActive(link.to)" class="absolute inset-x-2 bottom-0 h-[3px] rounded-t bg-white"></span>
           </router-link>
         </div>
 

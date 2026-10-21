@@ -94,12 +94,12 @@
       <!-- Total de Itens -->
       <div 
         @click="abrirModal('total')"
-        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
+        class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer transition"
       >
         <div class="flex items-center justify-between">
           <div>
             <p class="text-gray-600 text-sm font-medium">Total Auditável</p>
-            <p class="text-3xl font-bold text-blue-600">{{ analise.totalItens }}</p>
+            <p class="text-3xl font-bold text-slate-900">{{ analise.totalItens }}</p>
           </div>
           <i class="fas fa-list text-4xl text-blue-300 opacity-50"></i>
         </div>
@@ -108,12 +108,12 @@
       <!-- Itens Lidos Corretamente -->
       <div 
         @click="abrirModal('lidos')"
-        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
+        class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer transition"
       >
         <div class="flex items-center justify-between">
           <div>
             <p class="text-gray-600 text-sm font-medium">✅ Lidos Corretamente</p>
-            <p class="text-3xl font-bold text-green-600">{{ analise.itensLidosCorretamente }}</p>
+            <p class="text-3xl font-bold text-slate-900">{{ analise.itensLidosCorretamente }}</p>
           </div>
           <i class="fas fa-check-circle text-4xl text-green-300 opacity-50"></i>
         </div>
@@ -122,7 +122,7 @@
       <!-- Itens Pendentes -->
       <div 
         @click="abrirModal('pendentes')"
-        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
+        class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -136,7 +136,7 @@
       <!-- Itens Com Problema -->
       <div 
         @click="abrirModal('problema')"
-        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer hover:shadow-md transition"
+        class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm cursor-pointer transition"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -164,7 +164,7 @@
     <!-- Insights de Setores e Locais -->
     <div v-if="analise" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Setores Parados -->
-      <div v-if="analise.setoresParados.length > 0" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div v-if="analise.setoresParados.length > 0" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 class="font-bold text-gray-800 mb-3">
           <i class="fas fa-exclamation-circle text-red-600 mr-2"></i>
           Setores Parados
@@ -177,7 +177,7 @@
       </div>
 
       <!-- Locais sem Leitura -->
-      <div v-if="analise.locaisSemLeitura.length > 0" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div v-if="analise.locaisSemLeitura.length > 0" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h4 class="font-bold text-gray-800 mb-3">
           <i class="fas fa-map-marker-alt text-yellow-600 mr-2"></i>
           Locais sem Leitura
@@ -213,7 +213,7 @@
               <td class="px-4 py-3 text-right text-orange-600 font-semibold">{{ analise.porUsuario[usuario].pendentes }}</td>
               <td class="px-4 py-3 text-right">
                 <div class="flex items-center gap-2 justify-end">
-                  <span class="text-xs font-semibold text-purple-600">
+                  <span class="text-xs font-semibold text-slate-700">
                     {{ Math.round((analise.porUsuario[usuario].pendentes / (analise.porUsuario[usuario].lidos + analise.porUsuario[usuario].pendentes)) * 100) }}%
                   </span>
                 </div>

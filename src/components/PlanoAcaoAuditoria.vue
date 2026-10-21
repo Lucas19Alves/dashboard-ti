@@ -318,7 +318,7 @@ const imprimir = () => {
 </script>
 
 <template>
-  <section class="rounded-2xl bg-white p-5 shadow-sm">
+  <section class="rounded-xl bg-white p-5 shadow-sm">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div>
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-list-check mr-2 text-blue-600"></i>Plano de ação</h3>
@@ -389,7 +389,7 @@ const imprimir = () => {
             <b class="text-slate-900">{{ previa.total }}</b> de {{ novas.length }} marcada(s) · {{ previa.itens.toLocaleString('pt-BR') }} itens<template v-if="previa.minutos"> · ≈ {{ textoMin(previa.minutos) }}</template><template v-if="previa.pessoas"> · {{ previa.pessoas }} pessoa(s)</template>
           </p>
           <button type="button" class="ui-btn-primary py-2" :disabled="gerando || !previa.total" @click="gerar">
-            <i :class="gerando ? 'fas fa-spinner fa-spin' : 'fas fa-wand-magic-sparkles'"></i>
+            <i :class="gerando ? 'fas fa-spinner fa-spin' : 'fas fa-list-check'"></i>
             Gerar {{ previa.total }} ação(ões)
           </button>
         </div>
@@ -482,7 +482,7 @@ const imprimir = () => {
         </header>
         <TransitionGroup tag="ul" name="cartao" class="relative flex max-h-[620px] flex-1 flex-col gap-2 overflow-y-auto p-0.5">
           <li v-for="a in c.acoes" :key="a.id" draggable="true"
-            class="group cursor-grab rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200 transition hover:shadow-md active:cursor-grabbing"
+            class="group cursor-grab rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200 transition active:cursor-grabbing"
             :class="[arrastando === a.id ? 'opacity-40' : '', atrasada(a) ? 'ring-red-200' : '']"
             @dragstart="arrastando = a.id" @dragend="arrastando = null; colunaAlvo = null">
             <div class="flex items-start gap-2">

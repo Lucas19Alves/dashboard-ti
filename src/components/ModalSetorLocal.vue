@@ -2,19 +2,19 @@
   <UiModal v-if="aberto" :title="titulo" :subtitle="subtitulo" width="max-w-5xl" @close="fechar">
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div class="rounded-2xl bg-slate-50 p-3">
+        <div class="rounded-xl bg-slate-50 p-3">
           <p class="text-xs font-semibold text-slate-500">{{ tipo === 'setor' ? 'Setores' : 'Locais' }}</p>
           <p class="text-xl font-bold text-slate-900">{{ (items || []).length }}</p>
         </div>
-        <div class="rounded-2xl bg-slate-50 p-3">
+        <div class="rounded-xl bg-slate-50 p-3">
           <p class="text-xs font-semibold text-slate-500">Itens</p>
           <p class="text-xl font-bold text-slate-900">{{ totais.total.toLocaleString('pt-BR') }}</p>
         </div>
-        <div class="rounded-2xl bg-slate-50 p-3">
+        <div class="rounded-xl bg-slate-50 p-3">
           <p class="text-xs font-semibold text-slate-500">Pendentes</p>
           <p class="text-xl font-bold text-amber-700">{{ totais.pendentes.toLocaleString('pt-BR') }}</p>
         </div>
-        <div class="rounded-2xl p-3" :class="acimaDaMeta ? 'bg-red-50' : 'bg-emerald-50'">
+        <div class="rounded-xl p-3" :class="acimaDaMeta ? 'bg-red-50' : 'bg-emerald-50'">
           <p class="text-xs font-semibold text-slate-500">Acima de {{ META }}%</p>
           <p class="text-xl font-bold" :class="acimaDaMeta ? 'text-red-700' : 'text-emerald-700'">{{ acimaDaMeta }}</p>
         </div>
@@ -35,8 +35,8 @@
         </div>
       </div>
 
-      <p v-if="!lista.length" class="rounded-2xl bg-slate-50 py-10 text-center text-sm text-slate-500">Nenhum resultado.</p>
-      <ul v-else class="max-h-[55vh] divide-y divide-slate-100 overflow-y-auto rounded-2xl ring-1 ring-slate-200">
+      <p v-if="!lista.length" class="rounded-xl bg-slate-50 py-10 text-center text-sm text-slate-500">Nenhum resultado.</p>
+      <ul v-else class="max-h-[55vh] divide-y divide-slate-100 overflow-y-auto rounded-xl ring-1 ring-slate-200">
         <li v-for="item in lista" :key="item.nome">
           <button
             type="button"
