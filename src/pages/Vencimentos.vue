@@ -751,7 +751,7 @@ const exportarDetalhamentoSetor = async () => {
               class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total de Itens</p>
+                  <p class="text-xs font-semibold text-slate-500">Total de Itens</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-blue-700 tabular-nums">{{ resumo.total }}</p>
                   <p class="mt-1.5 text-xs text-slate-400">Itens com validade monitorada</p>
                 </div>
@@ -766,7 +766,7 @@ const exportarDetalhamentoSetor = async () => {
               class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-xs font-semibold text-red-600 uppercase tracking-wider">Vencidos</p>
+                  <p class="text-xs font-semibold text-red-600">Vencidos</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-red-700 tabular-nums">{{ resumo.vencidos }}</p>
                   <p class="mt-1.5 text-xs text-red-400">Requer ação imediata</p>
                 </div>
@@ -781,7 +781,7 @@ const exportarDetalhamentoSetor = async () => {
               class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Vencem Hoje</p>
+                  <p class="text-xs font-semibold text-orange-600">Vencem Hoje</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-orange-600 tabular-nums">{{ resumo.hoje }}</p>
                   <p class="mt-1.5 text-xs text-orange-400">Planejar acoes promocionais</p>
                 </div>
@@ -796,7 +796,7 @@ const exportarDetalhamentoSetor = async () => {
               class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div class="flex items-start justify-between">
                 <div>
-                  <p class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Até 3 Dias</p>
+                  <p class="text-xs font-semibold text-yellow-600">Até 3 Dias</p>
                   <p class="mt-2 text-3xl lg:text-4xl font-extrabold text-yellow-700 tabular-nums">{{ resumo.ate3 }}</p>
                   <p class="mt-1.5 text-xs text-yellow-500">Remarcação e giro de estoque</p>
                 </div>
@@ -829,15 +829,15 @@ const exportarDetalhamentoSetor = async () => {
               <table class="w-full text-sm">
               <thead>
                 <tr class="bg-slate-50 border-y border-slate-200">
-                  <th class="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Setor
+                  <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500">Setor
                   </th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider w-20">
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 w-20">
                     Total</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-red-500 uppercase tracking-wider w-24">
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-red-500 w-24">
                     Vencidos</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-orange-500 uppercase tracking-wider w-20">
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-orange-500 w-20">
                     Hoje</th>
-                  <th class="px-4 py-3 text-center text-[11px] font-bold text-yellow-600 uppercase tracking-wider w-20">
+                  <th class="px-4 py-3 text-center text-xs font-semibold text-yellow-600 w-20">
                     Até 3d</th>
                   <th class="w-10"></th>
                 </tr>
@@ -906,7 +906,7 @@ const exportarDetalhamentoSetor = async () => {
           <div v-else class="space-y-2.5">
             <div v-for="(item, idx) in itensCriticosPainel" :key="item._codigo + item._validadeISO + idx"
               class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xs transition-shadow hover:shadow-sm">
-              <span class="px-2.5 py-1 text-[10px] rounded-lg border font-bold uppercase tracking-wide shrink-0"
+              <span class="px-2.5 py-1 text-xs rounded-lg border font-semibold shrink-0"
                 :class="prazoBadgeClasses(item._prazo)">
                 {{ prazoBadgeLabel(item._prazo) }}
               </span>
@@ -957,7 +957,7 @@ const exportarDetalhamentoSetor = async () => {
         <!-- Smart Filter Bar -->
         <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider mr-2">Status:</span>
+            <span class="text-xs font-semibold text-slate-500 mr-2">Status:</span>
             <button v-for="pill in statusPills" :key="pill.valor" @click="filtroStatus = pill.valor"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all"
               :class="filtroStatus === pill.valor ? pill.corAtiva : pill.cor">
@@ -1032,7 +1032,7 @@ const exportarDetalhamentoSetor = async () => {
               <thead>
                 <tr class="border-b-2 border-slate-100">
                   <th v-for="col in colunasItens" :key="col.chave"
-                    class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                    class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
                     :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoItensFiltrados, col.chave)">
                     {{ col.titulo }}
@@ -1044,7 +1044,7 @@ const exportarDetalhamentoSetor = async () => {
                       <i v-else class="fas fa-sort-down text-indigo-600 ml-1"></i>
                     </template>
                   </th>
-                  <th class="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Ação</th>
+                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Ação</th>
                 </tr>
               </thead>
               <tbody>
@@ -1138,7 +1138,7 @@ const exportarDetalhamentoSetor = async () => {
               <thead>
                 <tr class="border-b-2 border-slate-100">
                   <th v-for="col in colunasFornecedores" :key="col.chave"
-                    class="px-3 py-2.5 font-semibold text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap"
+                    class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
                     :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-indigo-600 transition-colors' : '']"
                     @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedoresTab, col.chave)">
                     {{ col.titulo }}
@@ -1323,7 +1323,7 @@ const exportarDetalhamentoSetor = async () => {
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div v-for="f in resumoPrazos(itensSetorModal)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
-              <p class="text-[11px] font-bold uppercase tracking-wider opacity-80">{{ f.rotulo }}</p>
+              <p class="text-xs font-semibold opacity-80">{{ f.rotulo }}</p>
               <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
           </div>
@@ -1367,7 +1367,7 @@ const exportarDetalhamentoSetor = async () => {
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div v-for="f in resumoPrazos(itensFornecedor)" :key="f.chave" class="rounded-2xl p-3" :class="f.fundo">
-              <p class="text-[11px] font-bold uppercase tracking-wider opacity-80">{{ f.rotulo }}</p>
+              <p class="text-xs font-semibold opacity-80">{{ f.rotulo }}</p>
               <p class="text-xl font-bold">{{ f.valor }}</p>
             </div>
           </div>

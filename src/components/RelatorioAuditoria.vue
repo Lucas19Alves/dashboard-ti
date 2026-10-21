@@ -195,7 +195,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
       <!-- % pendente -->
       <div class="flex flex-col gap-4 rounded-2xl bg-blue-700 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-blue-200">Relatório de auditoria</p>
+          <p class="text-xs font-semibold text-blue-200">Relatório de auditoria</p>
           <p class="mt-1 text-2xl font-bold">{{ auditoria.tipo }} · {{ dataBR }}</p>
           <p class="text-sm text-blue-100">{{ auditoria.status === 'fechada' ? 'Fechada' : 'Em andamento' }} · #{{ auditoria.id }}</p>
         </div>
@@ -211,7 +211,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
       <!-- Indicadores -->
       <div class="grid grid-cols-2 gap-3" :class="cards.length === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4'">
         <div v-for="c in cards" :key="c.rotulo" class="rounded-2xl p-4" :class="c.classe">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ c.rotulo }}</p>
+          <p class="text-xs font-semibold text-slate-500">{{ c.rotulo }}</p>
           <p class="text-2xl font-bold" :class="c.texto">{{ c.valor.toLocaleString('pt-BR') }}</p>
           <p class="text-xs text-slate-500">{{ c.detalhe }}</p>
         </div>
@@ -228,7 +228,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
         <p v-if="!setoresOrdenados.length" class="mt-4 text-sm text-slate-500">Sem dados por setor.</p>
         <div v-else class="mt-4 overflow-x-auto rounded-xl ring-1 ring-slate-200">
           <table class="w-full text-sm">
-            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead class="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th class="px-4 py-3 text-left font-semibold">Setor</th>
                 <th class="px-4 py-3 text-right font-semibold">Itens</th>
@@ -303,7 +303,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
           </div>
           <div class="grid grid-cols-6 grid-rows-2 gap-4">
             <div v-for="c in cardsImagem" :key="c.rotulo" class="flex flex-col justify-center rounded-[22px] px-5" :class="[c.classe, c.coluna]">
-              <p class="text-[16px] font-bold uppercase tracking-wide text-slate-500">{{ c.rotulo }}</p>
+              <p class="text-[16px] font-semibold text-slate-500">{{ c.rotulo }}</p>
               <p class="text-[40px] font-black leading-tight" :class="c.texto">{{ c.valor.toLocaleString('pt-BR') }}</p>
               <p class="truncate text-[15px] text-slate-500">{{ c.detalhe }}</p>
             </div>
@@ -319,7 +319,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
             </div>
             <table class="mt-3 w-full table-fixed">
               <thead>
-                <tr class="text-left text-[14px] font-bold uppercase tracking-wide text-slate-500" :style="{ height: `${linhaSetor}px` }">
+                <tr class="text-left text-[14px] font-semibold text-slate-500" :style="{ height: `${linhaSetor}px` }">
                   <th>Setor</th>
                   <th class="w-16 text-right">Pend.</th>
                   <th class="w-24 text-right">%</th>

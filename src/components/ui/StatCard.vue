@@ -8,26 +8,27 @@ const props = defineProps({
   critical: { type: Boolean, default: false }
 })
 
+// O tom aparece só no marcador ao lado do título; o número fica na cor do texto
+// (vermelho apenas quando é crítico). Cor na tela = informação, não decoração.
 const tones = {
-  blue: { icon: 'bg-blue-50 text-blue-600', value: 'text-blue-700' },
-  indigo: { icon: 'bg-indigo-50 text-indigo-600', value: 'text-indigo-700' },
-  green: { icon: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-700' },
-  amber: { icon: 'bg-amber-50 text-amber-600', value: 'text-amber-700' },
-  red: { icon: 'bg-red-50 text-red-600', value: 'text-red-700' }
+  blue: 'bg-blue-600',
+  indigo: 'bg-indigo-500',
+  green: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  red: 'bg-red-600'
 }
 </script>
 
 <template>
-  <article class="ui-card ui-card-hover min-h-36 p-4">
-    <div class="flex items-center justify-between gap-2">
-      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ title }}</p>
-      <span class="inline-flex size-8 items-center justify-center rounded-xl" :class="tones[props.tone]?.icon || tones.blue.icon">
-        <i :class="[icon, 'text-xs']"></i>
-      </span>
+  <article class="ui-card min-h-32 p-4">
+    <div class="flex items-center gap-2">
+      <span class="size-2 shrink-0 rounded-full" :class="tones[props.tone] || tones.blue" aria-hidden="true"></span>
+      <p class="truncate text-[13px] font-semibold text-slate-600">{{ title }}</p>
+      <i :class="[icon, 'ml-auto text-xs text-slate-300']" aria-hidden="true"></i>
     </div>
-    <p class="mt-3 text-3xl font-bold tracking-tight" :class="critical ? 'text-red-700' : (tones[props.tone]?.value || tones.blue.value)">
+    <p class="mt-2.5 text-[2rem] font-semibold leading-none tracking-tight tabular-nums" :class="critical ? 'text-red-700' : 'text-slate-900'">
       {{ value }}
     </p>
-    <p class="mt-1.5 text-xs leading-relaxed text-slate-500">{{ description }}</p>
+    <p class="mt-2 text-xs leading-relaxed text-slate-500">{{ description }}</p>
   </article>
 </template>

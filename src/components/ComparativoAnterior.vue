@@ -31,7 +31,7 @@ const progressoMeta = computed(() => {
           <i :class="faltam > 0 ? 'fas fa-flag-checkered' : 'fas fa-circle-check'"></i>
         </span>
         <div class="min-w-0 flex-1">
-          <p class="text-[11px] font-bold uppercase tracking-wider" :class="faltam > 0 ? 'text-amber-700' : 'text-emerald-700'">Caminho até a meta</p>
+          <p class="text-xs font-semibold" :class="faltam > 0 ? 'text-amber-700' : 'text-emerald-700'">Caminho até a meta</p>
           <template v-if="faltam === null">
             <p class="mt-1 text-sm text-slate-600">Informe o SKU para calcular.</p>
           </template>
@@ -55,7 +55,7 @@ const progressoMeta = computed(() => {
     <section class="rounded-2xl bg-white p-5 shadow-sm">
       <div class="flex items-start justify-between gap-2">
         <div>
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Comparado à {{ auditoria.tipo }} anterior</p>
+          <p class="text-xs font-semibold text-slate-500">Comparado à {{ auditoria.tipo }} anterior</p>
           <RouterLink v-if="anterior" :to="`/auditoria/${anterior.id}`" class="text-xs font-semibold text-blue-600 hover:underline">
             {{ formatarDataBR(anterior.data) }} · #{{ anterior.id }}
           </RouterLink>

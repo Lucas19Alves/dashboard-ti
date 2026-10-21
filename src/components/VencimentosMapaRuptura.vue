@@ -167,9 +167,9 @@ const ESTILO_CHIP = { vencidos: 'bg-red-600 ring-red-600', hoje: 'bg-orange-500 
       <p v-if="!temAuditoriasPresenca" class="mt-4 rounded-xl bg-slate-50 py-8 text-center text-sm text-slate-500">Sem auditorias de Presença ou Ruptura com itens para cruzar.</p>
       <template v-else>
         <div class="mt-4 grid grid-cols-3 gap-3">
-          <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Produtos</p><p class="text-xl font-black text-slate-900">{{ cruzamento.length }}</p></div>
-          <div class="rounded-xl p-3" :class="recorrentes ? 'bg-red-50' : 'bg-slate-50'"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Ruptura recorrente</p><p class="text-xl font-black" :class="recorrentes ? 'text-red-700' : 'text-slate-900'">{{ recorrentes }}</p><p class="text-[11px] text-slate-500">2+ auditorias</p></div>
-          <div class="rounded-xl bg-amber-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-amber-700">Com estoque</p><p class="text-xl font-black text-amber-800">{{ comEstoque }}</p><p class="text-[11px] text-amber-700">dá para repor agora</p></div>
+          <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Produtos</p><p class="text-xl font-black text-slate-900">{{ cruzamento.length }}</p></div>
+          <div class="rounded-xl p-3" :class="recorrentes ? 'bg-red-50' : 'bg-slate-50'"><p class="text-xs font-semibold text-slate-500">Ruptura recorrente</p><p class="text-xl font-black" :class="recorrentes ? 'text-red-700' : 'text-slate-900'">{{ recorrentes }}</p><p class="text-[11px] text-slate-500">2+ auditorias</p></div>
+          <div class="rounded-xl bg-amber-50 p-3"><p class="text-xs font-semibold text-amber-700">Com estoque</p><p class="text-xl font-black text-amber-800">{{ comEstoque }}</p><p class="text-[11px] text-amber-700">dá para repor agora</p></div>
         </div>
         <div class="mt-4">
           <UiListaItens :itens="cruzamento" :colunas="colunas" :facetas="facetas" titulo="Vence no estoque, falta na gôndola" :ordem-inicial="{ chave: null, direcao: 'desc' }" />

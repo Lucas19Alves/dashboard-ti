@@ -333,7 +333,7 @@ const imprimirEscala = () => {
       <div v-else class="max-h-72 divide-y divide-slate-100 overflow-y-auto">
         <section v-for="grupo in gruposColab" :key="grupo.perfil" class="px-3 py-2">
           <div class="mb-1 flex items-center gap-2">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ grupo.perfil }}</p>
+            <p class="text-xs font-semibold text-slate-500">{{ grupo.perfil }}</p>
             <span class="text-[11px] text-slate-400">{{ grupo.escalados }}/{{ grupo.lista.length }}</span>
             <button type="button" class="ml-auto text-[11px] font-semibold text-blue-700 hover:underline" @click="definirGrupo(grupo.lista, grupo.escalados < grupo.lista.length)">{{ grupo.escalados < grupo.lista.length ? 'Marcar grupo' : 'Desmarcar grupo' }}</button>
           </div>
@@ -357,19 +357,19 @@ const imprimirEscala = () => {
     <p class="mt-1 text-[11px] text-slate-500">O ritmo padrão vale só para quem não tem histórico com horário e para o cálculo de pessoas necessárias.</p>
 
     <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-      <div class="rounded-xl bg-slate-50 p-3"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">{{ areas.length }} locais</p></div>
+      <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">{{ areas.length }} locais</p></div>
       <div class="rounded-xl bg-slate-50 p-3">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Pessoas necessárias</p>
+        <p class="text-xs font-semibold text-slate-500">Pessoas necessárias</p>
         <p class="text-xl font-black" :class="escala.pessoasNecessarias > selecionados.size ? 'text-red-700' : 'text-slate-900'">{{ escala.pessoasNecessarias }} <span class="text-sm font-semibold text-slate-500">/ {{ selecionados.size }} escaladas</span></p>
         <p class="text-[11px] text-slate-500">{{ horas.toFixed(1).replace('.', ',') }}h a {{ ritmoPadrao }}/h</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Término previsto</p>
+        <p class="text-xs font-semibold text-slate-500">Término previsto</p>
         <p class="text-xl font-black" :class="escala.cabeNoHorario ? 'text-slate-900' : 'text-red-700'">{{ escala.grupos.length && escala.termino ? textoHora(escala.termino) : '—' }}</p>
         <p class="text-[11px] text-slate-500">{{ escala.cabeNoHorario ? `dentro do horário (${horaFim})` : `passa de ${horaFim}` }}</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">No perfil</p>
+        <p class="text-xs font-semibold text-slate-500">No perfil</p>
         <p class="text-xl font-black" :class="escala.aderencia >= 95 ? 'text-slate-900' : 'text-amber-700'">{{ escala.aderencia.toFixed(0) }}%</p>
         <p class="text-[11px] text-slate-500">dos itens com quem já lê ali</p>
       </div>
@@ -441,7 +441,7 @@ const imprimirEscala = () => {
 
       <!-- Divisão por pessoa -->
       <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500">
           <span>Divisão por pessoa</span><span>{{ horaInicio }} – {{ textoHora(fimEscala) }}</span>
         </div>
         <ol class="max-h-[600px] divide-y divide-slate-100 overflow-y-auto">

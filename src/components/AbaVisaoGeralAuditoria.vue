@@ -306,7 +306,7 @@ const graficoAndamento = computed(() => {
           class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Auditável</p>
+            <p class="text-xs font-semibold text-slate-500">Total Auditável</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 text-blue-600">
               <i class="fas fa-clipboard-list text-sm"></i>
             </span>
@@ -319,7 +319,7 @@ const graficoAndamento = computed(() => {
           class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Lidos</p>
+            <p class="text-xs font-semibold text-slate-500">Total Lidos</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
               <i class="fas fa-check-circle text-sm"></i>
             </span>
@@ -332,7 +332,7 @@ const graficoAndamento = computed(() => {
           class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Pendentes</p>
+            <p class="text-xs font-semibold text-slate-500">Pendentes</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-amber-50 text-amber-600">
               <i class="fas fa-hourglass-half text-sm"></i>
             </span>
@@ -348,7 +348,7 @@ const graficoAndamento = computed(() => {
           class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Com Problema</p>
+            <p class="text-xs font-semibold text-slate-500">Com Problema</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-red-50 text-red-600">
               <i class="fas fa-exclamation-triangle text-sm"></i>
             </span>
@@ -363,7 +363,7 @@ const graficoAndamento = computed(() => {
       <div v-if="auditoria?.tipo === 'Etiqueta'" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm flex flex-col gap-2">
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Atualizado</p>
+            <p class="text-xs font-semibold text-slate-500">Atualizado</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600">
               <i class="fas fa-sync-alt text-sm"></i>
             </span>
@@ -376,7 +376,7 @@ const graficoAndamento = computed(() => {
           class="bg-white/80 backdrop-blur rounded-2xl p-5 shadow-sm cursor-pointer hover:shadow-md transition flex flex-col gap-2"
         >
           <div class="flex items-center justify-between">
-            <p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Desatualizado</p>
+            <p class="text-xs font-semibold text-slate-500">Desatualizado</p>
             <span class="inline-flex items-center justify-center h-8 w-8 rounded-lg bg-yellow-50 text-yellow-600">
               <i class="fas fa-history text-sm"></i>
             </span>
@@ -408,7 +408,7 @@ const graficoAndamento = computed(() => {
               <option v-for="s in Object.keys(auditoria?.analise?.porSetor || {})" :key="s" :value="s">{{ s }}</option>
             </select>
             <div v-if="andamentoAuditoriaPorHora" class="rounded-xl bg-violet-50 px-4 py-2 text-right shrink-0">
-              <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-500">Progresso atual</p>
+              <p class="text-xs font-semibold text-violet-500">Progresso atual</p>
               <p class="text-xl font-bold text-violet-700">{{ andamentoAuditoriaPorHora.percentualFinal.toFixed(2) }}%</p>
             </div>
           </div>
@@ -562,20 +562,20 @@ const graficoAndamento = computed(() => {
             <!-- Cards Resumo -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
               <div class="rounded-2xl bg-blue-50/70 p-3 text-center">
-                <p class="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Total Leituras</p>
+                <p class="text-xs font-semibold text-blue-500">Total Leituras</p>
                 <p class="text-2xl font-bold text-blue-700 mt-1">{{ leituraPorHoraFiltrada.totalLeituras.toLocaleString() }}</p>
               </div>
               <div class="rounded-2xl bg-emerald-50/70 p-3 text-center">
-                <p class="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Horário de Pico</p>
+                <p class="text-xs font-semibold text-emerald-500">Horário de Pico</p>
                 <p class="text-2xl font-bold text-emerald-700 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
                 <p class="text-[10px] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
               </div>
               <div class="rounded-2xl bg-indigo-50/70 p-3 text-center">
-                <p class="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide">Média/Hora</p>
+                <p class="text-xs font-semibold text-indigo-500">Média/Hora</p>
                 <p class="text-2xl font-bold text-indigo-700 mt-1">{{ leituraPorHoraFiltrada.media }}</p>
               </div>
               <div class="rounded-2xl bg-amber-50/70 p-3 text-center">
-                <p class="text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Horário de Baixa</p>
+                <p class="text-xs font-semibold text-amber-500">Horário de Baixa</p>
                 <p class="text-2xl font-bold text-amber-700 mt-1">{{ leituraPorHoraFiltrada.baixa?.hora || '--' }}</p>
                 <p class="text-[10px] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
               </div>
@@ -624,7 +624,7 @@ const graficoAndamento = computed(() => {
                   <i class="fas fa-arrow-up text-sm"></i>
                 </span>
                 <div>
-                  <p class="text-[11px] font-semibold text-emerald-500 uppercase tracking-wide">Maior Subida</p>
+                  <p class="text-xs font-semibold text-emerald-500">Maior Subida</p>
                   <p class="text-xs text-emerald-700 font-medium">
                     {{ leituraPorHoraFiltrada.maiorSubida.de }} → {{ leituraPorHoraFiltrada.maiorSubida.para }}
                     <span class="font-bold">(+{{ leituraPorHoraFiltrada.maiorSubida.variacao }}%)</span>
@@ -636,7 +636,7 @@ const graficoAndamento = computed(() => {
                   <i class="fas fa-arrow-down text-sm"></i>
                 </span>
                 <div>
-                  <p class="text-[11px] font-semibold text-red-500 uppercase tracking-wide">Maior Queda</p>
+                  <p class="text-xs font-semibold text-red-500">Maior Queda</p>
                   <p class="text-xs text-red-700 font-medium">
                     {{ leituraPorHoraFiltrada.maiorQueda.de }} → {{ leituraPorHoraFiltrada.maiorQueda.para }}
                     <span class="font-bold">({{ leituraPorHoraFiltrada.maiorQueda.variacao }}%)</span>

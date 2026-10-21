@@ -520,7 +520,7 @@ const gerarRelatorioPDF = () => {
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <article v-for="k in kpis" :key="k.titulo" class="ui-card p-4">
         <div class="flex items-center justify-between gap-2">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ k.titulo }}</p>
+          <p class="text-xs font-semibold text-slate-500">{{ k.titulo }}</p>
           <span class="inline-flex size-8 items-center justify-center rounded-xl" :class="k.alerta ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'">
             <i :class="[k.icone, 'text-xs']"></i>
           </span>
@@ -785,7 +785,7 @@ const gerarRelatorioPDF = () => {
         </div>
         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div class="rounded-xl bg-slate-50 p-3">
-            <p class="text-[11px] font-semibold uppercase text-slate-500">% Pendente</p>
+            <p class="text-xs font-semibold text-slate-500">% Pendente</p>
             <p class="mt-1 text-lg font-bold text-slate-900">{{ comparacao.resultado.anterior.percentualPendente.toFixed(2) }}% → {{ comparacao.resultado.atual.percentualPendente.toFixed(2) }}%</p>
             <p class="text-xs font-semibold" :class="comparacao.resultado.diferencaPendente <= 0 ? 'text-emerald-700' : 'text-red-700'">
               <i :class="comparacao.resultado.diferencaPendente <= 0 ? 'fas fa-arrow-down' : 'fas fa-arrow-up'"></i>
@@ -793,12 +793,12 @@ const gerarRelatorioPDF = () => {
             </p>
           </div>
           <div class="rounded-xl bg-slate-50 p-3">
-            <p class="text-[11px] font-semibold uppercase text-slate-500">Itens pendentes</p>
+            <p class="text-xs font-semibold text-slate-500">Itens pendentes</p>
             <p class="mt-1 text-lg font-bold text-slate-900">{{ comparacao.resultado.anterior.pendentes }} → {{ comparacao.resultado.atual.pendentes }}</p>
             <p class="text-xs text-slate-500">SKU {{ comparacao.resultado.anterior.total }} → {{ comparacao.resultado.atual.total }}</p>
           </div>
           <div class="rounded-xl bg-slate-50 p-3">
-            <p class="text-[11px] font-semibold uppercase text-slate-500">Setores</p>
+            <p class="text-xs font-semibold text-slate-500">Setores</p>
             <p class="mt-1 text-sm font-semibold"><span class="text-emerald-700">{{ comparacao.resultado.melhoraram.length }} melhoraram</span> · <span class="text-red-700">{{ comparacao.resultado.pioraram.length }} pioraram</span></p>
             <p v-if="comparacao.resultado.novos.length || comparacao.resultado.ausentes.length" class="text-xs text-slate-500">{{ comparacao.resultado.novos.length }} novos · {{ comparacao.resultado.ausentes.length }} ausentes</p>
           </div>

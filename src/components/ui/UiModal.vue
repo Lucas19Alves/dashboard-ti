@@ -33,7 +33,7 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div class="ui-fade-in fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" @click.self="emit('close')" @keydown="aoTeclar">
+    <div class="ui-fade-in fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4" @click.self="emit('close')" @keydown="aoTeclar">
       <section
         ref="painel"
         tabindex="-1"

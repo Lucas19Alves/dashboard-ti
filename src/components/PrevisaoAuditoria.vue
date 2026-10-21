@@ -66,7 +66,7 @@ const ticksY = computed(() => [0, 0.5, 1].map(r => Math.round((yMax.value / 1.08
 
     <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       <div v-for="k in indicadores" :key="k.rotulo" class="rounded-xl p-3" :class="k.alerta ? 'bg-red-50' : 'bg-slate-50'">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{{ k.rotulo }}</p>
+        <p class="text-xs font-semibold text-slate-500">{{ k.rotulo }}</p>
         <p class="mt-0.5 text-xl font-black" :class="k.alerta ? 'text-red-700' : 'text-slate-900'">{{ k.valor }}</p>
         <p class="text-[11px] text-slate-500">{{ k.detalhe }}</p>
       </div>

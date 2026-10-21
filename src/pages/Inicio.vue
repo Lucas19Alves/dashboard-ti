@@ -289,7 +289,7 @@ const handleArquivoBackup = async (e) => {
           <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
             <article v-for="serie in evolucao" :key="serie.tipo" class="rounded-xl border border-slate-100 p-4">
               <div class="flex items-start justify-between gap-2">
-                <p class="text-xs font-bold uppercase tracking-wider text-slate-500">{{ serie.tipo }}</p>
+                <p class="text-xs font-semibold text-slate-500">{{ serie.tipo }}</p>
                 <span
                   v-if="serie.naMeta !== null"
                   class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"

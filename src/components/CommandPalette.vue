@@ -178,7 +178,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', atalhoGlobal))
             Nada encontrado para "{{ consulta }}".
           </p>
           <div v-for="grupo in grupos" :key="grupo.nome" class="mb-1">
-            <p class="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">{{ grupo.nome }}</p>
+            <p class="px-3 pb-1 pt-2 text-xs font-semibold text-slate-400">{{ grupo.nome }}</p>
             <button
               v-for="item in grupo.itens"
               :key="item.id"

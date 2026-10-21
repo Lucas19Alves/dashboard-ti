@@ -142,22 +142,22 @@ const facetasProdutos = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'vezes', 
   <div class="space-y-5">
     <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
       <div class="ui-card p-4">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Locais analisados</p>
+        <p class="text-xs font-semibold text-slate-500">Locais analisados</p>
         <p class="mt-1 text-2xl font-black text-slate-900">{{ locais.length.toLocaleString('pt-BR') }}</p>
         <p class="text-xs text-slate-500">em {{ auditorias.length }} auditoria(s)</p>
       </div>
       <div class="ui-card p-4">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Crônicos</p>
+        <p class="text-xs font-semibold text-slate-500">Crônicos</p>
         <p class="mt-1 text-2xl font-black" :class="cronicos.length ? 'text-red-700' : 'text-slate-900'">{{ cronicos.length.toLocaleString('pt-BR') }}</p>
         <p class="text-xs text-slate-500">fora da meta em 2+ auditorias</p>
       </div>
       <div class="ui-card p-4">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Em sequência</p>
+        <p class="text-xs font-semibold text-slate-500">Em sequência</p>
         <p class="mt-1 text-2xl font-black" :class="emSequencia ? 'text-red-700' : 'text-slate-900'">{{ emSequencia }}</p>
         <p class="text-xs text-slate-500">3+ auditorias seguidas fora (recentes)</p>
       </div>
       <div class="ui-card p-4">
-        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Produtos reincidentes</p>
+        <p class="text-xs font-semibold text-slate-500">Produtos reincidentes</p>
         <p class="mt-1 text-2xl font-black text-slate-900">{{ produtos.length.toLocaleString('pt-BR') }}</p>
         <p class="text-xs text-slate-500">pendentes em 2+ auditorias</p>
       </div>
