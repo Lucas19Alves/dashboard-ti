@@ -231,7 +231,15 @@ const andamentoAuditoriaPorHora = computed(() => {
 
   const semHorario = Math.max(0, totalLidosAtual - acumulado)
   const serieVisivel = serie.slice(Math.max(0, primeiroIdx - 1), Math.min(serie.length, ultimoIdx + 2))
-  if (semHorario > 0) {
+  // Ruptura: itens sem horário já tinham presença confirmada (não precisaram de leitura),
+  // então contam desde o início do dia; a curva mostra só o avanço das leituras.
+  const baseInicial = auditoria.value?.tipo === 'Ruptura' && semHorario > 0
+  if (baseInicial) {
+    for (const ponto of serieVisivel) {
+      ponto.acumulado += semHorario
+      ponto.percentual = Math.min(100, (ponto.acumulado / totalAuditavel) * 100)
+    }
+  } else if (semHorario > 0) {
     serieVisivel.push({
       hora: 'Sem horário',
       leituras: semHorario,
@@ -245,11 +253,11 @@ const andamentoAuditoriaPorHora = computed(() => {
     totalAuditavel,
     totalComHorario: acumulado,
     semHorario,
+    baseInicial,
     percentualFinal: totalAuditavel > 0 ? Math.min(100, (totalLidosAtual / totalAuditavel) * 100) : 0
   }
 })
 
-const niveisGraficoAndamento = [100, 75, 50, 25, 0]
 
 const graficoAndamento = computed(() => {
   const serie = andamentoAuditoriaPorHora.value?.serie || []
@@ -261,11 +269,18 @@ const graficoAndamento = computed(() => {
   const larguraUtil = largura - margem.esquerda - margem.direita
   const alturaUtil = altura - margem.topo - margem.base
   const divisor = Math.max(1, serie.length - 1)
+  // Eixo Y começa em 0; na Ruptura com itens já confirmados, aproxima para ver o avanço das leituras.
+  const menor = Math.min(...serie.map(p => p.percentual))
+  const bruto = andamentoAuditoriaPorHora.value?.baseInicial ? Math.max(0, menor - 5) : 0
+  const passo = 100 - bruto <= 20 ? 5 : 100 - bruto <= 50 ? 10 : 25
+  const minimo = Math.floor(bruto / passo) * passo
+  const y = valor => margem.topo + ((100 - Math.min(100, Math.max(minimo, valor))) / (100 - minimo)) * alturaUtil
+  const niveis = Array.from({ length: (100 - minimo) / passo + 1 }, (_, i) => 100 - i * passo)
   const pontos = serie.map((ponto, indice) => ({
     ...ponto,
     rotulo: ponto.hora === 'Sem horário' ? 'Atual' : ponto.hora,
     x: margem.esquerda + (indice / divisor) * larguraUtil,
-    y: margem.topo + ((100 - Math.min(100, ponto.percentual)) / 100) * alturaUtil
+    y: y(ponto.percentual)
   }))
 
   return {
@@ -273,6 +288,8 @@ const graficoAndamento = computed(() => {
     altura,
     margem,
     alturaUtil,
+    niveis,
+    y,
     pontos,
     linha: pontos.map(ponto => `${ponto.x},${ponto.y}`).join(' '),
     area: `${margem.esquerda},${margem.topo + alturaUtil} ${pontos.map(ponto => `${ponto.x},${ponto.y}`).join(' ')} ${pontos[pontos.length - 1].x},${margem.topo + alturaUtil}`
@@ -415,18 +432,18 @@ const graficoAndamento = computed(() => {
                 </linearGradient>
               </defs>
 
-              <g v-for="nivel in niveisGraficoAndamento" :key="nivel">
+              <g v-for="nivel in graficoAndamento.niveis" :key="nivel">
                 <line
                   :x1="graficoAndamento.margem.esquerda"
                   :x2="graficoAndamento.largura - graficoAndamento.margem.direita"
-                  :y1="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil"
-                  :y2="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil"
+                  :y1="graficoAndamento.y(nivel)"
+                  :y2="graficoAndamento.y(nivel)"
                   stroke="#e2e8f0"
                   stroke-width="1"
                 />
                 <text
                   :x="graficoAndamento.margem.esquerda - 10"
-                  :y="graficoAndamento.margem.topo + ((100 - nivel) / 100) * graficoAndamento.alturaUtil + 4"
+                  :y="graficoAndamento.y(nivel) + 4"
                   text-anchor="end"
                   class="fill-slate-400 text-[11px]"
                 >{{ nivel }}%</text>
@@ -463,7 +480,8 @@ const graficoAndamento = computed(() => {
             </svg>
 
             <div v-if="andamentoAuditoriaPorHora?.semHorario > 0" class="mt-1 text-right text-[11px] text-slate-400">
-              {{ andamentoAuditoriaPorHora.semHorario.toLocaleString() }} item(ns) sem horário foram incorporados no ponto “Atual”.
+              <template v-if="andamentoAuditoriaPorHora.baseInicial">{{ andamentoAuditoriaPorHora.semHorario.toLocaleString('pt-BR') }} item(ns) com presença confirmada sem leitura contam desde o início; a curva mostra o avanço das leituras.</template>
+              <template v-else>{{ andamentoAuditoriaPorHora.semHorario.toLocaleString('pt-BR') }} item(ns) sem horário foram incorporados no ponto “Atual”.</template>
             </div>
           </div>
         </div>
