@@ -30,6 +30,6 @@ describe('vencimentos cruzados', () => {
     expect(linhas.map(l => l.codigo)).toEqual(['A', 'B'])
     expect(cruzarValidadeRuptura(itens, auditorias, { categorias: ['vencidos'] })).toHaveLength(0)
     expect(linhas[0]).toMatchObject({ codigo: 'A', vezesRuptura: 2, custoRuptura: 20, categoria: 'aVencer' })
-    expect(linhas[0].diagnostico).toMatch(/com frequência/)
+    expect(linhas[0].diagnostico).toMatch(/Repor a gôndola agora: 5 un./)
   })
 })

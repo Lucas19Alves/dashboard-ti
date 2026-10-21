@@ -32,7 +32,9 @@ const props = defineProps({
   // Pintura própria da aba principal (ex.: vencimentos), no lugar do % pendente:
   // { rotulo, classe(d), texto(d), dica(d), resumo(d) → [{ rotulo, valor, classe }], colunasFace: [{ rotulo, valor(d), classe }], legenda: [{ classe, rotulo }], semItens, botao, botaoIcone }
   // Slot #area ({ area }): conteúdo extra no painel da área selecionada.
-  pintura: { type: Object, default: null }
+  pintura: { type: Object, default: null },
+  // Várias pinturas como abas próprias: [{ id, rotulo, icone, ...mesmos campos de `pintura` }]
+  pinturas: { type: Array, default: null }
 })
 const emit = defineEmits(['ver-itens'])
 const META = props.metrica?.meta ?? META_PENDENTE_PERCENTUAL
@@ -136,7 +138,8 @@ const aoTeclar = (evento) => {
 }
 
 // ---------- Cores ----------
-const modo = ref(props.modoInicial) // pendente | leituras | usuario
+const modo = ref(props.pinturas?.length && !props.pinturas.some(p => p.id === props.modoInicial) ? props.pinturas[0].id : props.modoInicial) // pendente | leituras | usuario | id de pintura
+const pinturaAtiva = computed(() => (props.pinturas?.length ? props.pinturas.find(p => p.id === modo.value) || null : modo.value === 'pendente' ? props.pintura : null))
 const usuarioFoco = ref('')
 const usuarios = computed(() => {
   const total = new Map()
@@ -159,7 +162,7 @@ const TONS_AZUL = ['bg-blue-100 text-blue-900', 'bg-blue-200 text-blue-900', 'bg
 
 const classeDados = (d) => {
   if (!d || !d.total) return 'bg-slate-100 text-slate-400'
-  if (modo.value === 'pendente' && props.pintura) return props.pintura.classe(d)
+  if (pinturaAtiva.value) return pinturaAtiva.value.classe(d)
   if (modo.value === 'pendente') {
     if (!props.metrica && !d.lidos && !d.comProblema) return 'bg-slate-700 text-white'
     const p = percentualPendente(d)
@@ -174,7 +177,7 @@ const classeDados = (d) => {
 const classeFace = (area, face) => classeDados(area?.faces?.[face])
 const valorTexto = (d) => {
   if (!d?.total) return ''
-  if (modo.value === 'pendente' && props.pintura) return props.pintura.texto(d)
+  if (pinturaAtiva.value) return pinturaAtiva.value.texto(d)
   if (modo.value === 'pendente') return `${percentualPendente(d).toFixed(1)}%`
   return String(leiturasDe(d) || '')
 }
@@ -244,7 +247,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <div class="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex rounded-xl bg-slate-100 p-1 text-sm">
-          <button v-for="[v, r, i] in [['pendente', textos.rotulo, pintura?.icone || 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m))" :key="v" type="button"
+          <button v-for="[v, r, i] in (pinturas?.length ? pinturas.map(p => [p.id, p.rotulo, p.icone || 'fas fa-palette']) : [['pendente', textos.rotulo, pintura?.icone || 'fas fa-percent'], ['leituras', 'Leituras', 'fas fa-barcode'], ['usuario', 'Por usuário', 'fas fa-user']].filter(([m]) => modos.includes(m)))" :key="v" type="button"
             class="rounded-lg px-3 py-1.5 font-semibold transition" :class="modo === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'" @click="modo = v">
             <i :class="[i, 'mr-1 text-xs']"></i>{{ r }}
           </button>
@@ -275,7 +278,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </span>
         </div>
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas<template v-if="modos.includes('pendente') && !pintura"> · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</template></span>
+          <span><b class="text-slate-800">{{ resumo.corredores }}</b> corredores · <b class="text-slate-800">{{ resumo.areas }}</b> áreas<template v-if="modos.includes('pendente') && !pintura && !pinturas?.length"> · <b :class="resumo.acima ? 'text-red-700' : 'text-emerald-700'">{{ resumo.acima }}</b> acima da meta · <b :class="resumo.semLeitura ? 'text-slate-900' : ''">{{ resumo.semLeitura }}</b> sem leitura</template></span>
           <span><i class="fas fa-arrow-left mr-1"></i>Freezers · corredores (número no meio, faces C/D no fundo e A/B na frente) da direita para a esquerda · Líquida<i class="fas fa-arrow-right ml-1"></i></span>
         </div>
         <div class="overflow-x-auto">
@@ -332,8 +335,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
 
         <!-- Legenda -->
         <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
-          <template v-if="modo === 'pendente' && pintura">
-            <span v-for="l in pintura.legenda" :key="l.rotulo"><i class="mr-1 inline-block size-3 rounded align-[-2px]" :class="l.classe"></i>{{ l.rotulo }}</span>
+          <template v-if="pinturaAtiva">
+            <span v-for="l in pinturaAtiva.legenda" :key="l.rotulo"><i class="mr-1 inline-block size-3 rounded align-[-2px]" :class="l.classe"></i>{{ l.rotulo }}</span>
           </template>
           <template v-else-if="modo === 'pendente'">
             <span><i class="mr-1 inline-block size-3 rounded bg-emerald-500 align-[-2px]"></i>Até {{ META }}%</span>
@@ -373,8 +376,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Fechar" @click="selecionado = null"><i class="fas fa-times"></i></button>
           </div>
 
-          <div v-if="pintura?.resumo" class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div v-for="b in pintura.resumo(areaSelecionada)" :key="b.rotulo" class="rounded-xl py-2" :class="b.classe"><p class="text-lg font-black">{{ b.valor }}</p><p class="text-[10px]">{{ b.rotulo }}</p></div>
+          <div v-if="pinturaAtiva?.resumo" class="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div v-for="b in pinturaAtiva.resumo(areaSelecionada)" :key="b.rotulo" class="rounded-xl py-2" :class="b.classe"><p class="text-lg font-black">{{ b.valor }}</p><p class="text-[10px]">{{ b.rotulo }}</p></div>
           </div>
           <div v-else class="mt-4 grid grid-cols-3 gap-2 text-center">
             <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[10px] text-slate-500">{{ textos.lidos }}</p></div>
@@ -385,12 +388,12 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </div>
           </div>
 
-          <table v-if="areaSelecionada.tipo === 'gondola' && pintura?.colunasFace" class="mt-4 w-full text-sm">
-            <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th v-for="c in pintura.colunasFace" :key="c.rotulo" class="text-right">{{ c.rotulo }}</th></tr></thead>
+          <table v-if="areaSelecionada.tipo === 'gondola' && pinturaAtiva?.colunasFace" class="mt-4 w-full text-sm">
+            <thead class="text-[11px] uppercase text-slate-500"><tr><th class="py-1 text-left">Face</th><th v-for="c in pinturaAtiva.colunasFace" :key="c.rotulo" class="text-right">{{ c.rotulo }}</th></tr></thead>
             <tbody>
               <tr v-for="f in faces" :key="f" class="border-t border-slate-100">
                 <td class="py-1.5 font-bold">{{ areaSelecionada.bloco }}{{ f }}</td>
-                <td v-for="c in pintura.colunasFace" :key="c.rotulo" class="text-right" :class="c.classe">{{ areaSelecionada.faces[f] ? c.valor(areaSelecionada.faces[f]) : '—' }}</td>
+                <td v-for="c in pinturaAtiva.colunasFace" :key="c.rotulo" class="text-right" :class="c.classe">{{ areaSelecionada.faces[f] ? c.valor(areaSelecionada.faces[f]) : '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -406,7 +409,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
             </tbody>
           </table>
 
-          <div v-if="!pintura" class="mt-4">
+          <div v-if="!pinturaAtiva" class="mt-4">
             <p class="text-xs font-bold text-slate-700">Quem leu aqui</p>
             <p v-if="!usuariosDaArea.length" class="mt-1 text-xs text-slate-500">Nenhuma leitura registrada.</p>
             <ul v-else class="mt-2 space-y-2">
@@ -418,7 +421,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </div>
 
           <slot name="area" :area="areaSelecionada" />
-          <button v-if="areaSelecionada.total && itensDisponiveis" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i :class="pintura?.botaoIcone || 'fas fa-list'"></i>{{ pintura?.botao || 'Ver itens' }}</button>
+          <button v-if="areaSelecionada.total && itensDisponiveis" type="button" class="ui-btn-secondary mt-4 w-full py-2" @click="verItens(areaSelecionada)"><i :class="pinturaAtiva?.botaoIcone || 'fas fa-list'"></i>{{ pinturaAtiva?.botao || 'Ver itens' }}</button>
 
           <!-- Ajustes da área (modo edição) -->
           <div v-if="editando && posicaoSelecionada" class="mt-4 space-y-3 rounded-xl bg-blue-50 p-3">
@@ -490,7 +493,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         :style="{ left: `${dica.left}px`, top: `${dica.top}px`, transform: dica.abaixo ? 'translateX(-50%)' : 'translate(-50%, -100%)' }"
       >
         <b>{{ titulo(areaDica) }}</b><br>
-        <template v-if="pintura?.dica">{{ pintura.dica(areaDica) }}</template>
+        <template v-if="pinturaAtiva?.dica">{{ pinturaAtiva.dica(areaDica) }}</template>
         <template v-else>{{ percentualPendente(areaDica).toFixed(1) }}% {{ textos.curto }} · {{ areaDica.pendentes }} {{ textos.pendentes }} · {{ areaDica.lidos }} {{ textos.lidos }}</template>
       </div>
     </Teleport>
