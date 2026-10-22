@@ -69,6 +69,9 @@ const ESTILOS = `
   th { background: #f1f5f9; color: #334155; font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; padding: 4px 5px; text-align: left; border-bottom: 1.2px solid #94a3b8; }
   td { padding: 3px 5px; border-bottom: 1px solid #e2e8f0; vertical-align: top; overflow-wrap: anywhere; }
   tr:nth-child(even) td { background: #fafbfc; }
+  tr.grupo td { background: #eef2f7 !important; font-weight: 700; color: #14213d; border-top: 1.5px solid #94a3b8; padding: 4px 5px; }
+  tr.grupo td span { float: right; font-weight: 600; color: #475569; }
+  tr.grupo { break-after: avoid; page-break-after: avoid; }
   tr { break-inside: avoid; }
   td .mini { display: inline-block; vertical-align: middle; width: 14mm; height: 5px; border-radius: 1px; background: #eef2f7; margin-right: 5px; position: relative; overflow: hidden; }
   td .mini b { position: absolute; inset: 0 auto 0 0; }
@@ -146,6 +149,7 @@ export const blocoDestaques = ({ titulo = 'Destaques', itens = [] }) => (itens.l
   ${itens.map(i => `<li style="--cor:${cor(i.tom === 'bom' ? 'bom' : i.tom === 'ruim' ? 'ruim' : 'neutro')}">${escapeHtml(i.texto)}</li>`).join('')}</ul></div>` : '')
 
 // Tabela; colunas com `barra: { max, tom? }` ganham mini barra antes do valor.
+// Linha { __grupo: 'título', __detalhe: 'n itens' } vira cabeçalho de grupo ocupando a largura toda.
 export const blocoTabela = ({ titulo, subtitulo, colunas = [], linhas = [] }) => {
   if (!linhas.length) return ''
   const celula = (linha, col) => {
@@ -159,7 +163,9 @@ export const blocoTabela = ({ titulo, subtitulo, colunas = [], linhas = [] }) =>
   }
   return `<div class="secao tabela">${titulo ? `<h2>${escapeHtml(titulo)}</h2>` : ''}${subtitulo ? `<p class="sub">${escapeHtml(subtitulo)}</p>` : ''}<table>
     <thead><tr>${colunas.map(c => `<th style="text-align:${alinhar(c)}">${escapeHtml(c.titulo)}</th>`).join('')}</tr></thead>
-    <tbody>${linhas.map(l => `<tr>${colunas.map(c => `<td${c.alinhamento === 'right' ? ' class="num"' : ''} style="text-align:${alinhar(c)}">${celula(l, c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+    <tbody>${linhas.map(l => (l?.__grupo !== undefined
+      ? `<tr class="grupo"><td colspan="${colunas.length}">${escapeHtml(l.__grupo)}<span>${escapeHtml(l.__detalhe || '')}</span></td></tr>`
+      : `<tr>${colunas.map(c => `<td${c.alinhamento === 'right' ? ' class="num"' : ''} style="text-align:${alinhar(c)}">${celula(l, c)}</td>`).join('')}</tr>`)).join('')}</tbody></table></div>`
 }
 
 // Título de capítulo; `novaPagina` começa uma folha nova.

@@ -57,7 +57,8 @@ const textoDe = (item, c) => {
   return typeof bruto === 'number' ? bruto.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : String(bruto)
 }
 
-export const abrirRelatorioTabela = ({ id, titulo, subtitulo = '', contexto = [], colunas, itens, indicadores = [], tituloTabela = 'Itens', resumo: resumoPronto = null, assinaturaPadrao = false }) => {
+// agrupamento: { nome, valor: item => texto } — a tabela sai agrupada como na tela (grupos maiores primeiro).
+export const abrirRelatorioTabela = ({ id, titulo, subtitulo = '', contexto = [], colunas, itens, indicadores = [], tituloTabela = 'Itens', resumo: resumoPronto = null, assinaturaPadrao = false, agrupamento = null }) => {
   if (!Array.isArray(itens) || !itens.length || !Array.isArray(colunas) || !colunas.length) return
   let resumo = RESUMOS.find(([chave]) => colunas.some(c => c.chave === chave))
   let barras = []
@@ -86,13 +87,25 @@ export const abrirRelatorioTabela = ({ id, titulo, subtitulo = '', contexto = []
       {
         id: 'tabela',
         titulo: tituloTabela,
-        descricao: 'Lista completa, na ordem e com os filtros aplicados na tela.',
+        descricao: agrupamento ? `Lista completa agrupada por ${agrupamento.nome}, com os filtros da tela.` : 'Lista completa, na ordem e com os filtros aplicados na tela.',
         padrao: true,
         gerar: ({ colunas: escolhidas }) => {
           const usadas = colunas.filter(c => escolhidas.includes(c.chave))
+          const linha = item => Object.fromEntries(usadas.map(c => [c.chave, textoDe(item, c)]))
+          let linhas = itens.map(linha)
+          if (agrupamento?.valor) {
+            const mapa = new Map()
+            for (const item of itens) {
+              const k = String(agrupamento.valor(item) ?? '').trim() || 'Não informado'
+              if (!mapa.has(k)) mapa.set(k, [])
+              mapa.get(k).push(item)
+            }
+            linhas = [...mapa].sort((a, b) => b[1].length - a[1].length)
+              .flatMap(([k, lista]) => [{ __grupo: k, __detalhe: `${lista.length.toLocaleString('pt-BR')} item(ns)` }, ...lista.map(linha)])
+          }
           return blocoTabela({
             colunas: usadas.map(c => ({ chave: c.chave, titulo: c.titulo, alinhamento: c.alinhamento })),
-            linhas: itens.map(item => Object.fromEntries(usadas.map(c => [c.chave, textoDe(item, c)])))
+            linhas
           })
         }
       }

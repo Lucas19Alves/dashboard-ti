@@ -100,7 +100,8 @@ const linhasExport = () => ordenados.value.map(item => Object.fromEntries(props.
 const exportarCsv = () => baixarCsv(linhasExport(), props.colunas, props.titulo.toLowerCase().replace(/[^a-z0-9]+/gi, '-'))
 // Relatório A4 da lista como está na tela (busca, filtros e ordem), com escolha de colunas.
 const imprimir = () => {
-  const f = props.facetas.find(x => x.chave === agrupar.value) || props.facetas[0]
+  const agrupado = props.facetas.find(x => x.chave === agrupar.value) || null
+  const f = agrupado || props.facetas[0]
   const barras = f
     ? [...filtrados.value.reduce((m, i) => m.set(valorFaceta(i, f), (m.get(valorFaceta(i, f)) || 0) + 1), new Map())]
       .sort((a, b) => b[1] - a[1]).slice(0, 15).map(([rotulo, valor]) => ({ rotulo, valor }))
@@ -108,7 +109,8 @@ const imprimir = () => {
   const contexto = [
     busca.value && { rotulo: 'Busca', valor: `"${busca.value}"` },
     ...Object.entries(filtros.value).filter(([, v]) => v).map(([k, v]) => ({ rotulo: props.facetas.find(x => x.chave === k)?.titulo || k, valor: v })),
-    { rotulo: 'Listados', valor: `${filtrados.value.length.toLocaleString('pt-BR')} de ${props.itens.length.toLocaleString('pt-BR')}` }
+    { rotulo: 'Listados', valor: `${filtrados.value.length.toLocaleString('pt-BR')} de ${props.itens.length.toLocaleString('pt-BR')}` },
+    agrupado && { rotulo: 'Agrupado por', valor: agrupado.titulo }
   ].filter(Boolean)
   abrirRelatorioTabela({
     id: props.titulo.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').slice(0, 40),
@@ -116,7 +118,8 @@ const imprimir = () => {
     contexto,
     colunas: props.colunas,
     itens: ordenados.value,
-    resumo: f ? { nome: f.titulo.toLowerCase(), barras } : null
+    resumo: f ? { nome: f.titulo.toLowerCase(), barras } : null,
+    agrupamento: agrupado ? { nome: agrupado.titulo.toLowerCase(), valor: item => valorFaceta(item, agrupado) } : null
   })
 }
 
