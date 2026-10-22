@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { toPng } from 'html-to-image'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { blocoBarras, blocoTabela, selo } from '../utils/print'
@@ -11,6 +10,7 @@ import { baixarCsv } from '../utils/csv'
 import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
 import StatCard from '../components/ui/StatCard.vue'
+import ImagemVencimentos from '../components/ImagemVencimentos.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
@@ -78,7 +78,6 @@ const paginaFornecedorModal = ref(1)
 const buscaFornecedorModal = ref('')
 const ordenacaoFornecedorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
 const itensPorPaginaFornecedorModal = 12
-const detalhamentoSetorExportRef = ref(null)
 
 // Status filter pills config
 const statusPills = [
@@ -611,60 +610,18 @@ const aplicarFiltrosDaRota = () => {
 }
 watch(() => route.query, aplicarFiltrosDaRota, { immediate: true })
 
-const normalizarNomeArquivo = (texto) => {
-  return String(texto || 'imagem')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9\-_ ]/g, ' ')
-    .trim()
-    .replace(/\s+/g, '-')
-    .toLowerCase()
-}
-
+// Imagem quadrada para o WhatsApp (mesmo formato da imagem do relatório de auditoria).
+const imagemVencimentos = ref(null)
+const gerandoImagemVenc = ref(false)
 const exportarDetalhamentoSetor = async () => {
-  if (!detalhamentoSetorExportRef.value || typeof window === 'undefined') return
-
+  if (!imagemVencimentos.value) return
+  gerandoImagemVenc.value = true
   try {
-    const elemento = detalhamentoSetorExportRef.value
-    const rect = elemento.getBoundingClientRect?.() || {}
-    const largura = Math.max(Math.round(rect.width || elemento.scrollWidth || elemento.clientWidth || 1200), 1)
-    const altura = Math.max(Math.round(rect.height || elemento.scrollHeight || elemento.clientHeight || 700), 1)
-
-    const botoesOcultos = elemento.querySelectorAll('.export-button-hidden')
-    botoesOcultos.forEach(botao => {
-      botao.style.display = 'none'
-    })
-
-    const dataUrl = await toPng(elemento, {
-      cacheBust: true,
-      pixelRatio: 4,
-      backgroundColor: '#f8fafc',
-      width: largura,
-      height: altura,
-      skipFonts: false,
-      style: {
-        margin: '0',
-        padding: '0',
-        boxSizing: 'border-box',
-        transform: 'none',
-        maxWidth: 'none',
-        maxHeight: 'none'
-      }
-    })
-
-    botoesOcultos.forEach(botao => {
-      botao.style.display = ''
-    })
-
-    const link = document.createElement('a')
-    link.download = `${normalizarNomeArquivo('vencimentos-atencao-detalhamento-setor')}.png`
-    link.href = dataUrl
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    await imagemVencimentos.value.salvar()
   } catch (error) {
-    console.error('Erro ao exportar imagem do detalhamento por setor:', error)
-    window.alert('Não foi possível gerar a imagem do detalhamento por setor. Tente novamente.')
+    toastStore.addToast(`Não foi possível gerar a imagem: ${error?.message || error}`, 'error')
+  } finally {
+    gerandoImagemVenc.value = false
   }
 }
 </script>
@@ -732,7 +689,7 @@ const exportarDetalhamentoSetor = async () => {
       <!-- ===== TAB 1: VISAO GERAL ===== -->
       <!-- ============================================================ -->
       <template v-if="store.itens.length > 0 && abaAtiva === 'visao'">
-        <div ref="detalhamentoSetorExportRef" class="space-y-4">
+        <div class="space-y-4">
           <!-- Alert Banner -->
           <div class="rounded-xl border p-4 flex items-center gap-4" :class="alertaBanner.classe">
             <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" :class="alertaBanner.iconeCor">
@@ -762,9 +719,9 @@ const exportarDetalhamentoSetor = async () => {
                   detalhes.</p>
               </div>
               <div class="flex items-center gap-2">
-                <button @click="exportarDetalhamentoSetor"
-                  class="export-button-hidden inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-600 text-white hover:bg-orange-700 transition text-xs font-semibold shadow-sm print:hidden">
-                  <i class="fas fa-image"></i>
+                <button type="button" :disabled="gerandoImagemVenc" title="Imagem quadrada para compartilhar no WhatsApp" @click="exportarDetalhamentoSetor"
+                  class="ui-btn-secondary py-1.5 text-xs print:hidden">
+                  <i :class="gerandoImagemVenc ? 'fas fa-spinner fa-spin' : 'fas fa-image'"></i>
                   Salvar imagem
                 </button>
                 <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
@@ -1309,6 +1266,7 @@ const exportarDetalhamentoSetor = async () => {
     <UiModal v-if="modalEstoqueBaixo" title="Itens para excluir da validade" :subtitle="`${itensEstoqueBaixo.length} item(ns) com menos de ${LIMITE_ESTOQUE_BAIXO} unidades nos filtros atuais`" width="max-w-6xl" @close="modalEstoqueBaixo = false">
       <UiListaItens :itens="itensEstoqueBaixo" :colunas="colunasListaVenc" :facetas="facetasListaVenc" titulo="Itens para excluir da validade (estoque baixo)" :ordem-inicial="{ chave: '_estoque', direcao: 'asc' }" />
     </UiModal>
+    <ImagemVencimentos ref="imagemVencimentos" :resumo="resumo" :setores="setoresAnalise" :urgentes="itensCriticosPainel" />
     </div>
   </div>
 </template>
