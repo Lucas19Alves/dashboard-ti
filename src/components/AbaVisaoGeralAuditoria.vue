@@ -315,8 +315,6 @@ const graficoAndamento = computed(() => {
 
     <!-- Métricas Gerais -->
     <template v-else>
-      <!-- Previsão de fechamento (auditoria em andamento) -->
-      <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '20:00'" />
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           @click="abrirModalMetrica('total')"
@@ -390,6 +388,9 @@ const graficoAndamento = computed(() => {
           <p class="text-[11px] text-slate-400">Lidos mas desatualizados</p>
         </div>
       </div>
+
+      <!-- Previsão de fechamento (auditoria em andamento) -->
+      <PrevisaoAuditoria v-if="auditoria.status !== 'fechada'" :auditoria="auditoria" :fim="store.horariosAuditoria?.fim || '20:00'" />
 
       <!-- Andamento acumulado da auditoria completa por horário -->
       <div v-if="auditoria?.dados?.length" class="bg-white rounded-xl p-6 shadow-sm">
