@@ -71,7 +71,10 @@ for (const [setor, locais] of Object.entries(SETORES)) {
       classe: `${raiz.split(' - ')[0]}.${NOMES[setor].indexOf(tipo) + 1} - ${tipo}`,
       local: locais[i % locais.length],
       fornecedor: um(FORNECEDORES),
-      custo: (int(300, 4000) / 100).toFixed(2).replace('.', ',')
+      custo: (int(300, 4000) / 100).toFixed(2).replace('.', ','),
+      // Perfil de estoque: some da gôndola (reincidência), parado (sem venda), zerado no sistema mas na gôndola.
+      estoqueBase: int(4, 120),
+      perfil: chance(0.035) ? 'some' : chance(0.05) ? 'parado' : chance(0.025) ? 'zerado' : 'normal'
     })
   }
 }
@@ -81,12 +84,14 @@ const foraDoLugar = new Map(catalogo.filter(() => chance(0.02)).map(p => [p.codi
 const colunasAuditoria = ['Código', 'Produto', 'Classe de Produto Raiz', 'Classe de Produto', 'Fornecedor', 'Local', 'Usuário', 'Situação', 'Auditado em', 'Estoque atual', 'Lido não pertence', 'Dias sem venda', 'Custo Ruptura']
 
 const linhaAuditoria = (p, dia, tipo, qualidade) => {
-  const estoque = chance(0.08) ? 0 : int(1, 120)
-  const lido = chance(qualidade)
+  const estoque = p.perfil === 'zerado' ? 0 : chance(0.02) ? 0 : Math.max(1, p.estoqueBase + int(-3, 3))
+  // Quem "some" quase nunca é achado na Presença/Ruptura; metade deles ainda vende (está no depósito).
+  const lido = chance(p.perfil === 'some' ? 0.04 : qualidade)
+  const diasSemVenda = p.perfil === 'parado' || (p.perfil === 'some' && Number(p.codigo) % 2) ? int(35, 120) : int(0, 20)
   const hora = `${String(int(8, 19)).padStart(2, '0')}:${String(int(0, 59)).padStart(2, '0')}:00`
   const base = {
     'Código': p.codigo, Produto: p.produto, 'Classe de Produto Raiz': p.setor, 'Classe de Produto': p.classe, Fornecedor: p.fornecedor,
-    Local: `${p.local} - ${p.local}`, 'Estoque atual': estoque, 'Lido não pertence': 'Não', 'Dias sem venda': int(0, 40), 'Custo Ruptura': p.custo
+    Local: `${p.local} - ${p.local}`, 'Estoque atual': estoque, 'Lido não pertence': 'Não', 'Dias sem venda': diasSemVenda, 'Custo Ruptura': p.custo
   }
   const usuario = um(USUARIOS)
   if (tipo === 'Etiqueta') {
@@ -165,4 +170,6 @@ export const carregarDemo = async (pinia) => {
   await criarAuditorias(store, hoje)
   await criarVencimentos(hoje)
   await criarNaoVinculados(hoje, store.auditorias)
+  // Os avisos do processamento das planilhas não interessam na carga do demo.
+  setTimeout(() => store.toasts.splice(0), 0)
 }

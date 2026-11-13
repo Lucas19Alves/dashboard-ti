@@ -26,7 +26,7 @@ const links = [
   { to: '/auditorias', label: 'Auditorias', icon: 'fas fa-clipboard-check' },
   { to: '/auditorias/analise', label: 'Análise', icon: 'fas fa-chart-line' },
   { to: '/vencimentos', label: 'Vencimentos', icon: 'fas fa-calendar-alt' },
-  { to: '/nao-vinculados', label: 'Não vinculados', icon: 'fas fa-link-slash' }
+  { to: '/estoque', label: 'Estoque', icon: 'fas fa-boxes-stacked' }
 ]
 
 const isActive = (path) => {

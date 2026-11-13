@@ -38,24 +38,49 @@ const horaSegundos = valor => {
   return horas < 24 && minutos < 60 && segundos < 60 ? horas * 3600 + minutos * 60 + segundos : null
 }
 
-export const momentoLeitura = item => {
-  const chaves = Object.keys(item).filter(chave => /^auditado[ _]em/i.test(chave))
-  const valores = [
-    ...chaves.map(chave => ({ chave, valor: item[chave] })),
-    ...['Lido em', 'Carimbo de data/hora', 'Data', 'Hora'].map(chave => ({ chave, valor: item[chave] }))
-  ]
-  const comData = valores.map(campo => ({ ...campo, data: extrairDataISOPlanilha(campo.valor) }))
-    .find(campo => campo.data && Number.isFinite(Date.parse(`${campo.data}T00:00:00Z`)))
-  // Algumas planilhas usam colunas homônimas para data e hora. Uma hora
-  // explícita em outra coluna prevalece sobre a meia-noite da coluna de data.
-  const horas = valores.map(campo => ({ ...campo, segundos: horaSegundos(campo.valor) }))
-    .filter(campo => campo.segundos !== null)
-  const comHora = horas.find(campo => campo.segundos > 0) || horas[0]
-  if (!comData || !comHora) return null
-  const instante = Date.parse(`${comData.data}T00:00:00Z`) + comHora.segundos * 1000
+// Os itens das auditorias não mudam depois de importados (ficam fora da reatividade), então o
+// momento de leitura de cada um é calculado uma vez só e reaproveitado por todas as análises.
+const cacheMomento = new WeakMap()
+export const momentoLeitura = (item) => {
+  if (!item || typeof item !== 'object') return null
+  if (cacheMomento.has(item)) return cacheMomento.get(item)
+  const momento = calcularMomentoLeitura(item)
+  cacheMomento.set(item, momento)
+  return momento
+}
+
+const RE_AUDITADO_EM = /^auditado[ _]em/i
+const COLUNAS_EXTRAS = ['Lido em', 'Carimbo de data/hora', 'Data', 'Hora']
+
+// Colunas "Auditado em…" (na ordem do item) e depois as extras. A primeira com data válida dá o dia;
+// a primeira com hora > 0 (ou, sem ela, a primeira com hora) dá o horário. Algumas planilhas usam
+// colunas homônimas para data e hora: uma hora explícita em outra coluna prevalece sobre a meia-noite.
+// Roda para cada item lido, por isso evita criar listas e objetos intermediários.
+const calcularMomentoLeitura = item => {
+  let data = null
+  let colunaData = null
+  let segundos = null
+  let colunaHora = null
+  const avaliar = (chave) => {
+    const valor = item[chave]
+    if (valor === undefined || valor === null || valor === '') return
+    if (data === null) {
+      const d = extrairDataISOPlanilha(valor)
+      if (d && Number.isFinite(Date.parse(`${d}T00:00:00Z`))) { data = d; colunaData = chave }
+    }
+    if (segundos === null || segundos === 0) {
+      const s = horaSegundos(valor)
+      if (s !== null && (segundos === null || s > 0)) { segundos = s; colunaHora = chave }
+    }
+  }
+  for (const chave in item) {
+    if (chave.length >= 11 && (chave[0] === 'a' || chave[0] === 'A') && RE_AUDITADO_EM.test(chave)) avaliar(chave)
+  }
+  for (const chave of COLUNAS_EXTRAS) avaliar(chave)
+  if (data === null || segundos === null) return null
+  const instante = Date.parse(`${data}T00:00:00Z`) + segundos * 1000
   return Number.isFinite(instante)
-    ? { instante, data: comData.data, hora: new Date(instante).toISOString().slice(11, 19),
-        colunaData: comData.chave, colunaHora: comHora.chave }
+    ? { instante, data, hora: new Date(instante).toISOString().slice(11, 19), colunaData, colunaHora }
     : null
 }
 
