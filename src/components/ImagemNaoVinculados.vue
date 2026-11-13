@@ -4,10 +4,9 @@ import { toPng } from 'html-to-image'
 import { configuracoes } from '../composables/useConfiguracoes'
 
 // Imagem quadrada (1080, até 4x) dos itens sem local para mandar no grupo:
-// quantos faltam vincular, por setor e os itens com o local sugerido.
+// quantos faltam vincular, quantos chegaram hoje, por setor e os de maior estoque.
 const props = defineProps({
-  itens: { type: Array, default: () => [] }, // ativos (pendente/vinculado/ignorado)
-  resolvidosHoje: { type: Number, default: 0 }
+  itens: { type: Array, default: () => [] } // ativos (pendente/vinculado/ignorado)
 })
 
 const QUADRADO = 1080
@@ -18,9 +17,10 @@ const hoje = new Date()
 const loja = computed(() => [configuracoes.relatorio.empresa, configuracoes.relatorio.unidade].map(v => String(v || '').trim()).filter(Boolean).join(', '))
 
 const pendentes = computed(() => props.itens.filter(i => i.status === 'pendente'))
-const comLocal = computed(() => pendentes.value.filter(i => i.sugestao?.local).length)
-const ORDEM = { alta: 0, media: 1, baixa: 2 }
-const lista = computed(() => [...pendentes.value].sort((a, b) => ORDEM[a.prioridade] - ORDEM[b.prioridade] || b.estoque - a.estoque).slice(0, 10))
+const hojeISO = hoje.toLocaleDateString('sv-SE')
+const recebidosHoje = computed(() => pendentes.value.filter(i => i.primeiroVisto === hojeISO).length)
+const lista = computed(() => [...pendentes.value].sort((a, b) => b.estoque - a.estoque).slice(0, 10))
+const semVenda = d => (d === null || d === undefined ? '—' : d === 1 ? '1 dia' : `${d.toLocaleString('pt-BR')} dias`)
 const setores = computed(() => {
   const m = new Map()
   pendentes.value.forEach(i => m.set(i.setor, (m.get(i.setor) || 0) + 1))
@@ -64,26 +64,19 @@ defineExpose({ salvar, gerando })
 
       <div class="grid h-[230px] shrink-0 grid-cols-[430px_1fr] gap-5">
         <div class="flex flex-col justify-center rounded-[28px] px-8 text-white" :class="pendentes.length ? 'bg-blue-800' : 'bg-emerald-700'">
-          <p class="text-[24px] font-semibold text-white/80">Para vincular</p>
+          <p class="text-[24px] font-semibold text-white/80">Não vinculados</p>
           <p class="text-[110px] font-bold leading-[1.02] tracking-tight">{{ pendentes.length.toLocaleString('pt-BR') }}</p>
           <p class="text-[20px] font-semibold text-white/90">{{ pendentes.length ? 'Fora da auditoria até ganhar local' : 'Todos os itens têm local' }}</p>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div class="flex flex-col justify-center rounded-[22px] bg-blue-50 px-6">
-            <p class="text-[17px] font-semibold text-blue-900">Com local sugerido</p>
-            <p class="text-[54px] font-bold leading-tight text-blue-800">{{ comLocal }}</p>
-            <p class="text-[15px] text-blue-900/80">pelo histórico das auditorias</p>
-          </div>
-          <div class="flex flex-col justify-center rounded-[22px] bg-slate-50 px-6">
-            <p class="text-[17px] font-semibold text-slate-600">Saíram da lista hoje</p>
-            <p class="text-[54px] font-bold leading-tight text-emerald-700">{{ resolvidosHoje }}</p>
-            <p class="text-[15px] text-slate-500">já vinculados no sistema</p>
-          </div>
+        <div class="flex flex-col justify-center rounded-[28px] bg-blue-50 px-8">
+          <p class="text-[24px] font-semibold text-blue-900">Recebidos hoje</p>
+          <p class="text-[110px] font-bold leading-[1.02] tracking-tight text-blue-800">{{ recebidosHoje.toLocaleString('pt-BR') }}</p>
+          <p class="text-[20px] font-semibold text-blue-900/80">{{ recebidosHoje === 1 ? 'item chegou' : 'itens chegaram' }} sem local hoje</p>
         </div>
       </div>
 
       <div class="grid min-h-0 flex-1 grid-cols-[380px_1fr] gap-5">
-        <section class="flex min-h-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
+        <section class="flex min-h-0 min-w-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
           <p class="text-[24px] font-bold">Por setor</p>
           <ul class="mt-4 flex flex-col gap-3">
             <li v-for="[nome, n] in setores" :key="nome">
@@ -92,16 +85,23 @@ defineExpose({ salvar, gerando })
             </li>
           </ul>
         </section>
-        <section class="flex min-h-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
-          <p class="text-[24px] font-bold">Vincular primeiro</p>
+        <section class="flex min-h-0 min-w-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
+          <p class="text-[24px] font-bold">Maior estoque</p>
           <p v-if="!lista.length" class="mt-6 text-[20px] text-slate-500">Nada pendente.</p>
-          <ol v-else class="mt-4 flex flex-col gap-[18px]">
-            <li v-for="item in lista" :key="item.codigo" class="flex items-center gap-3">
+          <ol v-else class="mt-3 flex flex-col divide-y divide-slate-100">
+            <li v-for="item in lista" :key="item.codigo" class="flex items-center gap-3 py-[9px]">
               <div class="min-w-0 flex-1">
-                <p class="truncate text-[18px] font-semibold leading-tight">{{ item.produto }}</p>
+                <p class="truncate text-[17px] font-semibold leading-tight">{{ item.produto }}</p>
                 <p class="truncate text-[14px] text-slate-500">{{ item.codigo }}, {{ item.estoque.toLocaleString('pt-BR') }} em estoque</p>
               </div>
-              <span class="shrink-0 rounded-lg px-3 py-1 text-[18px] font-bold" :class="item.sugestao?.local ? 'bg-blue-50 text-blue-800' : 'bg-amber-50 text-amber-800'">{{ item.sugestao?.local || 'procurar' }}</span>
+              <div class="w-[118px] shrink-0 rounded-lg px-2.5 py-1 leading-tight" :class="item.sugestao?.local ? 'bg-blue-50 text-blue-900' : 'bg-amber-50 text-amber-900'">
+                <p class="text-[12px] font-semibold opacity-75">Local sugerido</p>
+                <p class="truncate text-[17px] font-bold">{{ item.sugestao?.local || 'procurar' }}</p>
+              </div>
+              <div class="w-[118px] shrink-0 rounded-lg bg-slate-50 px-2.5 py-1 leading-tight text-slate-800">
+                <p class="text-[12px] font-semibold text-slate-500">Sem venda há</p>
+                <p class="truncate text-[17px] font-bold" :class="item.diasSemVenda >= 30 ? 'text-red-700' : ''">{{ semVenda(item.diasSemVenda) }}</p>
+              </div>
             </li>
           </ol>
         </section>
