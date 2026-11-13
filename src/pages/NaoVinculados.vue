@@ -297,6 +297,6 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
         </ul>
       </UiModal>
     </div>
-    <ImagemNaoVinculados ref="imagem" :itens="ativos" :resolvidos-hoje="resolvidosHoje" />
+    <ImagemNaoVinculados ref="imagem" :itens="ativos" />
   </div>
 </template>
