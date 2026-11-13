@@ -42,20 +42,11 @@ export const useNaoVinculadosStore = defineStore('naoVinculados', () => {
     await db.naoVinculados.bulkPut(simples(itens.value))
   }
 
-  const atualizar = async (codigo, mudanca) => {
-    const indice = itens.value.findIndex(i => i.codigo === codigo)
-    if (indice < 0) return
-    const item = { ...itens.value[indice], ...mudanca, alteradoEm: new Date().toISOString() }
-    await db.naoVinculados.put(simples(item))
-    itens.value.splice(indice, 1, item)
-    registrarAlteracao('tratamento de não vinculado')
-  }
-
   const limpar = async () => {
     await db.naoVinculados.clear()
     itens.value = []
     registrarAlteracao('não vinculados apagados')
   }
 
-  return { itens, carregar, importar, atualizarSugestoes, atualizar, limpar }
+  return { itens, carregar, importar, atualizarSugestoes, limpar }
 })
