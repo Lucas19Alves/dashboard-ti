@@ -28,3 +28,12 @@ db.version(4).stores({
   planosAcao: '++id, auditoriaId, status',
   config: 'chave'
 })
+
+// Itens não vinculados a local (um registro por código, com status do tratamento).
+db.version(5).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status',
+  config: 'chave',
+  naoVinculados: 'codigo, status'
+})

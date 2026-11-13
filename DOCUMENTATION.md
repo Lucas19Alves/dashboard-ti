@@ -120,6 +120,15 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
   - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
   - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; aumentar ou diminuir o mapa em cada borda (esquerda, direita, topo, base), sendo que aumentar à esquerda/topo empurra as áreas e diminuir só remove espaço vazio; o layout fica salvo neste navegador, vale para todas as auditorias e vai junto no backup (`configuracoes.mapaLoja`).
 
+### 4.9 Itens não vinculados (`pages/NaoVinculados.vue`, `utils/naoVinculados.js`)
+Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **Não vinculados** recebe a planilha do dia (Código, Nome, Estoque, Dias sem venda, Classe de Produto, Classe de Produto Raiz, Fornecedor) e cruza com o histórico das auditorias.
+- **Sugestão de local**, da evidência mais forte para a mais fraca: local onde o item foi *lido não pertence* (está fisicamente lá), último local em que esteve vinculado, local mais comum dos itens da mesma classe de produto. Sem nada disso: "procurar na loja".
+- **Prioridade**: vende toda semana (≤ 7 dias sem venda) > com estoque > sem estoque.
+- **Tratamento**: confirmar o local e marcar "Vinculei" ou "Ignorar". A cada importação, quem continua na lista mantém o tratamento e quem saiu vai para **Resolvidos** (vinculado no sistema). Fica salvo no IndexedDB (`naoVinculados`) e vai no backup.
+- **Por local sugerido**: lista para o repositor conferir local a local.
+- **Vínculos suspeitos**: itens com local que as auditorias indicam estar errado (lido em outro local em 2+ auditorias, ou setor que quase não aparece no local onde está vinculado).
+- **Salvar imagem** quadrada para o WhatsApp, CSV da lista filtrada e **Recalcular** as sugestões depois de importar novas auditorias.
+
 ---
 
 ## 📖 5. Guia de Uso
@@ -132,7 +141,12 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 5. O sistema processará o arquivo e abrirá a tela de **Detalhes**.
 6. Utilize os filtros de **Setor**, **Local** ou **Usuário** para analisar gargalos na operação.
 
-### 5.2 Gerindo Vencimentos
+### 5.2 Tratando itens não vinculados
+1. Exporte do sistema a planilha de itens sem local e importe na aba **Não vinculados**.
+2. Confira o local sugerido de cada item (ou procure na loja os "sem pista") e vincule no sistema.
+3. Marque "Vinculei". Na importação do dia seguinte, os itens que sumiram da planilha vão para Resolvidos.
+
+### 5.3 Gerindo Vencimentos
 1. Acesse a aba **Vencimentos**.
 2. Importe a planilha de validade do sistema.
 3. O Dashboard classificará automaticamente os produtos por urgência.
