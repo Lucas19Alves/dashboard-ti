@@ -233,6 +233,7 @@ export const gerarBackupArquivo = async () => {
   const auditorias = await db.auditorias.toArray()
   const vencimentos = await db.vencimentos.toArray()
   const planosAcao = await db.planosAcao.toArray()
+  const naoVinculados = await db.naoVinculados.toArray()
   const auditoriasComStatus = auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' }))
   const payload = {
     versao: BACKUP_VERSION,
@@ -240,6 +241,7 @@ export const gerarBackupArquivo = async () => {
     auditorias: auditoriasComStatus,
     vencimentos,
     planosAcao,
+    naoVinculados,
     configuracoes: {
       mapaLoja: carregarLayoutSalvo(),
       sistema: copia(configuracoesSistema),
@@ -292,7 +294,8 @@ export const importarBackupJson = async (file) => {
   // por causa de um arquivo incompleto ou de formato incorreto.
   // Planos de ação só são substituídos quando o backup os traz (backups antigos não têm).
   const planosAcao = Array.isArray(dados.planosAcao) ? dados.planosAcao.filter(p => p && typeof p === 'object') : null
-  await db.transaction('rw', db.auditorias, db.vencimentos, db.planosAcao, async () => {
+  const naoVinculados = Array.isArray(dados.naoVinculados) ? dados.naoVinculados.filter(n => n && typeof n === 'object' && n.codigo) : null
+  await db.transaction('rw', db.auditorias, db.vencimentos, db.planosAcao, db.naoVinculados, async () => {
     await db.auditorias.clear()
     await db.vencimentos.clear()
     if (auditorias.length) await db.auditorias.bulkAdd(auditorias)
@@ -300,6 +303,10 @@ export const importarBackupJson = async (file) => {
     if (planosAcao) {
       await db.planosAcao.clear()
       if (planosAcao.length) await db.planosAcao.bulkAdd(planosAcao)
+    }
+    if (naoVinculados) {
+      await db.naoVinculados.clear()
+      if (naoVinculados.length) await db.naoVinculados.bulkPut(naoVinculados)
     }
   })
 
