@@ -31,7 +31,7 @@ const criarNomeBackup = (compactado) => {
   const agora = new Date()
   const data = agora.toISOString().slice(0, 10)
   const hora = agora.toTimeString().slice(0, 8).replaceAll(':', '-')
-  return `dashboard-ti-backup-${data}-${hora}.json${compactado ? '.gz' : ''}`
+  return `dashboard-loja-backup-${data}-${hora}.json${compactado ? '.gz' : ''}`
 }
 
 const compactarGzip = async (blob) => {

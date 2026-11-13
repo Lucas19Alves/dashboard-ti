@@ -15,7 +15,7 @@ import { useNaoVinculadosStore } from './stores/naoVinculadosStore'
 
 // Uma aba aberta antes do deploy pode pedir um chunk cujo nome ja nao existe.
 window.addEventListener('vite:preloadError', event => {
-  const chave = 'dashboard-ti-ultima-recarga-chunk'
+  const chave = 'dashboard-loja-ultima-recarga-chunk'
   const ultimaRecarga = Number(sessionStorage.getItem(chave) || 0)
   if (Date.now() - ultimaRecarga < 30_000) return
 

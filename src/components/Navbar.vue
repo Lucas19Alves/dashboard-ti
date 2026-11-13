@@ -6,6 +6,7 @@ import UiModal from './ui/UiModal.vue'
 import { usePaleta } from '../composables/usePaleta'
 import { useInstalarApp } from '../composables/useInstalarApp'
 import PainelConfiguracoes from './PainelConfiguracoes.vue'
+import { abrirTutorial } from '../composables/useTutorial'
 
 const isOpen = ref(false)
 const mostrarSobre = ref(false)
@@ -41,6 +42,11 @@ const abrirSobre = () => {
   mostrarSobre.value = true
 }
 
+const abrirTutorialMenu = () => {
+  isOpen.value = false
+  abrirTutorial()
+}
+
 const abrirBuscaMobile = () => {
   isOpen.value = false
   abrirBusca()
@@ -48,10 +54,12 @@ const abrirBuscaMobile = () => {
 
 const atualizarConexao = () => { online.value = navigator.onLine }
 onMounted(() => {
+  window.addEventListener('abrir-configuracoes', abrirConfiguracoes)
   window.addEventListener('online', atualizarConexao)
   window.addEventListener('offline', atualizarConexao)
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('abrir-configuracoes', abrirConfiguracoes)
   window.removeEventListener('online', atualizarConexao)
   window.removeEventListener('offline', atualizarConexao)
 })
@@ -63,7 +71,7 @@ onBeforeUnmount(() => {
       <div class="flex h-16 items-center justify-between gap-3">
         <router-link to="/" class="flex shrink-0 items-center gap-2 text-[17px] font-semibold tracking-tight">
           <i class="fas fa-chart-pie text-blue-200" aria-hidden="true"></i>
-          <span>Dashboard TI</span>
+          <span>Dashboard Loja</span>
         </router-link>
 
         <!-- Navegação principal: abas com marcador embaixo da aba atual. -->
@@ -98,7 +106,7 @@ onBeforeUnmount(() => {
             @click="abrirBusca"
           >
             <i class="fas fa-search text-xs"></i>
-            <span class="mr-4">Buscar...</span>
+            <span class="hidden xl:mr-4 xl:inline">Buscar...</span>
             <kbd class="rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd>
           </button>
           <button
@@ -119,6 +127,14 @@ onBeforeUnmount(() => {
             @click="instalar"
           >
             <i class="fas fa-download text-xs" aria-hidden="true"></i><span class="hidden sm:inline">Instalar app</span><span class="sr-only sm:hidden">Instalar app</span>
+          </button>
+          <button
+            type="button"
+            class="hidden h-9 min-w-9 items-center justify-center gap-2 rounded-xl bg-white/10 px-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white/20 lg:inline-flex xl:px-3"
+            title="Tutorial: como usar cada página do sistema"
+            @click="abrirTutorial"
+          >
+            <i class="fas fa-graduation-cap text-xs" aria-hidden="true"></i><span class="sr-only xl:not-sr-only">Tutorial</span>
           </button>
           <button
             type="button"
@@ -164,7 +180,10 @@ onBeforeUnmount(() => {
             <i :class="[link.icon, 'w-4 text-center text-sm']"></i>
             {{ link.label }}
           </router-link>
-          <div class="grid grid-cols-3 gap-2 pt-2">
+          <div class="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-4">
+            <button type="button" @click="abrirTutorialMenu" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
+              <i class="fas fa-graduation-cap"></i>Tutorial
+            </button>
             <button type="button" @click="abrirBuscaMobile" class="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-blue-50 hover:bg-white/20">
               <i class="fas fa-search"></i>Buscar
             </button>

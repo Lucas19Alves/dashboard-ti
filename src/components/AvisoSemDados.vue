@@ -47,7 +47,7 @@ const importar = async (e) => {
         <i class="fas fa-box-archive shrink-0 text-slate-400" aria-hidden="true"></i>
         <div class="min-w-0 flex-1">
           <p id="aviso-sem-dados-titulo" class="text-sm font-bold text-slate-900">Nenhum dado neste navegador</p>
-          <p class="mt-0.5 text-xs text-slate-600">Tem um backup do Dashboard TI? Importe para recuperar auditorias, vencimentos e planos. Os dados ficam só neste computador.</p>
+          <p class="mt-0.5 text-xs text-slate-600">Tem um backup do Dashboard Loja? Importe para recuperar auditorias, vencimentos e planos. Os dados ficam só neste computador.</p>
         </div>
         <button type="button" class="-mr-1 -mt-1 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Dispensar" @click="dispensar"><i class="fas fa-xmark"></i></button>
       </div>

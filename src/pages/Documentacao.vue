@@ -57,7 +57,7 @@ watch(ativo, id => {
 
 <template>
   <div class="ui-page">
-    <UiPageHeader title="Documentação do sistema" subtitle="Como o Dashboard TI funciona: auditorias, vencimentos, análise, mapa da loja e backup." icon="fas fa-book" tone="blue">
+    <UiPageHeader title="Documentação do sistema" subtitle="Como o Dashboard Loja funciona: auditorias, vencimentos, análise, mapa da loja e backup." icon="fas fa-book" tone="blue">
       <template #actions>
         <button type="button" class="ui-btn-secondary py-2 print:hidden" @click="imprimir"><i class="fas fa-print"></i>Imprimir</button>
       </template>

@@ -73,7 +73,7 @@ const router = createRouter({
 })
 
 router.afterEach(to => {
-  document.title = to.meta?.titulo ? `${to.meta.titulo} · Dashboard TI` : 'Dashboard TI'
+  document.title = to.meta?.titulo ? `${to.meta.titulo} · Dashboard Loja` : 'Dashboard Loja'
 })
 
 export default router

@@ -1,12 +1,12 @@
-# Documentação Técnica - Dashboard TI
+# Documentação Técnica - Dashboard Loja
 
-Este documento fornece uma visão detalhada da arquitetura, tecnologias e funcionalidades do projeto **Dashboard TI**, um painel de controle desenvolvido para otimizar operações de varejo, com foco em auditorias de estoque e controle de validades.
+Este documento fornece uma visão detalhada da arquitetura, tecnologias e funcionalidades do projeto **Dashboard Loja**, um painel de controle desenvolvido para otimizar operações de varejo, com foco em auditorias de estoque e controle de validades.
 
 ---
 
 ## 🚀 1. Visão Geral
 
-O Dashboard TI é uma aplicação web (SPA) moderna que permite aos gestores de loja:
+O Dashboard Loja é uma aplicação web (SPA) moderna que permite aos gestores de loja:
 1. **Realizar Auditorias**: Processar planilhas de inventário para identificar rupturas, problemas de etiquetas e presença de produtos.
 2. **Controlar Vencimentos**: Monitorar datas de validade de produtos para reduzir perdas.
 3. **Análise de Dados**: Visualizar métricas de desempenho de auditorias por setor, usuário e fornecedor.
@@ -108,6 +108,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Modais de lista** (`components/ui/UiListaItens.vue`): busca, filtros com contagem, agrupamento, ordenação, carregamento incremental, CSV, impressão e cópia do código. Usado em métricas, itens do local, usuário e vencimentos.
 - **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): % pendente em destaque, cards (SKU, lidos, pendentes, com problema e desatualizados na Etiqueta), tabela de % pendente por setor, top 10 locais e locais sem leitura; imprime/salva PDF e salva uma imagem quadrada em alta resolução para compartilhar.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
+- **Tutorial** (`components/ModalTutorial.vue`): botão Tutorial no menu (ou na busca rápida) abre um passo a passo de cada página: Início, Auditorias, detalhe, mapa, Análise, ficha do colaborador, Vencimentos, Não vinculados, relatórios, busca, configurações e backup. Cada passo tem "Abrir esta página".
 - **Documentação in-app** (`/documentacao`, `utils/markdown.js`): este documento dentro do sistema, com sumário fixo, busca e links para cada seção (`/documentacao#backup-e-seguranca`). Aberta pelo botão Documentação em "Sobre" ou pela busca rápida.
 
 ### 4.8 Detalhe da auditoria: navegação e mapa da loja
@@ -158,7 +159,7 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **N
 ## 🔧 6. Manutenção e Expansão
 
 ### Backup e Segurança
-- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). A exportação gera um arquivo `.json.gz`, reduzindo o tamanho sem remover informações. A importação aceita o formato compactado, backups `.json` antigos do Dashboard TI e backups regionais com `sessions`, que são migrados automaticamente para auditorias agregadas por loja. Todo conteúdo é validado antes de substituir o banco local. É recomendado fazer backup antes de limpezas de cache do navegador.
+- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). A exportação gera um arquivo `.json.gz`, reduzindo o tamanho sem remover informações. A importação aceita o formato compactado, backups `.json` antigos do Dashboard Loja e backups regionais com `sessions`, que são migrados automaticamente para auditorias agregadas por loja. Todo conteúdo é validado antes de substituir o banco local. É recomendado fazer backup antes de limpezas de cache do navegador.
 
 ### Adicionando Novas Regras
 - **Novas Colunas Excel**: Se o layout da planilha do ERP mudar, atualize os arrays `colunasPresenca` ou `colunasEtiqueta` no `auditoriasStore.js`.

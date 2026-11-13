@@ -1,6 +1,6 @@
 {
-  "name": "Dashboard TI",
-  "short_name": "Dashboard TI",
+  "name": "Dashboard Loja",
+  "short_name": "Dashboard Loja",
   "description": "Auditorias de loja e controle de vencimentos.",
   "lang": "pt-BR",
   "start_url": "/",
