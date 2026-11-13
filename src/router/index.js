@@ -6,6 +6,7 @@ const Auditorias = () => import('../pages/Auditorias.vue')
 const AuditoriaDetalhes = () => import('../pages/AuditoriaDetalhes.vue')
 const Vencimentos = () => import('../pages/Vencimentos.vue')
 const AnaliseAuditorias = () => import('../pages/AnaliseAuditorias.vue')
+const NaoVinculados = () => import('../pages/NaoVinculados.vue')
 const Documentacao = () => import('../pages/Documentacao.vue')
 const FichaColaborador = () => import('../pages/FichaColaborador.vue')
 
@@ -45,6 +46,12 @@ const routes = [
     name: 'Vencimentos',
     meta: { titulo: 'Vencimentos' },
     component: Vencimentos
+  },
+  {
+    path: '/nao-vinculados',
+    name: 'NaoVinculados',
+    meta: { titulo: 'Não vinculados' },
+    component: NaoVinculados
   },
   {
     path: '/documentacao',

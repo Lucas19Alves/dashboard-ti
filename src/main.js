@@ -11,6 +11,7 @@ import router from './router/index.js'
 import '@fortawesome/fontawesome-free/css/all.css'
 import { useAuditoriasStore } from './stores/auditoriasStore'
 import { useVencimentosStore } from './stores/vencimentosStore'
+import { useNaoVinculadosStore } from './stores/naoVinculadosStore'
 
 // Uma aba aberta antes do deploy pode pedir um chunk cujo nome ja nao existe.
 window.addEventListener('vite:preloadError', event => {
@@ -34,7 +35,8 @@ const vencimentosStore = useVencimentosStore(pinia)
 
 Promise.all([
   auditoriasStore.carregarAuditoriasPersistidas(),
-  vencimentosStore.carregarVencimentosPersistidos()
+  vencimentosStore.carregarVencimentosPersistidos(),
+  useNaoVinculadosStore(pinia).carregar().catch(e => console.error('Erro ao carregar não vinculados', e))
 ]).finally(() => {
   app.mount('#app')
   iniciarBackupAutomatico()
