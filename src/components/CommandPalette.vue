@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
+import { abrirTutorial } from '../composables/useTutorial'
 import { usePaleta } from '../composables/usePaleta'
 import { exportarBackupJson } from '../utils/backup'
 import { useAparencia } from '../composables/useAparencia'
@@ -27,6 +28,7 @@ const paginas = [
   { id: 'p-inicio', titulo: 'Início', detalhe: 'Painel operacional', icone: 'fas fa-home', termos: 'painel dashboard home', acao: () => router.push('/') },
   { id: 'p-auditorias', titulo: 'Auditorias', detalhe: 'Calendário e histórico', icone: 'fas fa-clipboard-check', termos: 'calendario historico', acao: () => router.push('/auditorias') },
   { id: 'p-analise', titulo: 'Análise de auditorias', detalhe: 'Comparativos e evolução', icone: 'fas fa-chart-line', termos: 'analise graficos', acao: () => router.push('/auditorias/analise') },
+  { id: 'p-tutorial', titulo: 'Tutorial', detalhe: 'Como usar cada página do sistema', icone: 'fas fa-graduation-cap', termos: 'ajuda como usar passo a passo aprender', acao: () => abrirTutorial() },
   { id: 'p-documentacao', titulo: 'Documentação', detalhe: 'Como o sistema funciona', icone: 'fas fa-book', termos: 'ajuda manual docs guia', acao: () => router.push('/documentacao') },
   { id: 'p-vencimentos', titulo: 'Vencimentos', detalhe: 'Controle de validades', icone: 'fas fa-calendar-alt', termos: 'validade vencidos', acao: () => router.push('/vencimentos') },
   { id: 'p-nao-vinculados', titulo: 'Não vinculados', detalhe: 'Itens sem local no sistema', icone: 'fas fa-link-slash', termos: 'vinculo local sem local vincular endereco', acao: () => router.push('/nao-vinculados') }

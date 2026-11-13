@@ -5,11 +5,11 @@ import { estadoBackup, marcarBackupFeito } from './lembreteBackup'
 import { diasDesde } from './saudeDados'
 
 // Backup automático numa pasta escolhida pelo usuário (Chrome/Edge, File System Access API).
-// Grava sempre o mesmo arquivo (dashboard-ti-backup.json.gz), substituindo o anterior.
+// Grava sempre o mesmo arquivo (dashboard-loja-backup.json.gz), substituindo o anterior.
 // O arquivo fica no computador (ex.: pasta do OneDrive/rede da empresa); nada passa por servidor.
 const CHAVE = 'pastaBackup'
 // Sempre o mesmo arquivo, substituído a cada backup (não acumula cópias na pasta).
-const NOME_ARQUIVO = 'dashboard-ti-backup'
+const NOME_ARQUIVO = 'dashboard-loja-backup'
 const ESPERA_MS = 20000 // junta mudanças seguidas num só backup
 
 export const suportaPasta = typeof window !== 'undefined' && 'showDirectoryPicker' in window
@@ -30,7 +30,7 @@ export const estadoPasta = reactive({
 let handle = null
 
 // Cópias datadas da versão anterior do backup automático: apagadas para liberar espaço.
-const PADRAO_ANTIGO = /^dashboard-ti-backup-\d{4}-\d{2}-\d{2}-[\d-]+\.json(\.gz)?$/
+const PADRAO_ANTIGO = /^dashboard-(ti|loja)-backup-\d{4}-\d{2}-\d{2}-[\d-]+\.json(\.gz)?$/
 
 const verificarPermissao = async () => {
   if (!handle) return 'prompt'
@@ -60,7 +60,7 @@ export const carregarPasta = async () => {
 export const escolherPasta = async () => {
   if (!suportaPasta) return false
   try {
-    handle = await window.showDirectoryPicker({ id: 'dashboard-ti-backup', mode: 'readwrite' })
+    handle = await window.showDirectoryPicker({ id: 'dashboard-loja-backup', mode: 'readwrite' })
   } catch {
     return false // cancelado
   }

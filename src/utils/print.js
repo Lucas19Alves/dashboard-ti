@@ -101,7 +101,7 @@ const agoraBR = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', t
 const origem = () => [configuracoes.relatorio.empresa, configuracoes.relatorio.unidade].map(v => String(v || '').trim()).filter(Boolean).join(' · ')
 const cabecalho = (titulo, subtitulo) => {
   const emissor = String(configuracoes.relatorio.emissor || '').trim()
-  return `<div class="topo"><div><div class="sistema">${escapeHtml(origem() || 'Dashboard TI')} · Relatório</div><h1>${escapeHtml(titulo)}</h1>${subtitulo ? `<p>${escapeHtml(subtitulo)}</p>` : ''}</div>
+  return `<div class="topo"><div><div class="sistema">${escapeHtml(origem() || 'Dashboard Loja')} · Relatório</div><h1>${escapeHtml(titulo)}</h1>${subtitulo ? `<p>${escapeHtml(subtitulo)}</p>` : ''}</div>
   <div class="meta">Gerado em <b>${escapeHtml(agoraBR())}</b>${emissor ? `<br>Emitido por <b>${escapeHtml(emissor)}</b>` : ''}</div></div>`
 }
 
@@ -204,7 +204,7 @@ const abrirJanela = (titulo, corpo, { orientacao = 'auto', rodape = '' } = {}) =
   const final = orientacao === 'auto' ? orientacaoAutomatica(corpo) : orientacao
   const win = window.open('', '_blank')
   if (!win) return
-  const textoRodape = rodape || `${origem() || 'Dashboard TI'} · ${titulo}`
+  const textoRodape = rodape || `${origem() || 'Dashboard Loja'} · ${titulo}`
   win.document.open()
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" /><title>${escapeHtml(titulo)}</title><style>${ESTILOS}
     @page { size: A4 ${final === 'paisagem' ? 'landscape' : 'portrait'}; margin: 14mm 12mm 16mm;

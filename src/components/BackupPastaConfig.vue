@@ -20,7 +20,7 @@ const quando = d => (d ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeSty
     </p>
 
     <template v-else-if="!estadoPasta.configurada">
-      <p class="text-[11px] text-slate-500">Escolha uma pasta (ex.: OneDrive ou rede da empresa). O sistema grava o backup sozinho a cada mudança grande e uma vez por dia, sempre no mesmo arquivo (dashboard-ti-backup.json.gz), substituindo o anterior.</p>
+      <p class="text-[11px] text-slate-500">Escolha uma pasta (ex.: OneDrive ou rede da empresa). O sistema grava o backup sozinho a cada mudança grande e uma vez por dia, sempre no mesmo arquivo (dashboard-loja-backup.json.gz), substituindo o anterior.</p>
       <button type="button" class="ui-btn-secondary w-full py-2 text-xs" @click="escolherPasta"><i class="fas fa-folder-plus"></i>Escolher pasta</button>
     </template>
 

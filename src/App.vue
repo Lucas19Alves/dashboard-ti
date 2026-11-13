@@ -6,6 +6,7 @@ import AvisoBackup from './components/AvisoBackup.vue'
 import AvisoSemDados from './components/AvisoSemDados.vue'
 import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
 import ModalRelatorio from './components/ModalRelatorio.vue'
+import ModalTutorial from './components/ModalTutorial.vue'
 </script>
 
 <template>
@@ -20,6 +21,7 @@ import ModalRelatorio from './components/ModalRelatorio.vue'
     <AvisoSemDados />
     <ModalConferenciaPlanilha />
     <ModalRelatorio />
+    <ModalTutorial />
     <main id="conteudo">
       <router-view v-slot="{ Component, route }">
         <transition name="pagina" mode="out-in">

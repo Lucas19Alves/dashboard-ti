@@ -1,6 +1,6 @@
-# 📊 Dashboard TI - Gestão de Auditoria e Vencimentos
+# 📊 Dashboard Loja - Gestão de Auditoria e Vencimentos
 
-O **Dashboard TI** é uma solução web moderna e robusta desenvolvida para otimizar processos operacionais em lojas de varejo. Focado em **Auditorias de Estoque** e **Controle de Validades**, o projeto transforma planilhas brutas de ERP (como WinThor) em dashboards interativos e acionáveis.
+O **Dashboard Loja** é uma solução web moderna e robusta desenvolvida para otimizar processos operacionais em lojas de varejo. Focado em **Auditorias de Estoque** e **Controle de Validades**, o projeto transforma planilhas brutas de ERP (como WinThor) em dashboards interativos e acionáveis.
 
 ![Vue.js](https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
@@ -29,7 +29,7 @@ O **Dashboard TI** é uma solução web moderna e robusta desenvolvida para otim
 ### 💾 Persistência e Segurança
 - **IndexedDB**: Armazenamento local de alta performance usando Dexie.js.
 - **Privacidade**: Todos os dados permanecem no navegador do usuário.
-- **Backup compacto e compatível**: Exportação Gzip, importação dos JSON antigos do Dashboard TI e migração automática dos backups regionais baseados em sessões.
+- **Backup compacto e compatível**: Exportação Gzip, importação dos JSON antigos do Dashboard Loja e migração automática dos backups regionais baseados em sessões.
 - **Modo offline**: Instalação como PWA e acesso ao painel mesmo sem conexão após o primeiro carregamento.
 - **Fluxo operacional**: Registro de ação e responsável para itens de vencimento, mantendo histórico local.
 
