@@ -47,9 +47,10 @@ export const indexarHistorico = (auditorias) => {
       reg.setor = setorDoItem(item)
       // Lido não pertence: o item estava fisicamente nesse local, mas o sistema o tem em outro.
       const alvo = item._lidoNaoPertence ? reg.achado : reg.vinculado
-      const atual = alvo.get(local) || { vezes: 0, ultima: '' }
+      const atual = alvo.get(local) || { vezes: 0, ultima: '', ultimaLida: '' }
       atual.vezes++
       atual.ultima = data
+      if (item._temPresenca) atual.ultimaLida = data
       alvo.set(local, atual)
       porCodigo.set(codigo, reg)
       const classe = classeCodigo(item['Classe de Produto'])
@@ -83,7 +84,7 @@ export const sugerirLocal = (item, indice) => {
     const parte = Math.round((n / total) * 100)
     return { local, confianca: parte >= 60 ? 'media' : 'baixa', motivo: `${parte}% dos itens da mesma classe ficam em ${local}` }
   }
-  return { local: '', confianca: 'nenhuma', motivo: 'Sem histórico nas auditorias: procurar na loja' }
+  return { local: '', confianca: 'nenhuma', motivo: '' }
 }
 
 // Prioridade: estoque parado sem local some da auditoria; com venda recente é o que mais importa.
@@ -107,7 +108,7 @@ export const tratarPlanilha = (linhas, auditorias) => {
 }
 
 // Junta a importação do dia com o que já estava salvo:
-// quem continua na lista mantém status e local escolhido; quem saiu foi vinculado no sistema.
+// quem continua na lista segue pendente; quem saiu foi vinculado no sistema; quem voltou reabre.
 export const mesclarImportacao = (anteriores, novos, hoje) => {
   const antigos = new Map((anteriores || []).map(r => [r.codigo, r]))
   const resultado = novos.map(item => {
@@ -116,8 +117,7 @@ export const mesclarImportacao = (anteriores, novos, hoje) => {
     const reaberto = antigo?.status === 'resolvido'
     return {
       ...item,
-      status: !antigo || reaberto ? 'pendente' : antigo.status,
-      localEscolhido: reaberto ? '' : antigo?.localEscolhido || '',
+      status: 'pendente',
       primeiroVisto: reaberto ? hoje : antigo?.primeiroVisto || hoje,
       ultimoVisto: hoje,
       vezes: (antigo?.vezes || 0) + 1,
@@ -130,41 +130,24 @@ export const mesclarImportacao = (anteriores, novos, hoje) => {
   return resultado
 }
 
-// Vínculos suspeitos nas auditorias (independem da planilha):
-// - achado: lido em outro local em 2+ auditorias (está fisicamente lá);
-// - setor: o setor do item quase não aparece no local onde está vinculado.
-export const vinculosSuspeitos = (auditorias, { minVezes = 2, minItensLocal = 10, maxParte = 0.1 } = {}) => {
+// Vínculos suspeitos nas auditorias (independem da planilha): item vinculado num local,
+// mas lido em outro ("lido não pertence") em 2+ auditorias.
+// Fica de fora quando: o local da leitura também é um local vinculado do item; não se sabe onde está
+// vinculado (nunca apareceu como item do local); ou depois da última leitura fora do lugar ele foi lido
+// no local vinculado (vínculo já corrigido).
+export const vinculosSuspeitos = (auditorias, { minVezes = 2 } = {}) => {
   const indice = indexarHistorico(auditorias)
   const linhas = []
   for (const [codigo, reg] of indice.porCodigo) {
+    if (!reg.vinculado.size) continue
+    const lidoNoVinculado = [...reg.vinculado.values()].reduce((m, v) => (v.ultimaLida > m ? v.ultimaLida : m), '')
     for (const [local, { vezes, ultima }] of reg.achado) {
-      if (vezes < minVezes) continue
-      const vinculadoEm = maisRecente(reg.vinculado)?.[0] || ''
-      linhas.push({ codigo, produto: reg.produto, setor: reg.setor, tipo: 'achado', local, vinculadoEm, vezes, ultima, motivo: `Lido em ${local} em ${vezes} auditorias${vinculadoEm ? `, mas vinculado em ${vinculadoEm}` : ''}` })
+      if (vezes < minVezes || reg.vinculado.has(local) || lidoNoVinculado > ultima) continue
+      const vinculadoEm = maisRecente(reg.vinculado)[0]
+      linhas.push({ codigo, produto: reg.produto, setor: reg.setor, local, vinculadoEm, vezes, ultima, motivo: `Lido em ${local} em ${vezes} auditorias, mas vinculado em ${vinculadoEm}` })
     }
   }
-  // Setor fora do lugar: olha só a última auditoria com locais (retrato atual dos vínculos).
-  const ultima = emOrdem(auditorias).filter(a => (a.dados || []).some(i => localValido(codigoLocal(i?.Local)))).at(-1)
-  const porLocal = new Map()
-  for (const item of ultima?.dados || []) {
-    const local = codigoLocal(item?.Local)
-    if (!localValido(local) || item._lidoNaoPertence) continue
-    const grupo = porLocal.get(local) || []
-    grupo.push(item)
-    porLocal.set(local, grupo)
-  }
-  for (const [local, grupo] of porLocal) {
-    if (grupo.length < minItensLocal) continue
-    const contagem = new Map()
-    grupo.forEach(i => contagem.set(setorDoItem(i), (contagem.get(setorDoItem(i)) || 0) + 1))
-    const [setorLocal] = [...contagem.entries()].sort((a, b) => b[1] - a[1])[0]
-    for (const item of grupo) {
-      const setor = setorDoItem(item)
-      if (setor === 'Não especificado' || contagem.get(setor) / grupo.length > maxParte) continue
-      linhas.push({ codigo: codigoDoItem(item), produto: texto(item.Produto), setor, tipo: 'setor', local, vinculadoEm: local, vezes: 1, ultima: dataDe(ultima), motivo: `${setor} em ${local}, local de ${setorLocal}` })
-    }
-  }
-  return linhas.sort((a, b) => (a.tipo === b.tipo ? b.vezes - a.vezes : a.tipo === 'achado' ? -1 : 1))
+  return linhas.sort((a, b) => b.ultima.localeCompare(a.ultima) || b.vezes - a.vezes)
 }
 
 // Itens da planilha que aparecem nas auditorias (para mostrar o histórico de cada um).

@@ -16,7 +16,7 @@ const quadro = ref(null)
 const hoje = new Date()
 const loja = computed(() => [configuracoes.relatorio.empresa, configuracoes.relatorio.unidade].map(v => String(v || '').trim()).filter(Boolean).join(', '))
 
-const pendentes = computed(() => props.itens.filter(i => i.status === 'pendente'))
+const pendentes = computed(() => props.itens)
 const hojeISO = hoje.toLocaleDateString('sv-SE')
 const recebidosHoje = computed(() => pendentes.value.filter(i => i.primeiroVisto === hojeISO).length)
 const lista = computed(() => [...pendentes.value].sort((a, b) => b.estoque - a.estoque).slice(0, 10))
@@ -94,9 +94,11 @@ defineExpose({ salvar, gerando })
                 <p class="truncate text-[17px] font-semibold leading-tight">{{ item.produto }}</p>
                 <p class="truncate text-[14px] text-slate-500">{{ item.codigo }}, {{ item.estoque.toLocaleString('pt-BR') }} em estoque</p>
               </div>
-              <div class="w-[118px] shrink-0 rounded-lg px-2.5 py-1 leading-tight" :class="item.sugestao?.local ? 'bg-blue-50 text-blue-900' : 'bg-amber-50 text-amber-900'">
-                <p class="text-[12px] font-semibold opacity-75">Local sugerido</p>
-                <p class="truncate text-[17px] font-bold">{{ item.sugestao?.local || 'procurar' }}</p>
+              <div class="w-[118px] shrink-0 rounded-lg px-2.5 py-1 leading-tight" :class="item.sugestao?.local ? 'bg-blue-50 text-blue-900' : ''">
+                <template v-if="item.sugestao?.local">
+                  <p class="text-[12px] font-semibold opacity-75">Local sugerido</p>
+                  <p class="truncate text-[17px] font-bold">{{ item.sugestao.local }}</p>
+                </template>
               </div>
               <div class="w-[118px] shrink-0 rounded-lg bg-slate-50 px-2.5 py-1 leading-tight text-slate-800">
                 <p class="text-[12px] font-semibold text-slate-500">Sem venda há</p>

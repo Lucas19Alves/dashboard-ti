@@ -42,15 +42,15 @@ const hojeISO = new Date().toLocaleDateString('sv-SE')
 const ativos = computed(() => store.itens.filter(i => i.status !== 'resolvido'))
 const resolvidos = computed(() => store.itens.filter(i => i.status === 'resolvido').sort((a, b) => b.resolvidoEm.localeCompare(a.resolvidoEm)))
 const resolvidosHoje = computed(() => resolvidos.value.filter(i => i.resolvidoEm === hojeISO).length)
-const pendentes = computed(() => ativos.value.filter(i => i.status === 'pendente'))
+const pendentes = ativos
 const suspeitos = computed(() => vinculosSuspeitos(auditoriasStore.auditorias))
 const temAuditorias = computed(() => auditoriasStore.auditorias.some(a => a.dados?.length))
 const diasNaLista = i => Math.max(0, Math.round((new Date(hojeISO) - new Date(i.primeiroVisto)) / 86400000))
 
 const resumo = computed(() => [
-  { rotulo: 'Para vincular', valor: pendentes.value.length, nota: `${ativos.value.length - pendentes.value.length} marcados ou ignorados` },
+  { rotulo: 'Não vinculados', valor: pendentes.value.length, nota: `${pendentes.value.filter(i => i.primeiroVisto === hojeISO).length} recebidos hoje` },
   { rotulo: 'Local pelo histórico', valor: pendentes.value.filter(i => i.sugestao?.confianca === 'alta').length, nota: 'lido ou vinculado antes num local' },
-  { rotulo: 'Sem pista', valor: pendentes.value.filter(i => !i.sugestao?.local).length, nota: 'procurar na loja' },
+  { rotulo: 'Sem local sugerido', valor: pendentes.value.filter(i => !i.sugestao?.local).length, nota: 'sem histórico nas auditorias' },
   { rotulo: 'Na lista há 3+ dias', valor: pendentes.value.filter(i => diasNaLista(i) >= 3).length, nota: 'voltaram em várias importações' },
   { rotulo: 'Saíram da lista hoje', valor: resolvidosHoje.value, nota: 'vinculados no sistema' }
 ])
@@ -58,13 +58,12 @@ const resumo = computed(() => [
 // --- Abas e filtros ---
 const aba = ref('tratar')
 const abas = computed(() => [
-  { value: 'tratar', label: `Tratar (${ativos.value.length})`, icon: 'fas fa-link' },
+  { value: 'tratar', label: `Itens (${ativos.value.length})`, icon: 'fas fa-link' },
   { value: 'locais', label: 'Por local sugerido', icon: 'fas fa-map-pin' },
   { value: 'suspeitos', label: `Vínculos suspeitos (${suspeitos.value.length})`, icon: 'fas fa-triangle-exclamation' },
   { value: 'resolvidos', label: `Resolvidos (${resolvidos.value.length})`, icon: 'fas fa-check' }
 ])
 const busca = ref('')
-const filtroStatus = ref('pendente')
 const filtroConfianca = ref('')
 const filtroSetor = ref('')
 const setores = computed(() => [...new Set(ativos.value.map(i => i.setor))].sort())
@@ -73,7 +72,7 @@ const ORDEM = { alta: 0, media: 1, baixa: 2 }
 const filtrados = computed(() => {
   const termo = busca.value.trim().toLowerCase()
   return ativos.value
-    .filter(i => (!filtroStatus.value || i.status === filtroStatus.value) && (!filtroSetor.value || i.setor === filtroSetor.value) && (!filtroConfianca.value || i.sugestao?.confianca === filtroConfianca.value) && casa(i, termo))
+    .filter(i => (!filtroSetor.value || i.setor === filtroSetor.value) && (!filtroConfianca.value || i.sugestao?.confianca === filtroConfianca.value) && casa(i, termo))
     .sort((a, b) => ORDEM[a.prioridade] - ORDEM[b.prioridade] || b.estoque - a.estoque)
 })
 const porLocal = computed(() => {
@@ -84,18 +83,8 @@ const porLocal = computed(() => {
   }
   return [...m.entries()].sort((a, b) => (!a[0]) - (!b[0]) || a[0].localeCompare(b[0], 'pt-BR', { numeric: true }))
 })
-const filtroSuspeito = ref('')
-const suspeitosFiltrados = computed(() => suspeitos.value.filter(s => !filtroSuspeito.value || s.tipo === filtroSuspeito.value))
 
 // --- Ações ---
-const rascunho = ref({})
-const localDe = i => rascunho.value[i.codigo] ?? (i.localEscolhido || i.sugestao?.local || '')
-const marcar = async (i, status) => {
-  const local = localDe(i).trim().toUpperCase()
-  if (status === 'vinculado' && !local) return toast('Informe o local antes de marcar como vinculado.', 'warning')
-  await store.atualizar(i.codigo, { status, localEscolhido: status === 'vinculado' ? local : i.localEscolhido })
-}
-const reabrir = i => store.atualizar(i.codigo, { status: 'pendente' })
 const recalcular = async () => {
   await store.atualizarSugestoes(auditoriasStore.auditorias)
   toast('Sugestões recalculadas com as auditorias atuais.', 'success')
@@ -115,20 +104,19 @@ const imagem = ref(null)
 const salvarImagem = async () => {
   try { await imagem.value.salvar() } catch (e) { toast(e?.message || 'Não foi possível gerar a imagem.', 'error') }
 }
-const exportarCsv = () => baixarCsv(filtrados.value.map(i => ({ ...i, local: localDe(i), sugerido: i.sugestao?.local, motivo: i.sugestao?.motivo, confianca: i.sugestao?.confianca, dias: diasNaLista(i) })), [
+const exportarCsv = () => baixarCsv(filtrados.value.map(i => ({ ...i, sugerido: i.sugestao?.local, motivo: i.sugestao?.motivo, confianca: i.sugestao?.confianca, dias: diasNaLista(i) })), [
   ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['estoque', 'Estoque'], ['diasSemVenda', 'Dias sem venda'],
-  ['prioridade', 'Prioridade'], ['sugerido', 'Local sugerido'], ['confianca', 'Confiança'], ['motivo', 'Motivo'], ['local', 'Local escolhido'], ['status', 'Status'], ['dias', 'Dias na lista']
+  ['prioridade', 'Prioridade'], ['sugerido', 'Local sugerido'], ['confianca', 'Confiança'], ['motivo', 'Motivo'], ['dias', 'Dias na lista']
 ], `nao-vinculados-${hojeISO}`)
-const exportarSuspeitos = () => baixarCsv(suspeitosFiltrados.value, [
+const exportarSuspeitos = () => baixarCsv(suspeitos.value, [
   ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['vinculadoEm', 'Vinculado em'], ['local', 'Lido/está em'], ['vezes', 'Vezes'], ['ultima', 'Última auditoria'], ['motivo', 'Motivo']
 ], `vinculos-suspeitos-${hojeISO}`)
 
 // --- Formatação ---
 const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
-const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem pista' }
+const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem local sugerido' }
 const corConfianca = c => ({ alta: 'bg-blue-700', media: 'bg-blue-400', baixa: 'bg-slate-300', nenhuma: 'bg-amber-400' })[c] || 'bg-slate-300'
 const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Sem estoque' }
-const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado' }
 </script>
 
 <template>
@@ -187,9 +175,6 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
         <section v-if="aba === 'tratar'" class="space-y-4">
           <div class="flex flex-wrap items-end gap-3">
             <label class="min-w-56 flex-1"><span class="ui-label">Buscar</span><input v-model="busca" class="ui-input" placeholder="Código, produto, fornecedor ou local" /></label>
-            <label><span class="ui-label">Status</span>
-              <select v-model="filtroStatus" class="ui-input"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="vinculado">Marcados</option><option value="ignorado">Ignorados</option></select>
-            </label>
             <label><span class="ui-label">Sugestão</span>
               <select v-model="filtroConfianca" class="ui-input"><option value="">Todas</option><option v-for="(r, v) in CONFIANCA" :key="v" :value="v">{{ r }}</option></select>
             </label>
@@ -201,7 +186,7 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
 
           <p v-if="!filtrados.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">Nenhum item com esses filtros.</p>
           <ul v-else class="ui-card divide-y divide-slate-100">
-            <li v-for="i in filtrados" :key="i.codigo" class="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)_auto] lg:items-center" :class="i.status !== 'pendente' ? 'opacity-60' : ''">
+            <li v-for="i in filtrados" :key="i.codigo" class="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center">
               <div class="min-w-0">
                 <button type="button" class="truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver ${i.produto} nas auditorias`" @click="itemHistorico = i">{{ i.produto }}</button>
                 <p class="truncate text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}<template v-if="i.fornecedor">, {{ i.fornecedor }}</template></p>
@@ -210,27 +195,16 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
                 <p><span class="font-semibold tabular-nums">{{ i.estoque.toLocaleString('pt-BR') }}</span> em estoque<template v-if="i.diasSemVenda !== null">, sem venda há {{ i.diasSemVenda }} d</template></p>
                 <p class="text-xs text-slate-500">{{ PRIORIDADE[i.prioridade] }}<template v-if="diasNaLista(i)">, na lista há {{ diasNaLista(i) }} d</template></p>
               </div>
-              <div class="flex min-w-0 items-start gap-2.5">
-                <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corConfianca(i.sugestao?.confianca)" :title="CONFIANCA[i.sugestao?.confianca]"></span>
+              <div v-if="i.sugestao?.local" class="flex min-w-0 items-start gap-2.5">
+                <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corConfianca(i.sugestao.confianca)" :title="CONFIANCA[i.sugestao.confianca]"></span>
                 <div class="min-w-0">
-                  <p class="text-sm"><span class="font-semibold">{{ i.sugestao?.local || 'Sem sugestão' }}</span> <span class="text-xs text-slate-500">{{ CONFIANCA[i.sugestao?.confianca] }}</span></p>
-                  <p class="text-xs text-slate-500">{{ i.sugestao?.motivo }}</p>
+                  <p class="text-sm"><span class="text-xs text-slate-500">Local sugerido</span> <span class="font-semibold">{{ i.sugestao.local }}</span> <span class="text-xs text-slate-500">{{ CONFIANCA[i.sugestao.confianca] }}</span></p>
+                  <p class="text-xs text-slate-500">{{ i.sugestao.motivo }}</p>
                 </div>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <template v-if="i.status === 'pendente'">
-                  <input :value="localDe(i)" class="ui-input w-28 py-1.5 uppercase" :aria-label="`Local para ${i.produto}`" placeholder="Local" @input="rascunho[i.codigo] = $event.target.value" @keyup.enter="marcar(i, 'vinculado')" />
-                  <UiButton size="sm" variant="success" title="Já vinculei no sistema" @click="marcar(i, 'vinculado')"><i class="fas fa-check"></i>Vinculei</UiButton>
-                  <UiButton size="sm" variant="ghost" title="Não precisa de local (ex.: item fora de linha)" @click="marcar(i, 'ignorado')">Ignorar</UiButton>
-                </template>
-                <template v-else>
-                  <span class="text-sm text-slate-600">{{ STATUS[i.status] }}<template v-if="i.localEscolhido && i.status === 'vinculado'"> em <b>{{ i.localEscolhido }}</b></template></span>
-                  <UiButton size="sm" variant="ghost" @click="reabrir(i)">Desfazer</UiButton>
-                </template>
               </div>
             </li>
           </ul>
-          <p class="text-xs text-slate-500">"Vinculei" só marca aqui. O item sai da lista de vez quando a próxima planilha não o trouxer mais.</p>
+          <p class="text-xs text-slate-500">O vínculo é feito no sistema da loja. O item sai desta lista quando a próxima planilha não o trouxer mais.</p>
         </section>
 
         <!-- Por local -->
@@ -238,7 +212,7 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
           <p v-if="!porLocal.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">Nada pendente.</p>
           <article v-for="[local, lista] in porLocal" :key="local || 'sem'" class="ui-card p-4">
             <header class="flex items-baseline justify-between border-b border-slate-100 pb-2">
-              <h2 class="text-lg font-semibold" :class="local ? 'text-slate-900' : 'text-amber-800'">{{ local || 'Sem sugestão: procurar' }}</h2>
+              <h2 class="text-lg font-semibold" :class="local ? 'text-slate-900' : 'text-amber-800'">{{ local || 'Sem local sugerido' }}</h2>
               <span class="text-sm text-slate-500">{{ lista.length }} {{ lista.length === 1 ? 'item' : 'itens' }}</span>
             </header>
             <ul class="mt-2 space-y-1.5">
@@ -251,22 +225,19 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
 
         <!-- Suspeitos -->
         <section v-else-if="aba === 'suspeitos'" class="space-y-4">
-          <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens que já têm local, mas as auditorias indicam que pode ser o errado: lidos em outro local em duas ou mais auditorias ("lido não pertence"), ou de um setor que quase não aparece no local onde estão vinculados.</p>
+          <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens vinculados num local, mas lidos em outro ("lido não pertence") em duas ou mais auditorias e não lidos no local vinculado depois disso. Itens lidos no próprio local vinculado ou sem local vinculado conhecido ficam de fora.</p>
           <div class="flex flex-wrap items-end gap-3">
-            <label><span class="ui-label">Sinal</span>
-              <select v-model="filtroSuspeito" class="ui-input"><option value="">Todos</option><option value="achado">Lido em outro local</option><option value="setor">Setor fora do lugar</option></select>
-            </label>
-            <UiButton variant="secondary" :disabled="!suspeitosFiltrados.length" @click="exportarSuspeitos"><i class="fas fa-file-csv"></i>CSV</UiButton>
+            <UiButton variant="secondary" :disabled="!suspeitos.length" @click="exportarSuspeitos"><i class="fas fa-file-csv"></i>CSV</UiButton>
           </div>
-          <p v-if="!suspeitosFiltrados.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">{{ temAuditorias ? 'Nenhum vínculo suspeito nas auditorias.' : 'Importe auditorias para cruzar os vínculos.' }}</p>
+          <p v-if="!suspeitos.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">{{ temAuditorias ? 'Nenhum vínculo suspeito nas auditorias.' : 'Importe auditorias para cruzar os vínculos.' }}</p>
           <div v-else class="ui-card overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="text-left text-xs text-slate-500"><tr><th class="px-4 py-2.5">Produto</th><th class="px-4">Vinculado em</th><th class="px-4">Está em</th><th class="px-4">Motivo</th><th class="px-4">Última</th></tr></thead>
               <tbody class="divide-y divide-slate-100">
-                <tr v-for="s in suspeitosFiltrados" :key="s.tipo + s.codigo + s.local">
+                <tr v-for="s in suspeitos" :key="s.codigo + s.local">
                   <td class="px-4 py-2.5"><p class="font-semibold">{{ s.produto }}</p><p class="text-xs text-slate-500">{{ s.codigo }}, {{ s.setor }}</p></td>
                   <td class="px-4">{{ s.vinculadoEm || '—' }}</td>
-                  <td class="px-4 font-semibold" :class="s.tipo === 'achado' ? 'text-blue-800' : 'text-slate-400'">{{ s.tipo === 'achado' ? s.local : '—' }}</td>
+                  <td class="px-4 font-semibold text-blue-800">{{ s.local }}</td>
                   <td class="px-4 text-slate-600">{{ s.motivo }}</td>
                   <td class="px-4 tabular-nums">{{ br(s.ultima) }}</td>
                 </tr>
@@ -281,7 +252,7 @@ const STATUS = { pendente: 'Pendente', vinculado: 'Marcado', ignorado: 'Ignorado
           <ul v-else class="ui-card divide-y divide-slate-100">
             <li v-for="i in resolvidos" :key="i.codigo" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
               <div class="min-w-0"><p class="truncate font-semibold">{{ i.produto }}</p><p class="text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}</p></div>
-              <p class="text-slate-600">Saiu da lista em {{ br(i.resolvidoEm) }}, após {{ i.vezes }} {{ i.vezes === 1 ? 'importação' : 'importações' }}<template v-if="i.localEscolhido">, local {{ i.localEscolhido }}</template></p>
+              <p class="text-slate-600">Saiu da lista em {{ br(i.resolvidoEm) }}, após {{ i.vezes }} {{ i.vezes === 1 ? 'importação' : 'importações' }}</p>
             </li>
           </ul>
         </section>
