@@ -301,7 +301,10 @@ const graficoAndamento = computed(() => {
 
 <template>
   <div class="space-y-8">
-    <div v-if="(!auditoria.dados || auditoria.dados.length === 0) && !readOnly" class="bg-blue-50 border-2 border-blue-300 rounded-lg p-12">
+    <p v-if="!auditoria.dados?.length && !store.itensCarregados" class="ui-card flex items-center gap-2 px-4 py-6 text-sm text-slate-500">
+      <i class="fas fa-spinner fa-spin"></i>Carregando os itens desta auditoria...
+    </p>
+    <div v-else-if="(!auditoria.dados || auditoria.dados.length === 0) && !readOnly" class="bg-blue-50 border-2 border-blue-300 rounded-lg p-12">
       <div class="text-center">
         <i class="fas fa-cloud-upload-alt text-6xl text-blue-500 mb-6"></i>
         <h3 class="text-2xl font-bold text-gray-800 mb-3">Nenhum dado carregado</h3>

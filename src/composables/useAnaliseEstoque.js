@@ -47,5 +47,8 @@ const criarAnalise = () => {
     custoReincidentes: reincidentes.value.reduce((s, l) => s + (l.custoAcumulado || 0), 0)
   }))
 
-  return { indice, reincidentes, semEstoque, parados, naoVinculados, suspeitos, prioridades, resumo, limiarReincidencia, limiarParado }
+  // Enquanto os itens chegam em segundo plano, as listas ainda não estão completas.
+  const carregando = computed(() => !auditorias.itensCarregados)
+
+  return { carregando, indice, reincidentes, semEstoque, parados, naoVinculados, suspeitos, prioridades, resumo, limiarReincidencia, limiarParado }
 }

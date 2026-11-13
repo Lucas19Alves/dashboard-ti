@@ -27,6 +27,8 @@ const soltar = e => { e.preventDefault(); hoverDrop.value = false; arquivo.value
 const importar = async () => {
   carregando.value = true
   try {
+    // A sugestão de local usa o histórico: espera os itens das auditorias chegarem.
+    await auditoriasStore.aguardarItens()
     const { total, resolvidos } = await store.importar(arquivo.value, auditoriasStore.auditorias)
     toast(`${total} itens sem local importados${resolvidos ? `; ${resolvidos} saíram da lista (já vinculados)` : ''}.`, 'success')
     mostrarUpload.value = false
@@ -46,7 +48,7 @@ const resolvidosHoje = computed(() => store.itens.filter(i => i.status === 'reso
 const pendentes = ativos
 // Mesmo cálculo da aba Estoque (compartilhado, não refaz ao trocar de aba).
 const { suspeitos } = useAnaliseEstoque()
-const temAuditorias = computed(() => auditoriasStore.auditorias.some(a => a.dados?.length))
+const temAuditorias = computed(() => !auditoriasStore.itensCarregados || auditoriasStore.auditorias.some(a => a.dados?.length))
 const diasNaLista = i => Math.max(0, Math.round((new Date(hojeISO) - new Date(i.primeiroVisto)) / 86400000))
 
 const resumo = computed(() => [
@@ -86,6 +88,7 @@ const porLocal = computed(() => {
 
 // --- Ações ---
 const recalcular = async () => {
+  await auditoriasStore.aguardarItens()
   await store.atualizarSugestoes(auditoriasStore.auditorias)
   toast('Sugestões recalculadas com as auditorias atuais.', 'success')
 }

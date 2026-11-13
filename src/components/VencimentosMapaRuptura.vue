@@ -5,6 +5,7 @@ import UiModal from './ui/UiModal.vue'
 import UiListaItens from './ui/UiListaItens.vue'
 import { CATEGORIAS_VENCIMENTO, categoriaVencimento, cruzarValidadeRuptura, mapaVencimentos } from '../utils/vencimentosCruzados'
 import { formatarDataBR } from '../utils/busca'
+import { useAuditoriasStore } from '../stores/auditoriasStore'
 
 // Vencimentos no mapa da loja (vencidos, vencem hoje, a vencer) e produtos que vencem
 // no estoque enquanto faltam na gôndola.
@@ -99,7 +100,8 @@ const cruzamento = computed(() => cruzarValidadeRuptura(props.itens, props.audit
 const recorrentes = computed(() => cruzamento.value.filter(l => l.vezesRuptura >= 2).length)
 const comEstoque = computed(() => cruzamento.value.filter(l => l.estoque > 0).length)
 const moeda = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const temAuditoriasPresenca = computed(() => props.auditorias.some(a => (a.tipo === 'Presença' || a.tipo === 'Ruptura') && a.dados?.length))
+// Enquanto os itens das auditorias carregam, não afirma que não há auditorias.
+const temAuditoriasPresenca = computed(() => !useAuditoriasStore().itensCarregados || props.auditorias.some(a => (a.tipo === 'Presença' || a.tipo === 'Ruptura') && a.dados?.length))
 
 const colunas = [
   { chave: 'codigo', titulo: 'Código' },

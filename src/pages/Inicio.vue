@@ -418,7 +418,7 @@ const handleArquivoBackup = async (e) => {
             </RouterLink>
           </div>
           <div class="mt-4">
-            <ListaProblemasEstoque :linhas="estoque.prioridades.value" compacto :limite="5" :vazio="estoque.indice.value.auditorias ? 'Nenhum problema de estoque.' : 'Importe auditorias de Presença ou Ruptura para ver os problemas de estoque.'" @abrir="fichaCodigo = $event" />
+            <ListaProblemasEstoque :linhas="estoque.prioridades.value" compacto :limite="5" :vazio="estoque.carregando.value ? 'Carregando os itens das auditorias...' : estoque.indice.value.auditorias ? 'Nenhum problema de estoque.' : 'Importe auditorias de Presença ou Ruptura para ver os problemas de estoque.'" @abrir="fichaCodigo = $event" />
           </div>
         </section>
 

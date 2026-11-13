@@ -163,7 +163,7 @@ const criarNaoVinculados = async (hoje, auditorias) => {
 }
 
 export const carregarDemo = async (pinia) => {
-  await Promise.all([db.auditorias.clear(), db.vencimentos.clear(), db.planosAcao.clear(), db.naoVinculados.clear()])
+  await Promise.all([db.auditorias.clear(), db.vencimentos.clear(), db.planosAcao.clear(), db.naoVinculados.clear(), db.itensAuditoria.clear()])
   const store = useAuditoriasStore(pinia)
   store.auditorias = []
   const hoje = new Date()
