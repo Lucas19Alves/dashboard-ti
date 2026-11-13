@@ -33,11 +33,16 @@ app.use(router)
 const auditoriasStore = useAuditoriasStore(pinia)
 const vencimentosStore = useVencimentosStore(pinia)
 
-Promise.all([
+// Dados fictícios só no ambiente local: abra com ?demo (apaga os dados deste navegador).
+const demo = import.meta.env.DEV && new URLSearchParams(location.search).has('demo')
+  ? import('./dev/demo.js').then(m => m.carregarDemo(pinia)).then(() => history.replaceState(null, '', location.pathname)).catch(e => console.error('Erro ao gerar dados de demonstração', e))
+  : Promise.resolve()
+
+demo.then(() => Promise.all([
   auditoriasStore.carregarAuditoriasPersistidas(),
   vencimentosStore.carregarVencimentosPersistidos(),
   useNaoVinculadosStore(pinia).carregar().catch(e => console.error('Erro ao carregar não vinculados', e))
-]).finally(() => {
+])).finally(() => {
   app.mount('#app')
   iniciarBackupAutomatico()
 })
