@@ -4,6 +4,8 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
 import { historicoDoCodigo, vinculosSuspeitos } from '../utils/naoVinculados'
 import { baixarCsv } from '../utils/csv'
+import { blocoBarras, blocoTabela } from '../utils/print'
+import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
 import UiButton from '../components/ui/UiButton.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiModal from '../components/ui/UiModal.vue'
@@ -112,6 +114,100 @@ const exportarSuspeitos = () => baixarCsv(suspeitos.value, [
   ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['vinculadoEm', 'Vinculado em'], ['local', 'Lido/está em'], ['vezes', 'Vezes'], ['ultima', 'Última auditoria'], ['motivo', 'Motivo']
 ], `vinculos-suspeitos-${hojeISO}`)
 
+// --- Relatórios (mesmo modal de escolha de seções/colunas dos outros relatórios) ---
+const int = v => (Number(v) || 0).toLocaleString('pt-BR')
+const COLUNAS_ITENS = [
+  { chave: 'codigo', titulo: 'Código' },
+  { chave: 'produto', titulo: 'Produto' },
+  { chave: 'setor', titulo: 'Setor' },
+  { chave: 'fornecedor', titulo: 'Fornecedor' },
+  { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' },
+  { chave: 'diasSemVenda', titulo: 'Dias sem venda', alinhamento: 'right' },
+  { chave: 'local', titulo: 'Local sugerido', valor: i => i.sugestao?.local },
+  { chave: 'origem', titulo: 'Origem da sugestão', valor: i => (i.sugestao?.local ? CONFIANCA[i.sugestao.confianca] : '') },
+  { chave: 'motivo', titulo: 'Motivo', valor: i => i.sugestao?.motivo },
+  { chave: 'diasLista', titulo: 'Dias na lista', alinhamento: 'right', valor: diasNaLista }
+]
+const COLUNAS_PADRAO = ['codigo', 'produto', 'setor', 'estoque', 'diasSemVenda', 'local', 'motivo']
+const COLUNAS_SUSPEITOS = [
+  { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'setor', titulo: 'Setor' },
+  { chave: 'vinculadoEm', titulo: 'Vinculado em' }, { chave: 'local', titulo: 'Lido em' },
+  { chave: 'vezes', titulo: 'Vezes', alinhamento: 'right' }, { chave: 'ultima', titulo: 'Última auditoria', valor: s => br(s.ultima) }
+]
+const celula = (item, c) => {
+  const v = c.valor ? c.valor(item) : item[c.chave]
+  return v === null || v === undefined || v === '' ? '—' : typeof v === 'number' ? int(v) : v
+}
+const tabela = (lista, colunas, chaves = colunas.map(c => c.chave)) => {
+  const usadas = colunas.filter(c => chaves.includes(c.chave))
+  return blocoTabela({ colunas: usadas, linhas: lista.map(i => Object.fromEntries(usadas.map(c => [c.chave, celula(i, c)]))) })
+}
+const porEstoque = lista => [...lista].sort((a, b) => b.estoque - a.estoque)
+const { abrir: abrirRelatorio } = useRelatorio()
+
+const relatorioGeral = () => {
+  const recebidos = pendentes.value.filter(i => i.primeiroVisto === hojeISO).length
+  const comLocal = pendentes.value.filter(i => i.sugestao?.local).length
+  const setoresBarras = [...pendentes.value.reduce((m, i) => m.set(i.setor, (m.get(i.setor) || 0) + 1), new Map())]
+    .sort((a, b) => b[1] - a[1]).slice(0, 15).map(([rotulo, valor]) => ({ rotulo, valor }))
+  abrirRelatorio({
+    id: 'nao-vinculados',
+    titulo: 'Relatório de itens não vinculados',
+    subtitulo: `Situação em ${new Date().toLocaleDateString('pt-BR')}`,
+    contexto: [
+      { rotulo: 'Última importação', valor: br(store.itens.reduce((m, i) => (i.ultimoVisto > m ? i.ultimoVisto : m), '')) },
+      { rotulo: 'Auditorias no histórico', valor: int(auditoriasStore.auditorias.length) }
+    ],
+    indicadores: [
+      { rotulo: 'Não vinculados', valor: int(pendentes.value.length), detalhe: 'fora da auditoria', tom: pendentes.value.length ? 'ruim' : 'bom' },
+      { rotulo: 'Recebidos hoje', valor: int(recebidos), detalhe: 'novos na planilha', tom: recebidos ? 'alerta' : 'bom' },
+      { rotulo: 'Com local sugerido', valor: int(comLocal), detalhe: 'pelas auditorias', tom: 'neutro' },
+      { rotulo: 'Saíram da lista hoje', valor: int(resolvidosHoje.value), detalhe: 'vinculados no sistema', tom: 'bom' },
+      { rotulo: 'Vínculos suspeitos', valor: int(suspeitos.value.length), detalhe: 'lidos em outro local', tom: suspeitos.value.length ? 'alerta' : 'bom' }
+    ],
+    assinaturaPadrao: true,
+    colunas: { lista: COLUNAS_ITENS.map(c => ({ chave: c.chave, titulo: c.titulo })), padrao: COLUNAS_PADRAO },
+    secoes: [
+      { id: 'itens', titulo: `Itens não vinculados (${pendentes.value.length})`, descricao: 'Do maior para o menor estoque, com o local sugerido.', padrao: true, gerar: ({ colunas }) => tabela(porEstoque(pendentes.value), COLUNAS_ITENS, colunas) || '<p class="nota">Nenhum item sem local.</p>' },
+      { id: 'locais', titulo: 'Por local sugerido', descricao: 'Lista para conferir local a local.', padrao: true, gerar: () => {
+        const linhas = porLocal.value.flatMap(([local, lista]) => [
+          { __grupo: local || 'Sem local sugerido', __detalhe: `${lista.length} item(ns)` },
+          ...porEstoque(lista).map(i => ({ codigo: i.codigo, produto: i.produto, estoque: int(i.estoque), diasSemVenda: celula(i, COLUNAS_ITENS[5]) }))
+        ])
+        return blocoTabela({ colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' }, { chave: 'diasSemVenda', titulo: 'Dias sem venda', alinhamento: 'right' }], linhas })
+      } },
+      ...(setoresBarras.length > 1 ? [{ id: 'setores', titulo: 'Por setor', descricao: 'Itens sem local em cada setor.', padrao: true, gerar: () => blocoBarras({ titulo: 'Itens sem local por setor', barras: setoresBarras }) }] : []),
+      { id: 'suspeitos', titulo: `Vínculos suspeitos (${suspeitos.value.length})`, descricao: 'Vinculados num local, lidos em outro em 2+ auditorias.', padrao: suspeitos.value.length > 0, gerar: () => tabela(suspeitos.value, COLUNAS_SUSPEITOS) || '<p class="nota">Nenhum vínculo suspeito.</p>' },
+      { id: 'resolvidos', titulo: `Resolvidos (${resolvidos.value.length})`, descricao: 'Itens que saíram da lista (vinculados no sistema).', padrao: false, gerar: () => tabela(resolvidos.value, [
+        { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'setor', titulo: 'Setor' },
+        { chave: 'resolvidoEm', titulo: 'Saiu em', valor: i => br(i.resolvidoEm) }, { chave: 'vezes', titulo: 'Importações', alinhamento: 'right' }
+      ]) || '<p class="nota">Nenhum item resolvido.</p>' }
+    ]
+  })
+}
+
+const relatorioItens = () => abrirRelatorioTabela({
+  id: 'nao-vinculados-itens',
+  titulo: 'Não vinculados · itens filtrados',
+  subtitulo: `${filtrados.value.length} item(ns)`,
+  contexto: [
+    filtroSetor.value && { rotulo: 'Setor', valor: filtroSetor.value },
+    filtroConfianca.value && { rotulo: 'Sugestão', valor: CONFIANCA[filtroConfianca.value] },
+    busca.value.trim() && { rotulo: 'Busca', valor: busca.value.trim() }
+  ].filter(Boolean),
+  colunas: COLUNAS_ITENS,
+  itens: filtrados.value,
+  assinaturaPadrao: true
+})
+const relatorioSuspeitos = () => abrirRelatorioTabela({
+  id: 'nao-vinculados-suspeitos',
+  titulo: 'Vínculos suspeitos',
+  subtitulo: 'Vinculados num local, lidos em outro em 2+ auditorias',
+  colunas: COLUNAS_SUSPEITOS,
+  itens: suspeitos.value,
+  assinaturaPadrao: true
+})
+
 // --- Formatação ---
 const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
 const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem local sugerido' }
@@ -126,6 +222,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
         <template #actions>
           <UiButton @click="mostrarUpload = true"><i class="fas fa-file-upload"></i>Importar planilha</UiButton>
           <template v-if="store.itens.length">
+            <UiButton variant="secondary" @click="relatorioGeral"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
             <UiButton variant="secondary" :disabled="imagem?.gerando" @click="salvarImagem"><i :class="imagem?.gerando ? 'fas fa-spinner fa-spin' : 'fas fa-image'"></i>Salvar imagem</UiButton>
             <UiButton variant="secondary" title="Refaz as sugestões com as auditorias importadas depois desta planilha" @click="recalcular"><i class="fas fa-rotate"></i>Recalcular</UiButton>
             <UiButton variant="dangerSoft" @click="limpar"><i class="fas fa-trash-alt"></i>Limpar</UiButton>
@@ -181,6 +278,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
             <label><span class="ui-label">Setor</span>
               <select v-model="filtroSetor" class="ui-input"><option value="">Todos</option><option v-for="s in setores" :key="s">{{ s }}</option></select>
             </label>
+            <UiButton variant="secondary" :disabled="!filtrados.length" @click="relatorioItens"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
             <UiButton variant="secondary" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</UiButton>
           </div>
 
@@ -227,6 +325,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
         <section v-else-if="aba === 'suspeitos'" class="space-y-4">
           <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens vinculados num local, mas lidos em outro ("lido não pertence") em duas ou mais auditorias e não lidos no local vinculado depois disso. Itens lidos no próprio local vinculado ou sem local vinculado conhecido ficam de fora.</p>
           <div class="flex flex-wrap items-end gap-3">
+            <UiButton variant="secondary" :disabled="!suspeitos.length" @click="relatorioSuspeitos"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
             <UiButton variant="secondary" :disabled="!suspeitos.length" @click="exportarSuspeitos"><i class="fas fa-file-csv"></i>CSV</UiButton>
           </div>
           <p v-if="!suspeitos.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">{{ temAuditorias ? 'Nenhum vínculo suspeito nas auditorias.' : 'Importe auditorias para cruzar os vínculos.' }}</p>

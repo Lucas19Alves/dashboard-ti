@@ -127,6 +127,7 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **N
 - **Tratamento**: o vínculo é feito no sistema da loja; aqui fica só o tratamento. A cada importação, quem continua na lista segue pendente e quem saiu vai para **Resolvidos** (vinculado no sistema). Fica salvo no IndexedDB (`naoVinculados`) e vai no backup.
 - **Por local sugerido**: lista para o repositor conferir local a local.
 - **Vínculos suspeitos**: item vinculado num local, mas lido em outro (*lido não pertence*) em 2+ auditorias e não lido no local vinculado depois disso. Ficam de fora itens lidos no próprio local vinculado e itens sem local vinculado conhecido.
+- **Relatórios PDF** no mesmo modal dos outros relatórios (seções, colunas, orientação, observações e assinaturas): o geral (indicadores, itens por maior estoque, por local sugerido, por setor, vínculos suspeitos e resolvidos), o da lista filtrada na aba Itens e o dos vínculos suspeitos.
 - **Salvar imagem** quadrada para o WhatsApp (não vinculados, recebidos hoje, por setor e os de maior estoque com local sugerido e dias sem venda), CSV da lista filtrada e **Recalcular** as sugestões depois de importar novas auditorias.
 
 ---
