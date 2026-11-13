@@ -24,7 +24,8 @@ const links = [
   { to: '/', label: 'Início', icon: 'fas fa-home' },
   { to: '/auditorias', label: 'Auditorias', icon: 'fas fa-clipboard-check' },
   { to: '/auditorias/analise', label: 'Análise', icon: 'fas fa-chart-line' },
-  { to: '/vencimentos', label: 'Vencimentos', icon: 'fas fa-calendar-alt' }
+  { to: '/vencimentos', label: 'Vencimentos', icon: 'fas fa-calendar-alt' },
+  { to: '/nao-vinculados', label: 'Não vinculados', icon: 'fas fa-link-slash' }
 ]
 
 const isActive = (path) => {
@@ -66,16 +67,16 @@ onBeforeUnmount(() => {
         </router-link>
 
         <!-- Navegação principal: abas com marcador embaixo da aba atual. -->
-        <div class="hidden h-full items-stretch gap-1 self-stretch md:flex">
+        <div class="hidden h-full items-stretch gap-1 self-stretch lg:flex">
           <router-link
             v-for="link in links"
             :key="link.to"
             :to="link.to"
-            class="relative flex items-center gap-2 px-3.5 text-sm font-medium transition-colors"
+            class="relative flex items-center gap-2 whitespace-nowrap px-2.5 text-sm font-medium transition-colors xl:px-3.5"
             :class="isActive(link.to) ? 'text-white' : 'text-blue-100 hover:text-white'"
             :aria-current="isActive(link.to) ? 'page' : undefined"
           >
-            <i :class="[link.icon, 'text-xs opacity-80']"></i>
+            <i :class="[link.icon, 'hidden text-xs opacity-80 xl:inline']"></i>
             {{ link.label }}
             <span v-if="isActive(link.to)" class="absolute inset-x-2 bottom-0 h-[3px] rounded-t bg-white"></span>
           </router-link>
@@ -132,7 +133,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             @click="abrirSobre"
-            class="hidden size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:inline-flex"
+            class="hidden size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 lg:inline-flex"
             title="Sobre o projeto"
             aria-label="Sobre o projeto"
           >
@@ -142,7 +143,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             @click="isOpen = !isOpen"
-            class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 md:hidden"
+            class="inline-flex size-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 transition hover:bg-white/20 lg:hidden"
             :aria-expanded="isOpen"
             aria-label="Abrir menu de navegação"
           >
@@ -152,7 +153,7 @@ onBeforeUnmount(() => {
       </div>
 
       <transition name="menu">
-        <div v-if="isOpen" class="space-y-1 pb-4 md:hidden">
+        <div v-if="isOpen" class="space-y-1 pb-4 lg:hidden">
           <router-link
             v-for="link in links"
             :key="link.to"

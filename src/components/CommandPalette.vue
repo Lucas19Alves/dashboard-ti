@@ -28,7 +28,8 @@ const paginas = [
   { id: 'p-auditorias', titulo: 'Auditorias', detalhe: 'Calendário e histórico', icone: 'fas fa-clipboard-check', termos: 'calendario historico', acao: () => router.push('/auditorias') },
   { id: 'p-analise', titulo: 'Análise de auditorias', detalhe: 'Comparativos e evolução', icone: 'fas fa-chart-line', termos: 'analise graficos', acao: () => router.push('/auditorias/analise') },
   { id: 'p-documentacao', titulo: 'Documentação', detalhe: 'Como o sistema funciona', icone: 'fas fa-book', termos: 'ajuda manual docs guia', acao: () => router.push('/documentacao') },
-  { id: 'p-vencimentos', titulo: 'Vencimentos', detalhe: 'Controle de validades', icone: 'fas fa-calendar-alt', termos: 'validade vencidos', acao: () => router.push('/vencimentos') }
+  { id: 'p-vencimentos', titulo: 'Vencimentos', detalhe: 'Controle de validades', icone: 'fas fa-calendar-alt', termos: 'validade vencidos', acao: () => router.push('/vencimentos') },
+  { id: 'p-nao-vinculados', titulo: 'Não vinculados', detalhe: 'Itens sem local no sistema', icone: 'fas fa-link-slash', termos: 'vinculo local sem local vincular endereco', acao: () => router.push('/nao-vinculados') }
 ]
 
 const acoes = computed(() => {
