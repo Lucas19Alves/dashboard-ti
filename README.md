@@ -70,6 +70,9 @@ O **Dashboard Loja** é uma solução web moderna e robusta desenvolvida para ot
    http://localhost:5173
    ```
 
+5. **Dados de demonstração (opcional)**
+   Abra `http://localhost:5173/?demo` para gerar 8 semanas de auditorias, validades e itens não vinculados fictícios (`src/dev/demo.js`). Apaga os dados deste navegador e só funciona no `npm run dev`.
+
 ---
 
 ## 📖 Documentação Técnica
