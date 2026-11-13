@@ -221,6 +221,9 @@ const dataAuditoriaBR = computed(() => {
 onMounted(() => {
   if (!auditoria.value) {
     router.push('/auditorias')
+  } else {
+    // Itens desta auditoria primeiro, sem esperar a fila do carregamento em segundo plano.
+    store.garantirItens(auditoria.value.id)
   }
   try {
     if (route.query?.print === 'relatorio') {

@@ -265,7 +265,6 @@ const handleFileChange = (event) => {
     arquivoSelecionado.value = file
     nomeArquivo.value = file.name
     erroUpload.value = ''
-    console.log('✅ Arquivo selecionado:', file.name)
   }
 }
 
@@ -313,8 +312,6 @@ const onDrop = (e) => {
 const { conferir } = useConferencia()
 
 const processar = async () => {
-  console.clear()
-  console.log('🚀 PROCESSAMENTO INICIADO')
   
   if (!arquivoSelecionado.value) {
     store.addToast('Selecione um arquivo!', 'warning')
@@ -352,7 +349,6 @@ const processar = async () => {
     }
     if (!(await conferir(dados, { tipo, data: props.auditoria?.data, arquivo: arquivoSelecionado.value?.name }))) return
 
-    console.log('✅ Dados recebidos:', dados.length, 'linhas')
     // Usar o tipo definido na auditoria (já foi selecionado no formulário)
     const tipoEfetivo = props.auditoria?.tipo || 'Etiqueta'
     const skuValor = props.auditoria?.sku || 0

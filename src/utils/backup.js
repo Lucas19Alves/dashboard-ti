@@ -243,8 +243,10 @@ export const gerarBackupArquivo = async () => {
   const [auditorias, vencimentos, planosAcao, naoVinculados] = await Promise.all([
     db.auditorias.toArray(), db.vencimentos.toArray(), db.planosAcao.toArray(), db.naoVinculados.toArray()
   ])
+  // Os itens ficam em outra tabela no banco; no arquivo, continuam dentro de cada auditoria.
+  const itens = new Map((await db.itensAuditoria.toArray()).map(r => [r.auditoriaId, r.dados]))
   const conteudo = {
-    auditorias: auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' })),
+    auditorias: auditorias.map(a => ({ ...a, dados: itens.get(a.id) || a.dados || [], status: a.status || 'em_andamento' })),
     vencimentos,
     planosAcao,
     naoVinculados
@@ -293,10 +295,15 @@ export const importarBackupJson = async (file) => {
   // Planos de ação só são substituídos quando o backup os traz (backups antigos não têm).
   const planosAcao = Array.isArray(dados.planosAcao) ? dados.planosAcao.filter(p => p && typeof p === 'object') : null
   const naoVinculados = Array.isArray(dados.naoVinculados) ? dados.naoVinculados.filter(n => n && typeof n === 'object' && n.codigo) : null
-  await db.transaction('rw', db.auditorias, db.vencimentos, db.planosAcao, db.naoVinculados, async () => {
+  await db.transaction('rw', [db.auditorias, db.itensAuditoria, db.vencimentos, db.planosAcao, db.naoVinculados], async () => {
     await db.auditorias.clear()
+    await db.itensAuditoria.clear()
     await db.vencimentos.clear()
-    if (auditorias.length) await db.auditorias.bulkAdd(auditorias)
+    if (auditorias.length) {
+      // Resumo numa tabela, itens na outra (o id vem do arquivo; sem ele, o banco cria um).
+      const ids = await db.auditorias.bulkAdd(auditorias.map(({ dados, ...resumo }) => resumo), { allKeys: true })
+      await db.itensAuditoria.bulkPut(auditorias.map((a, i) => ({ auditoriaId: ids[i], dados: Array.isArray(a.dados) ? a.dados : [] })))
+    }
     if (vencimentos.length) await db.vencimentos.bulkAdd(vencimentos)
     if (planosAcao) {
       await db.planosAcao.clear()

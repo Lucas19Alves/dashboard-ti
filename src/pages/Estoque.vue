@@ -15,7 +15,7 @@ import AbaNaoVinculados from '../components/estoque/AbaNaoVinculados.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { indice, reincidentes, semEstoque, parados, naoVinculados, suspeitos, prioridades, resumo, limiarReincidencia, limiarParado } = useAnaliseEstoque()
+const { carregando, indice, reincidentes, semEstoque, parados, naoVinculados, suspeitos, prioridades, resumo, limiarReincidencia, limiarParado } = useAnaliseEstoque()
 
 // --- Abas (na URL, para o Início e a busca abrirem direto) ---
 const ABAS = ['visao', 'reincidencias', 'sem-estoque', 'parados', 'nao-vinculados', 'onde-agir', 'consultar']
@@ -120,7 +120,8 @@ const relatorioGeral = () => abrirRelatorio({
 
     <!-- Visão geral -->
     <template v-if="aba === 'visao'">
-      <UiEmptyState v-if="!temBase" title="Sem auditorias de Presença ou Ruptura" description="As análises de estoque usam as auditorias de Presença e Ruptura. Importe auditorias para ver reincidências, estoque zerado e parados." icon="fas fa-boxes-stacked">
+      <UiEmptyState v-if="carregando && !temBase" title="Carregando os itens das auditorias" description="Leva só um instante. As análises aparecem assim que os itens chegarem." icon="fas fa-spinner fa-spin" />
+      <UiEmptyState v-else-if="!temBase" title="Sem auditorias de Presença ou Ruptura" description="As análises de estoque usam as auditorias de Presença e Ruptura. Importe auditorias para ver reincidências, estoque zerado e parados." icon="fas fa-boxes-stacked">
         <template #actions><UiButton to="/auditorias"><i class="fas fa-clipboard-check"></i>Ir para Auditorias</UiButton></template>
       </UiEmptyState>
       <template v-else>
@@ -183,7 +184,7 @@ const relatorioGeral = () => abrirRelatorio({
           <select v-model.number="limiarReincidencia" class="ui-input"><option :value="14">14+ dias</option><option :value="21">21+ dias</option><option :value="30">30+ dias</option><option :value="60">60+ dias</option></select>
         </label>
       </div>
-      <ListaProblemasEstoque id="estoque-reincidencias" titulo="Reincidências de estoque" :linhas="reincidentes" :filtros="filtros" :vazio="temBase ? 'Nenhum item com estoque sem leitura nesse período.' : 'Importe auditorias de Presença ou Ruptura.'" @abrir="fichaCodigo = $event" />
+      <ListaProblemasEstoque id="estoque-reincidencias" titulo="Reincidências de estoque" :linhas="reincidentes" :filtros="filtros" :vazio="carregando ? 'Carregando os itens das auditorias...' : temBase ? 'Nenhum item com estoque sem leitura nesse período.' : 'Importe auditorias de Presença ou Ruptura.'" @abrir="fichaCodigo = $event" />
     </section>
 
     <!-- Estoque zerado -->

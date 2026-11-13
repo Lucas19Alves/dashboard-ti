@@ -7,6 +7,10 @@ import AvisoSemDados from './components/AvisoSemDados.vue'
 import ModalConferenciaPlanilha from './components/ModalConferenciaPlanilha.vue'
 import ModalRelatorio from './components/ModalRelatorio.vue'
 import ModalTutorial from './components/ModalTutorial.vue'
+import { useAuditoriasStore } from './stores/auditoriasStore'
+
+// A tela abre com o resumo das auditorias; os itens chegam logo depois, em segundo plano.
+const auditorias = useAuditoriasStore()
 </script>
 
 <template>
@@ -22,6 +26,9 @@ import ModalTutorial from './components/ModalTutorial.vue'
     <ModalConferenciaPlanilha />
     <ModalRelatorio />
     <ModalTutorial />
+    <p v-if="!auditorias.itensCarregados" class="fixed bottom-4 left-4 z-30 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm print:hidden" role="status">
+      <i class="fas fa-spinner fa-spin text-blue-600"></i>Carregando os itens das auditorias...
+    </p>
     <main id="conteudo">
       <router-view v-slot="{ Component, route }">
         <transition name="pagina" mode="out-in">

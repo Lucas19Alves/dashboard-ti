@@ -46,8 +46,8 @@ src/
 
 ## 🧠 4. Lógica de Negócio e Módulos
 
-### 4.1 Sistema de Auditorias (`auditoriasStore.js`)
-O sistema possui uma inteligência de processamento de planilhas Excel (comumente extraídas do ERP WinThor).
+### 4.1 Sistema de Auditorias (`utils/processamentoAuditoria.js`, `stores/auditoriasStore.js`)
+O sistema possui uma inteligência de processamento de planilhas Excel (comumente extraídas do ERP WinThor). A leitura e a análise das planilhas ficam em `utils/processamentoAuditoria.js` (funções puras, testadas em `processamentoAuditoria.test.js`); o store só guarda o resultado, persiste e mostra os avisos.
 
 #### Algoritmos de Detecção e Processamento:
 - **Detecção Automática de Tipo**: O sistema analisa as primeiras 100 linhas da planilha. Se encontrar termos como "atualizado/desatualizado", classifica como **Etiqueta**. Se encontrar "com/sem presença" em massa, classifica como **Presença**. Se detectar "sem presença + com estoque", prioriza **Ruptura**.
@@ -73,8 +73,10 @@ Gerencia o ciclo de vida dos produtos na prateleira com base na data de validade
 ### 4.3 Persistência de Dados (`appDb.js`)
 Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Esquema**:
-  - `auditorias`: Armazena o histórico completo de auditorias, incluindo os dados brutos processados e as análises calculadas.
+  - `auditorias`: resumo de cada auditoria (data, tipo, status, SKU e análise calculada).
+  - `itensAuditoria`: os itens processados de cada auditoria (`auditoriaId` → `dados`), a maior parte dos dados. Desde a versão 7 do banco ficam separados do resumo; a migração move os itens das auditorias antigas automaticamente.
   - `vencimentos`: Armazena a última lista de vencimentos importada.
+- **Abertura rápida**: ao abrir, o sistema lê só os resumos e mostra a tela; os itens chegam em segundo plano, em lotes, das auditorias mais recentes para as mais antigas (`itensCarregados` e `aguardarItens()` no store). Abrir uma auditoria pelo link carrega os itens dela na hora (`garantirItens`). Importar ruptura e não vinculados espera os itens chegarem. O backup continua com os itens dentro de cada auditoria.
 - **Sincronização de Status**: O status de "fechada/aberta" das auditorias é sincronizado entre o IndexedDB e o LocalStorage para garantir consistência rápida na UI.
 
 ### 4.4 Painel inicial, busca rápida e saúde dos dados
@@ -178,7 +180,7 @@ A aba **Estoque** reúne os problemas de estoque calculados a partir das auditor
 - Gerar e ler o arquivo rodam num **Web Worker** (`workers/backup.worker.js`), para a tela não travar com muitos dados. Sem suporte a worker, roda na própria página.
 
 ### Adicionando Novas Regras
-- **Novas Colunas Excel**: Se o layout da planilha do ERP mudar, atualize os arrays `colunasPresenca` ou `colunasEtiqueta` no `auditoriasStore.js`.
+- **Novas Colunas Excel**: Se o layout da planilha do ERP mudar, atualize os arrays `colunasPresenca` ou `colunasEtiqueta` no `auditoriasStore.js` e as regras em `utils/processamentoAuditoria.js`.
 - **Novas Métricas**: As métricas de desempenho são calculadas na função `analisarDadosPresenca`. Novas fórmulas devem ser inseridas ali para refletir em todos os tipos de auditoria.
 
 ---

@@ -37,3 +37,20 @@ db.version(5).stores({
   config: 'chave',
   naoVinculados: 'codigo, status'
 })
+
+// (Versão 7, não 6: a 6 chegou a existir em navegadores de desenvolvimento com outro esquema.)
+// Itens das auditorias numa tabela própria: ao abrir, o sistema lê só o resumo das auditorias
+// (rápido) e mostra a tela; os itens chegam em segundo plano. Migra os itens que estavam dentro
+// de cada auditoria.
+db.version(7).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status',
+  config: 'chave',
+  naoVinculados: 'codigo, status',
+  itensAuditoria: 'auditoriaId'
+}).upgrade(async (tx) => {
+  const auditorias = await tx.table('auditorias').toArray()
+  await tx.table('itensAuditoria').bulkPut(auditorias.map(a => ({ auditoriaId: a.id, dados: Array.isArray(a.dados) ? a.dados : [] })))
+  await tx.table('auditorias').toCollection().modify((a) => { delete a.dados })
+})
