@@ -21,14 +21,23 @@ import {
   solicitarArmazenamentoPersistente
 } from '../utils/saudeDados'
 import { estadoBackup } from '../utils/lembreteBackup'
+import { itensParaMeta } from '../utils/analiseHistorica'
+import { useAnaliseEstoque } from '../composables/useAnaliseEstoque'
+import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import BackupPastaConfig from '../components/BackupPastaConfig.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
+import ListaProblemasEstoque from '../components/estoque/ListaProblemasEstoque.vue'
+import FichaItemEstoque from '../components/estoque/FichaItemEstoque.vue'
 
 const router = useRouter()
 const auditoriasStore = useAuditoriasStore()
 const vencStore = useVencimentosStore()
+const estoque = useAnaliseEstoque()
+const fichaCodigo = ref('')
+const problemasDoCodigo = codigo => [...estoque.reincidentes.value, ...estoque.semEstoque.value, ...estoque.parados.value].filter(l => l.codigo === codigo)
+const totalEstoque = computed(() => estoque.resumo.value.reincidentes + estoque.resumo.value.semEstoque + estoque.resumo.value.parados)
 
 const auditorias = computed(() => (Array.isArray(auditoriasStore.auditorias) ? auditoriasStore.auditorias.filter(Boolean) : []))
 const totalAuditorias = computed(() => auditorias.value.length)
@@ -136,6 +145,46 @@ const ultimasAuditorias = computed(() => [...auditorias.value]
   .slice(0, 5)
   .map(a => ({ ...a, metricas: metricasAuditoria(a) })))
 
+// ---------- Prioridades do dia ----------
+// Uma lista curta do que fazer agora, juntando auditorias, validades, estoque e backup.
+// tom: urgente (vermelho) · atencao (âmbar) · info (azul)
+const nvStore = useNaoVinculadosStore()
+const curtoBR = iso => `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}`
+const plural = (n, um, varios) => `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`
+const prioridades = computed(() => {
+  const lista = []
+  for (const dia of agenda.value) {
+    for (const item of dia.itens) {
+      if (item.estado === 'hoje') lista.push({ tom: 'atencao', icone: 'fas fa-plus', titulo: `Criar a auditoria de ${item.tipo} de hoje`, detalhe: 'Planejada para hoje e ainda não criada.', to: { path: '/auditorias', query: { data: dia.data, tipo: item.tipo } }, ordem: 2 })
+      if (item.estado === 'atrasada') lista.push({ tom: 'atencao', icone: 'fas fa-triangle-exclamation', titulo: `${item.tipo} de ${curtoBR(dia.data)} não foi criada`, detalhe: 'Auditoria planejada da semana que ficou sem registro.', to: { path: '/auditorias', query: { data: dia.data, tipo: item.tipo } }, ordem: 4 })
+    }
+  }
+  for (const a of auditorias.value.filter(x => x.status !== 'fechada')) {
+    const faltam = itensParaMeta(a)
+    if (faltam === null) continue
+    lista.push(faltam > 0
+      ? { tom: 'urgente', icone: 'fas fa-bullseye', titulo: `${a.tipo} de ${curtoBR(a.data)}: faltam ${plural(faltam, 'item', 'itens')} para a meta`, detalhe: `${metricasAuditoria(a).percentualPendente.toFixed(1)}% pendente, meta de ${META_PENDENTE_PERCENTUAL}%.`, to: `/auditoria/${a.id}`, ordem: 1 }
+      : { tom: 'info', icone: 'fas fa-lock', titulo: `${a.tipo} de ${curtoBR(a.data)} está na meta`, detalhe: 'Pode ser fechada.', to: `/auditoria/${a.id}`, ordem: 6 })
+  }
+  const r = resumoVenc.value
+  if (r.vencidos) lista.push({ tom: 'urgente', icone: 'fas fa-ban', titulo: `Retirar ${plural(r.vencidos, 'item vencido', 'itens vencidos')}`, detalhe: 'Tirar da venda e registrar a perda.', to: { path: '/vencimentos', query: { prazo: 'vencidos' } }, ordem: 0 })
+  if (r.hoje) lista.push({ tom: 'atencao', icone: 'fas fa-tag', titulo: `Rebaixar ${plural(r.hoje, 'item que vence', 'itens que vencem')} hoje`, detalhe: 'Expor na frente e rebaixar.', to: { path: '/vencimentos', query: { prazo: 'hoje' } }, ordem: 2 })
+  const e = estoque.resumo.value
+  if (e.reincidentes) lista.push({ tom: 'atencao', icone: 'fas fa-repeat', titulo: `${plural(e.reincidentes, 'item', 'itens')} com estoque sem leitura há ${estoque.limiarReincidencia.value}+ dias`, detalhe: 'Procurar, repor ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'reincidencias' } }, ordem: 3 })
+  if (e.semEstoque) lista.push({ tom: 'atencao', icone: 'fas fa-box-open', titulo: `${plural(e.semEstoque, 'item', 'itens')} na gôndola com estoque zerado`, detalhe: 'Lançar a entrada ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'sem-estoque' } }, ordem: 3 })
+  const hoje = paraISOLocal(agora)
+  const nvHoje = nvStore.itens.filter(i => i.status !== 'resolvido' && i.primeiroVisto === hoje).length
+  if (e.naoVinculados) lista.push({ tom: 'info', icone: 'fas fa-link-slash', titulo: `Vincular ${plural(e.naoVinculados, 'item sem local', 'itens sem local')}`, detalhe: nvHoje ? `${nvHoje} chegaram hoje.` : 'Ficam fora da auditoria até ter local.', to: { path: '/estoque', query: { aba: 'nao-vinculados' } }, ordem: 5 })
+  if (lembrarBackup.value) lista.push({ tom: 'info', icone: 'fas fa-download', titulo: 'Fazer backup', detalhe: `${estadoBackup.alteracoes.length} alterações desde o último backup.`, acao: handleExportarBackup, ordem: 7 })
+  return lista.sort((a, b) => a.ordem - b.ordem)
+})
+const mostrarTodasPrioridades = ref(false)
+const TONS = {
+  urgente: { faixa: 'bg-red-600', icone: 'text-red-600' },
+  atencao: { faixa: 'bg-amber-500', icone: 'text-amber-600' },
+  info: { faixa: 'bg-blue-600', icone: 'text-blue-600' }
+}
+
 // ---------- Backup e armazenamento ----------
 const ultimoBackup = computed(() => estadoBackup.ultimo)
 const armazenamento = ref(null)
@@ -166,9 +215,7 @@ const handleExportarBackup = async () => {
   exportando.value = true
   try {
     const resultado = await exportarBackupJson()
-    const reducao = resultado.tamanhoOriginal > 0 ? Math.round((1 - resultado.tamanhoFinal / resultado.tamanhoOriginal) * 100) : 0
-    const detalhe = resultado.compactado ? `${formatarBytes(resultado.tamanhoFinal)} (${reducao}% menor)` : formatarBytes(resultado.tamanhoFinal)
-    auditoriasStore.addToast(`Backup exportado: ${detalhe}.`, 'success')
+    auditoriasStore.addToast(`Backup exportado: ${formatarBytes(resultado.tamanhoFinal)}.`, 'success')
   } catch (err) {
     auditoriasStore.addToast('Erro ao exportar backup: ' + (err?.message || 'desconhecido'), 'error')
   } finally {
@@ -183,6 +230,7 @@ const handleArquivoBackup = async (e) => {
     const resultado = await importarBackupJson(arquivo)
     await auditoriasStore.carregarAuditoriasPersistidas()
     await vencStore.carregarVencimentosPersistidos()
+    await nvStore.carregar()
     armazenamento.value = await obterUsoArmazenamento()
     const mensagem = resultado.origem === 'backup-regional'
       ? `Backup regional convertido: ${resultado.auditorias.length} auditorias importadas.`
@@ -211,24 +259,63 @@ const handleArquivoBackup = async (e) => {
         <UiButton v-for="tipo in tiposHoje" :key="tipo" :to="{ path: '/auditorias', query: { data: paraISOLocal(agora), tipo } }">
           <i class="fas fa-plus"></i>Nova auditoria de {{ tipo }}
         </UiButton>
-        <UiButton to="/vencimentos" variant="warning">
+        <UiButton to="/vencimentos" variant="secondary">
           <i class="fas fa-clock"></i>Validades
+        </UiButton>
+        <UiButton to="/estoque" variant="secondary">
+          <i class="fas fa-boxes-stacked"></i>Estoque
         </UiButton>
       </div>
     </header>
 
+    <!-- Prioridades do dia -->
+    <section class="ui-card overflow-hidden" aria-labelledby="titulo-prioridades">
+      <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-5 py-3.5">
+        <div>
+          <h2 id="titulo-prioridades" class="text-lg font-semibold text-slate-900">O que fazer agora</h2>
+          <p class="text-xs text-slate-500">Auditorias, validades, estoque e backup, do mais urgente para o menos.</p>
+        </div>
+        <span class="text-xs text-slate-500">{{ prioridades.length ? `${prioridades.length} ${prioridades.length === 1 ? 'pendência' : 'pendências'}` : '' }}</span>
+      </div>
+      <p v-if="!prioridades.length" class="flex items-center gap-2 px-5 py-6 text-sm text-emerald-700"><i class="fas fa-circle-check"></i>Tudo em dia. Nada pendente por aqui.</p>
+      <ul v-else class="grid divide-y divide-slate-100 md:grid-cols-2 md:divide-y-0 xl:grid-cols-3">
+        <li v-for="(p, i) in (mostrarTodasPrioridades ? prioridades : prioridades.slice(0, 6))" :key="p.titulo" class="md:border-b md:border-slate-100" :class="i % 3 !== 2 ? 'xl:border-r' : ''">
+          <component :is="p.to ? 'RouterLink' : 'button'" :to="p.to" type="button" class="group relative flex h-full w-full items-start gap-3 px-5 py-3.5 text-left transition hover:bg-slate-50" @click="p.acao && p.acao()">
+            <span class="absolute inset-y-3 left-0 w-1 rounded-r" :class="TONS[p.tom].faixa" aria-hidden="true"></span>
+            <i :class="[p.icone, TONS[p.tom].icone, 'mt-0.5 w-4 text-center text-sm']" aria-hidden="true"></i>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-slate-900 group-hover:text-blue-700">{{ p.titulo }}</span>
+              <span class="block text-xs text-slate-500">{{ p.detalhe }}</span>
+            </span>
+            <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-300 group-hover:text-blue-600" aria-hidden="true"></i>
+          </component>
+        </li>
+      </ul>
+      <button v-if="prioridades.length > 6" type="button" class="w-full border-t border-slate-100 py-2 text-xs font-semibold text-blue-700 hover:bg-slate-50" @click="mostrarTodasPrioridades = !mostrarTodasPrioridades">
+        {{ mostrarTodasPrioridades ? 'Mostrar menos' : `Ver mais ${prioridades.length - 6}` }}
+      </button>
+    </section>
+
     <!-- KPIs -->
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatCard title="Itens críticos" :value="totalCriticosPrazo" description="Vencidos, hoje ou até 3 dias." icon="fas fa-bolt" tone="red" :critical="totalCriticosPrazo > 0" />
-      <StatCard title="Itens monitorados" :value="resumoVenc.total" description="Itens com validade acompanhada." icon="fas fa-box-open" tone="green" />
-      <StatCard title="Auditorias abertas" :value="auditoriasAbertas" :description="`${totalAuditorias} no histórico.`" icon="fas fa-clipboard-list" tone="blue" />
-      <StatCard
-        title="Taxa na meta"
-        :value="taxaMeta === null ? '—' : `${taxaMeta}%`"
-        :description="`Fechadas com até ${META_PENDENTE_PERCENTUAL}% pendente.`"
-        icon="fas fa-bullseye"
-        :tone="taxaMeta === null || taxaMeta >= 80 ? 'blue' : 'amber'"
-      />
+      <RouterLink :to="{ path: '/vencimentos', query: { prazo: 'vencidos' } }" class="block rounded-[var(--ui-radius)] transition hover:ring-2 hover:ring-blue-200">
+        <StatCard title="Validades críticas" :value="totalCriticosPrazo" :description="`Vencidos, hoje ou até 3 dias, de ${resumoVenc.total} monitorados.`" icon="fas fa-bolt" tone="red" :critical="totalCriticosPrazo > 0" />
+      </RouterLink>
+      <RouterLink to="/estoque" class="block rounded-[var(--ui-radius)] transition hover:ring-2 hover:ring-blue-200">
+        <StatCard title="Problemas de estoque" :value="totalEstoque" :description="`${estoque.resumo.value.reincidentes} sem leitura, ${estoque.resumo.value.semEstoque} zerados, ${estoque.resumo.value.parados} parados.`" icon="fas fa-boxes-stacked" tone="amber" />
+      </RouterLink>
+      <RouterLink to="/auditorias" class="block rounded-[var(--ui-radius)] transition hover:ring-2 hover:ring-blue-200">
+        <StatCard title="Auditorias abertas" :value="auditoriasAbertas" :description="`${totalAuditorias} no histórico.`" icon="fas fa-clipboard-list" tone="blue" />
+      </RouterLink>
+      <RouterLink to="/auditorias/analise" class="block rounded-[var(--ui-radius)] transition hover:ring-2 hover:ring-blue-200">
+        <StatCard
+          title="Taxa na meta"
+          :value="taxaMeta === null ? '—' : `${taxaMeta}%`"
+          :description="`Fechadas com até ${META_PENDENTE_PERCENTUAL}% pendente.`"
+          icon="fas fa-bullseye"
+          :tone="taxaMeta === null || taxaMeta >= 80 ? 'blue' : 'amber'"
+        />
+      </RouterLink>
     </div>
 
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-3 2xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -308,6 +395,30 @@ const handleArquivoBackup = async (e) => {
               </template>
               <p v-else class="mt-6 pb-6 text-center text-xs text-slate-400">Sem auditorias deste tipo.</p>
             </article>
+          </div>
+        </section>
+
+        <!-- Estoque -->
+        <section class="ui-card p-5 md:p-6">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-bold text-slate-900">Estoque: mais graves</h2>
+              <p class="text-xs text-slate-500">Os itens mais graves das auditorias de Presença e Ruptura. Clique no nome para ver a ficha.</p>
+            </div>
+            <RouterLink to="/estoque" class="text-xs font-semibold text-blue-600 hover:underline">Ver estoque</RouterLink>
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-3">
+            <RouterLink v-for="c in [
+              { rotulo: 'Sem leitura', valor: estoque.resumo.value.reincidentes, aba: 'reincidencias', cor: 'bg-red-500' },
+              { rotulo: 'Estoque zerado', valor: estoque.resumo.value.semEstoque, aba: 'sem-estoque', cor: 'bg-amber-400' },
+              { rotulo: 'Parados', valor: estoque.resumo.value.parados, aba: 'parados', cor: 'bg-indigo-400' }
+            ]" :key="c.aba" :to="{ path: '/estoque', query: { aba: c.aba } }" class="rounded-xl border border-slate-100 p-3 transition hover:border-blue-300">
+              <p class="flex items-center gap-1.5 text-xs font-semibold text-slate-500"><span class="size-2 rounded-full" :class="c.cor"></span>{{ c.rotulo }}</p>
+              <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900">{{ c.valor }}</p>
+            </RouterLink>
+          </div>
+          <div class="mt-4">
+            <ListaProblemasEstoque :linhas="estoque.prioridades.value" compacto :limite="5" :vazio="estoque.indice.value.auditorias ? 'Nenhum problema de estoque.' : 'Importe auditorias de Presença ou Ruptura para ver os problemas de estoque.'" @abrir="fichaCodigo = $event" />
           </div>
         </section>
 
@@ -477,5 +588,7 @@ const handleArquivoBackup = async (e) => {
         </section>
       </aside>
     </div>
+
+    <FichaItemEstoque v-if="fichaCodigo" :codigo="fichaCodigo" :indice="estoque.indice.value" :problemas="problemasDoCodigo(fichaCodigo)" @close="fichaCodigo = ''" />
   </div>
 </template>

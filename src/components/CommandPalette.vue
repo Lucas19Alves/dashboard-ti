@@ -31,7 +31,10 @@ const paginas = [
   { id: 'p-tutorial', titulo: 'Tutorial', detalhe: 'Como usar cada página do sistema', icone: 'fas fa-graduation-cap', termos: 'ajuda como usar passo a passo aprender', acao: () => abrirTutorial() },
   { id: 'p-documentacao', titulo: 'Documentação', detalhe: 'Como o sistema funciona', icone: 'fas fa-book', termos: 'ajuda manual docs guia', acao: () => router.push('/documentacao') },
   { id: 'p-vencimentos', titulo: 'Vencimentos', detalhe: 'Controle de validades', icone: 'fas fa-calendar-alt', termos: 'validade vencidos', acao: () => router.push('/vencimentos') },
-  { id: 'p-nao-vinculados', titulo: 'Não vinculados', detalhe: 'Itens sem local no sistema', icone: 'fas fa-link-slash', termos: 'vinculo local sem local vincular endereco', acao: () => router.push('/nao-vinculados') }
+  { id: 'p-estoque', titulo: 'Estoque', detalhe: 'Reincidências, estoque zerado, parados e onde agir', icone: 'fas fa-boxes-stacked', termos: 'estoque reincidencia reincidente sumiu gondola parado sem venda zerado ajuste inventario', acao: () => router.push('/estoque') },
+  { id: 'p-estoque-reincidencias', titulo: 'Reincidências de estoque', detalhe: 'Itens com estoque sem leitura há semanas', icone: 'fas fa-repeat', termos: 'reincidencia sem leitura sumido ruptura recorrente', acao: () => router.push({ path: '/estoque', query: { aba: 'reincidencias' } }) },
+  { id: 'p-estoque-consultar', titulo: 'Consultar item', detalhe: 'Ficha do produto em todas as auditorias', icone: 'fas fa-magnifying-glass', termos: 'ficha produto historico codigo item', acao: () => router.push({ path: '/estoque', query: { aba: 'consultar' } }) },
+  { id: 'p-nao-vinculados', titulo: 'Não vinculados', detalhe: 'Itens sem local no sistema (em Estoque)', icone: 'fas fa-link-slash', termos: 'vinculo local sem local vincular endereco', acao: () => router.push({ path: '/estoque', query: { aba: 'nao-vinculados' } }) }
 ]
 
 const acoes = computed(() => {

@@ -108,7 +108,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Modais de lista** (`components/ui/UiListaItens.vue`): busca, filtros com contagem, agrupamento, ordenação, carregamento incremental, CSV, impressão e cópia do código. Usado em métricas, itens do local, usuário e vencimentos.
 - **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): % pendente em destaque, cards (SKU, lidos, pendentes, com problema e desatualizados na Etiqueta), tabela de % pendente por setor, top 10 locais e locais sem leitura; imprime/salva PDF e salva uma imagem quadrada em alta resolução para compartilhar.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
-- **Tutorial** (`components/ModalTutorial.vue`): botão Tutorial no menu (ou na busca rápida) abre um passo a passo de cada página: Início, Auditorias, detalhe, mapa, Análise, ficha do colaborador, Vencimentos, Não vinculados, relatórios, busca, configurações e backup. Cada passo tem "Abrir esta página".
+- **Tutorial** (`components/ModalTutorial.vue`): botão Tutorial no menu (ou na busca rápida) abre um passo a passo de cada página: Início, Auditorias, detalhe, mapa, Análise, ficha do colaborador, Vencimentos, Estoque, Não vinculados, relatórios, busca, configurações e backup. Cada passo tem "Abrir esta página".
 - **Documentação in-app** (`/documentacao`, `utils/markdown.js`): este documento dentro do sistema, com sumário fixo, busca e links para cada seção (`/documentacao#backup-e-seguranca`). Aberta pelo botão Documentação em "Sobre" ou pela busca rápida.
 
 ### 4.8 Detalhe da auditoria: navegação e mapa da loja
@@ -121,15 +121,29 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
   - Cores por % pendente, por leituras ou pelas leituras de um usuário; clique mostra faces, quem leu e os itens.
   - **Editar layout**: arrastar, redimensionar, girar e renomear áreas; aumentar ou diminuir o mapa em cada borda (esquerda, direita, topo, base), sendo que aumentar à esquerda/topo empurra as áreas e diminuir só remove espaço vazio; o layout fica salvo neste navegador, vale para todas as auditorias e vai junto no backup (`configuracoes.mapaLoja`).
 
-### 4.9 Itens não vinculados (`pages/NaoVinculados.vue`, `utils/naoVinculados.js`)
-Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **Não vinculados** recebe a planilha do dia (Código, Nome, Estoque, Dias sem venda, Classe de Produto, Classe de Produto Raiz, Fornecedor) e cruza com o histórico das auditorias.
+### 4.9 Itens não vinculados (`components/estoque/AbaNaoVinculados.vue`, `utils/naoVinculados.js`)
+Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **Estoque › Não vinculados** recebe a planilha do dia (Código, Nome, Estoque, Dias sem venda, Classe de Produto, Classe de Produto Raiz, Fornecedor) e cruza com o histórico das auditorias.
 - **Sugestão de local**, da evidência mais forte para a mais fraca: local onde o item foi *lido não pertence* (está fisicamente lá), último local em que esteve vinculado, local mais comum dos itens da mesma classe de produto. Sem nada disso, o local sugerido fica em branco.
 - **Prioridade**: vende toda semana (≤ 7 dias sem venda) > com estoque > sem estoque.
-- **Tratamento**: o vínculo é feito no sistema da loja; aqui fica só o tratamento. A cada importação, quem continua na lista segue pendente e quem saiu vai para **Resolvidos** (vinculado no sistema). Fica salvo no IndexedDB (`naoVinculados`) e vai no backup.
+- **Tratamento**: o vínculo é feito no sistema da loja; aqui fica só o tratamento. A cada importação, quem continua na lista segue pendente e quem saiu deixa a lista (vinculado no sistema; conta em "Saíram da lista hoje"). Fica salvo no IndexedDB (`naoVinculados`) e vai no backup.
 - **Por local sugerido**: lista para o repositor conferir local a local.
 - **Vínculos suspeitos**: item vinculado num local, mas lido em outro (*lido não pertence*) em 2+ auditorias e não lido no local vinculado depois disso. Ficam de fora itens lidos no próprio local vinculado e itens sem local vinculado conhecido.
-- **Relatórios PDF** no mesmo modal dos outros relatórios (seções, colunas, orientação, observações e assinaturas): o geral (indicadores, itens por maior estoque, por local sugerido, por setor, vínculos suspeitos e resolvidos), o da lista filtrada na aba Itens e o dos vínculos suspeitos.
+- **Relatórios PDF** no mesmo modal dos outros relatórios (seções, colunas, orientação, observações e assinaturas): o geral (indicadores, itens por maior estoque, por local sugerido, por setor, vínculos suspeitos), o da lista filtrada na aba Itens e o dos vínculos suspeitos.
 - **Salvar imagem** quadrada para o WhatsApp (não vinculados, recebidos hoje, por setor e os de maior estoque com local sugerido e dias sem venda), CSV da lista filtrada e **Recalcular** as sugestões depois de importar novas auditorias.
+
+### 4.10 Estoque (`pages/Estoque.vue`, `utils/estoque.js`, `composables/useAnaliseEstoque.js`)
+A aba **Estoque** reúne os problemas de estoque calculados a partir das auditorias de **Presença e Ruptura** (as que leem a gôndola), das validades e dos não vinculados. Cada código é avaliado pela situação na última vez em que apareceu; só entram itens vistos desde a última Presença (ciclo atual). *Lido não pertence* não conta como leitura: o local vinculado continuou vazio.
+- **Reincidências**: itens com estoque não lidos há 14+ dias (14/21/30/60, lembrado no navegador). Mostra dias e auditorias seguidas sem leitura, última leitura, ruptura acumulada (`Custo Ruptura`) e um diagnóstico: achado em outro local, vende mas não é achado (depósito), nunca lido e sem venda (estoque provavelmente inexistente).
+- **Estoque zerado**: itens lidos na gôndola com estoque zerado no sistema, com quantas auditorias seguidas.
+- **Parados**: itens com estoque e 30+ dias sem venda (30/60/90), cruzados com a menor validade do código.
+- **Não vinculados**: a antiga aba (seção 4.9) virou uma aba de Estoque; `/nao-vinculados` redireciona para `/estoque?aba=nao-vinculados`.
+- **Onde agir**: problemas abertos somados por local, setor ou fornecedor; clicar num número abre a lista filtrada.
+- **Consultar item**: ficha do código com histórico em Presença/Ruptura, validades e não vinculado.
+- Relatório PDF geral e por lista (com agrupamento por local) e CSV.
+
+### 4.11 Início
+- **O que fazer agora**: lista única do que está pendente, do mais urgente para o menos: vencidos a retirar, auditorias abertas fora da meta (quantos itens faltam), auditoria do dia não criada, reincidências, estoque zerado, não vinculados e backup.
+- Indicadores clicáveis (validades críticas, problemas de estoque, auditorias abertas, taxa na meta) e o bloco **Estoque: mais graves**, com a ficha de cada item.
 
 ---
 
@@ -144,9 +158,9 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **N
 6. Utilize os filtros de **Setor**, **Local** ou **Usuário** para analisar gargalos na operação.
 
 ### 5.2 Tratando itens não vinculados
-1. Exporte do sistema a planilha de itens sem local e importe na aba **Não vinculados**.
+1. Exporte do sistema a planilha de itens sem local e importe em **Estoque › Não vinculados**.
 2. Confira o local sugerido de cada item e vincule no sistema da loja.
-3. Na importação do dia seguinte, os itens que sumiram da planilha vão para Resolvidos.
+3. Na importação do dia seguinte, os itens que sumiram da planilha saem da lista.
 
 ### 5.3 Gerindo Vencimentos
 1. Acesse a aba **Vencimentos**.
@@ -159,7 +173,9 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **N
 ## 🔧 6. Manutenção e Expansão
 
 ### Backup e Segurança
-- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). A exportação gera um arquivo `.json.gz`, reduzindo o tamanho sem remover informações. A importação aceita o formato compactado, backups `.json` antigos do Dashboard Loja e backups regionais com `sessions`, que são migrados automaticamente para auditorias agregadas por loja. Todo conteúdo é validado antes de substituir o banco local. É recomendado fazer backup antes de limpezas de cache do navegador.
+- O sistema oferece funcionalidades de **Exportar Backup** e **Importar Backup** (em `utils/backup.js`). A exportação gera um arquivo `.json.gz` na **versão 3**, em formato colunar compacto e sem perda (`utils/backupCompacto.js`), normalmente ~6x menor que o backup versão 2 com os mesmos dados. A importação aceita a versão 3, os backups `.json`/`.json.gz` antigos (versões 1 e 2) e backups regionais com `sessions`, que são migrados automaticamente para auditorias agregadas por loja. Todo conteúdo é validado antes de substituir o banco local. É recomendado fazer backup antes de limpezas de cache do navegador.
+- **Formato compacto (versão 3)**: as listas de objetos (itens das auditorias, vencimentos, não vinculados) viram tabelas por coluna. Cada valor entra uma vez num dicionário global e vira um número. Cada coluna é gravada do jeito mais curto: constante, repetições seguidas, cópia da mesma coluna na auditoria anterior (a lista de códigos se repete toda semana), prevista pelo código do produto (nome, classe, fornecedor e local só são gravados quando mudam), diferença numérica para o último valor do produto (estoque, dias sem venda), igual a outra coluna (`Situação`/`_situacao`, `"6"`/`6`) ou data-hora em segundos. A expansão refaz as mesmas previsões na mesma ordem, e `expandir(compactar(x))` é igual a `JSON.parse(JSON.stringify(x))` (testado em `backupCompacto.test.js` e `backupFormato.test.js`).
+- Gerar e ler o arquivo rodam num **Web Worker** (`workers/backup.worker.js`), para a tela não travar com muitos dados. Sem suporte a worker, roda na própria página.
 
 ### Adicionando Novas Regras
 - **Novas Colunas Excel**: Se o layout da planilha do ERP mudar, atualize os arrays `colunasPresenca` ou `colunasEtiqueta` no `auditoriasStore.js`.

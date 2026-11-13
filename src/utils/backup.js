@@ -4,9 +4,48 @@ import { carregarLayoutSalvo, layoutValido, salvarLayout } from './mapaLoja'
 import { configuracoes as configuracoesSistema } from '../composables/useConfiguracoes'
 import { useAparencia } from '../composables/useAparencia'
 
+import { lerArquivoBackup, montarArquivoBackup } from './backupFormato'
+
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
-const BACKUP_VERSION = 2
-const GZIP_MAGIC = [0x1f, 0x8b]
+// 3: dados em formato colunar compacto (ver backupCompacto.js). 1 e 2 continuam sendo lidos.
+const BACKUP_VERSION = 3
+
+// Montar/ler o arquivo no Web Worker; se ele falhar (navegador antigo, testes), roda aqui mesmo.
+let worker = null
+let proximoId = 0
+const pendentes = new Map()
+const obterWorker = () => {
+  if (worker || typeof Worker === 'undefined') return worker
+  try {
+    worker = new Worker(new URL('../workers/backup.worker.js', import.meta.url), { type: 'module' })
+  } catch {
+    return null
+  }
+  worker.onmessage = ({ data }) => {
+    const p = pendentes.get(data.id)
+    if (!p) return
+    pendentes.delete(data.id)
+    if (data.erro) p.reject(new Error(data.erro))
+    else p.resolve(data.resultado)
+  }
+  worker.onerror = (evento) => {
+    evento.preventDefault?.()
+    for (const p of pendentes.values()) p.reject(Object.assign(new Error('worker'), { semWorker: true }))
+    pendentes.clear()
+    worker?.terminate()
+    worker = null
+  }
+  return worker
+}
+const noWorker = (mensagem, local) => {
+  const w = obterWorker()
+  if (!w) return local()
+  return new Promise((resolve, reject) => {
+    const id = ++proximoId
+    pendentes.set(id, { resolve, reject })
+    w.postMessage({ ...mensagem, id })
+  }).catch(erro => (erro?.semWorker ? local() : Promise.reject(erro)))
+}
 
 const limparStatusLocalLegado = () => {
   try {
@@ -32,35 +71,6 @@ const criarNomeBackup = (compactado) => {
   const data = agora.toISOString().slice(0, 10)
   const hora = agora.toTimeString().slice(0, 8).replaceAll(':', '-')
   return `dashboard-loja-backup-${data}-${hora}.json${compactado ? '.gz' : ''}`
-}
-
-const compactarGzip = async (blob) => {
-  if (typeof CompressionStream === 'undefined') return null
-
-  const stream = blob.stream().pipeThrough(new CompressionStream('gzip'))
-  return new Response(stream, {
-    headers: { 'Content-Type': 'application/gzip' }
-  }).blob()
-}
-
-const arquivoEhGzip = async (file) => {
-  const bytes = new Uint8Array(await file.slice(0, 2).arrayBuffer())
-  return bytes[0] === GZIP_MAGIC[0] && bytes[1] === GZIP_MAGIC[1]
-}
-
-const lerTextoBackup = async (file) => {
-  if (!(await arquivoEhGzip(file))) return file.text()
-
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Error('Este navegador não oferece suporte à leitura de backups compactados.')
-  }
-
-  try {
-    const stream = file.stream().pipeThrough(new DecompressionStream('gzip'))
-    return await new Response(stream).text()
-  } catch {
-    throw new Error('O arquivo compactado está corrompido ou incompleto.')
-  }
 }
 
 export const validarBackup = (dados) => {
@@ -228,20 +238,20 @@ const restaurarConfiguracoes = (cfg = {}) => {
   }
 }
 
-// Monta o arquivo de backup (JSON compactado em gzip quando o navegador permite).
+// Monta o arquivo de backup: formato colunar compacto + gzip, gerado no Web Worker.
 export const gerarBackupArquivo = async () => {
-  const auditorias = await db.auditorias.toArray()
-  const vencimentos = await db.vencimentos.toArray()
-  const planosAcao = await db.planosAcao.toArray()
-  const naoVinculados = await db.naoVinculados.toArray()
-  const auditoriasComStatus = auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' }))
-  const payload = {
-    versao: BACKUP_VERSION,
-    geradoEm: new Date().toISOString(),
-    auditorias: auditoriasComStatus,
+  const [auditorias, vencimentos, planosAcao, naoVinculados] = await Promise.all([
+    db.auditorias.toArray(), db.vencimentos.toArray(), db.planosAcao.toArray(), db.naoVinculados.toArray()
+  ])
+  const conteudo = {
+    auditorias: auditorias.map(a => ({ ...a, status: a.status || 'em_andamento' })),
     vencimentos,
     planosAcao,
-    naoVinculados,
+    naoVinculados
+  }
+  const extras = {
+    versao: BACKUP_VERSION,
+    geradoEm: new Date().toISOString(),
     configuracoes: {
       mapaLoja: carregarLayoutSalvo(),
       sistema: copia(configuracoesSistema),
@@ -249,17 +259,12 @@ export const gerarBackupArquivo = async () => {
       preferencias: lerPreferencias()
     }
   }
-
-  const jsonBlob = new Blob([JSON.stringify(payload)], {
-    type: 'application/json;charset=utf-8'
-  })
-  const gzipBlob = await compactarGzip(jsonBlob)
-  const blob = gzipBlob || jsonBlob
+  const { blob, compactado, tamanhoJson } = await noWorker({ acao: 'montar', conteudo, extras }, () => montarArquivoBackup(conteudo, extras))
   return {
     blob,
-    nome: criarNomeBackup(Boolean(gzipBlob)),
-    compactado: Boolean(gzipBlob),
-    tamanhoOriginal: jsonBlob.size,
+    nome: criarNomeBackup(compactado),
+    compactado,
+    tamanhoOriginal: tamanhoJson,
     tamanhoFinal: blob.size
   }
 }
@@ -276,16 +281,9 @@ export const importarBackupJson = async (file) => {
     throw new Error('Selecione um arquivo de backup válido.')
   }
 
-  const texto = await lerTextoBackup(file)
-  let dados
-  try {
-    dados = validarBackup(normalizarFormatoBackup(JSON.parse(texto)))
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error('O arquivo não contém um JSON válido.')
-    }
-    throw error
-  }
+  // Leitura, descompactação e expansão do formato compacto rodam no Web Worker.
+  const bruto = await noWorker({ acao: 'ler', file }, () => lerArquivoBackup(file))
+  const dados = validarBackup(normalizarFormatoBackup(bruto))
 
   const auditorias = dados.auditorias
   const vencimentos = dados.vencimentos

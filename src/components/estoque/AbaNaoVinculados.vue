@@ -1,17 +1,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useAuditoriasStore } from '../stores/auditoriasStore'
-import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
-import { historicoDoCodigo, vinculosSuspeitos } from '../utils/naoVinculados'
-import { baixarCsv } from '../utils/csv'
-import { blocoBarras, blocoTabela } from '../utils/print'
-import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
-import UiButton from '../components/ui/UiButton.vue'
-import UiEmptyState from '../components/ui/UiEmptyState.vue'
-import UiModal from '../components/ui/UiModal.vue'
-import UiPageHeader from '../components/ui/UiPageHeader.vue'
-import UiTabs from '../components/ui/UiTabs.vue'
-import ImagemNaoVinculados from '../components/ImagemNaoVinculados.vue'
+import { useAuditoriasStore } from '../../stores/auditoriasStore'
+import { useNaoVinculadosStore } from '../../stores/naoVinculadosStore'
+import { historicoDoCodigo } from '../../utils/naoVinculados'
+import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
+import { baixarCsv } from '../../utils/csv'
+import { blocoBarras, blocoTabela } from '../../utils/print'
+import { abrirRelatorioTabela, useRelatorio } from '../../composables/useRelatorio'
+import UiButton from '../ui/UiButton.vue'
+import UiEmptyState from '../ui/UiEmptyState.vue'
+import UiModal from '../ui/UiModal.vue'
+import UiTabs from '../ui/UiTabs.vue'
+import ImagemNaoVinculados from '../ImagemNaoVinculados.vue'
 
 const store = useNaoVinculadosStore()
 const auditoriasStore = useAuditoriasStore()
@@ -42,10 +42,10 @@ onMounted(() => { if (!store.itens.length) mostrarUpload.value = true })
 // --- Dados ---
 const hojeISO = new Date().toLocaleDateString('sv-SE')
 const ativos = computed(() => store.itens.filter(i => i.status !== 'resolvido'))
-const resolvidos = computed(() => store.itens.filter(i => i.status === 'resolvido').sort((a, b) => b.resolvidoEm.localeCompare(a.resolvidoEm)))
-const resolvidosHoje = computed(() => resolvidos.value.filter(i => i.resolvidoEm === hojeISO).length)
+const resolvidosHoje = computed(() => store.itens.filter(i => i.status === 'resolvido' && i.resolvidoEm === hojeISO).length)
 const pendentes = ativos
-const suspeitos = computed(() => vinculosSuspeitos(auditoriasStore.auditorias))
+// Mesmo cálculo da aba Estoque (compartilhado, não refaz ao trocar de aba).
+const { suspeitos } = useAnaliseEstoque()
 const temAuditorias = computed(() => auditoriasStore.auditorias.some(a => a.dados?.length))
 const diasNaLista = i => Math.max(0, Math.round((new Date(hojeISO) - new Date(i.primeiroVisto)) / 86400000))
 
@@ -62,9 +62,7 @@ const aba = ref('tratar')
 const abas = computed(() => [
   { value: 'tratar', label: `Itens (${ativos.value.length})`, icon: 'fas fa-link' },
   { value: 'locais', label: 'Por local sugerido', icon: 'fas fa-map-pin' },
-  { value: 'suspeitos', label: `Vínculos suspeitos (${suspeitos.value.length})`, icon: 'fas fa-triangle-exclamation' },
-  { value: 'resolvidos', label: `Resolvidos (${resolvidos.value.length})`, icon: 'fas fa-check' }
-])
+  { value: 'suspeitos', label: `Vínculos suspeitos (${suspeitos.value.length})`, icon: 'fas fa-triangle-exclamation' }])
 const busca = ref('')
 const filtroConfianca = ref('')
 const filtroSetor = ref('')
@@ -177,11 +175,7 @@ const relatorioGeral = () => {
         return blocoTabela({ colunas: [{ chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' }, { chave: 'diasSemVenda', titulo: 'Dias sem venda', alinhamento: 'right' }], linhas })
       } },
       ...(setoresBarras.length > 1 ? [{ id: 'setores', titulo: 'Por setor', descricao: 'Itens sem local em cada setor.', padrao: true, gerar: () => blocoBarras({ titulo: 'Itens sem local por setor', barras: setoresBarras }) }] : []),
-      { id: 'suspeitos', titulo: `Vínculos suspeitos (${suspeitos.value.length})`, descricao: 'Vinculados num local, lidos em outro em 2+ auditorias.', padrao: suspeitos.value.length > 0, gerar: () => tabela(suspeitos.value, COLUNAS_SUSPEITOS) || '<p class="nota">Nenhum vínculo suspeito.</p>' },
-      { id: 'resolvidos', titulo: `Resolvidos (${resolvidos.value.length})`, descricao: 'Itens que saíram da lista (vinculados no sistema).', padrao: false, gerar: () => tabela(resolvidos.value, [
-        { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'setor', titulo: 'Setor' },
-        { chave: 'resolvidoEm', titulo: 'Saiu em', valor: i => br(i.resolvidoEm) }, { chave: 'vezes', titulo: 'Importações', alinhamento: 'right' }
-      ]) || '<p class="nota">Nenhum item resolvido.</p>' }
+      { id: 'suspeitos', titulo: `Vínculos suspeitos (${suspeitos.value.length})`, descricao: 'Vinculados num local, lidos em outro em 2+ auditorias.', padrao: suspeitos.value.length > 0, gerar: () => tabela(suspeitos.value, COLUNAS_SUSPEITOS) || '<p class="nota">Nenhum vínculo suspeito.</p>' }
     ]
   })
 }
@@ -216,10 +210,11 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)]">
-    <div class="ui-page">
-      <UiPageHeader title="Não vinculados" subtitle="Itens que chegaram sem local no sistema. Sem local, o item fica fora da auditoria: vincule no local certo para a auditoria acertar.">
-        <template #actions>
+  <div>
+    <div class="space-y-6">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <p class="max-w-[72ch] text-sm leading-relaxed text-slate-600">Itens que chegaram sem local no sistema. Sem local, o item fica fora da auditoria: vincule no local certo para a auditoria acertar.</p>
+        <div class="flex flex-wrap items-center gap-2">
           <UiButton @click="mostrarUpload = true"><i class="fas fa-file-upload"></i>Importar planilha</UiButton>
           <template v-if="store.itens.length">
             <UiButton variant="secondary" @click="relatorioGeral"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
@@ -227,8 +222,8 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
             <UiButton variant="secondary" title="Refaz as sugestões com as auditorias importadas depois desta planilha" @click="recalcular"><i class="fas fa-rotate"></i>Recalcular</UiButton>
             <UiButton variant="dangerSoft" @click="limpar"><i class="fas fa-trash-alt"></i>Limpar</UiButton>
           </template>
-        </template>
-      </UiPageHeader>
+        </div>
+      </div>
 
       <UiModal v-if="mostrarUpload" title="Importar itens não vinculados" subtitle="Planilha do dia exportada do sistema (.xlsx ou .csv)" @close="mostrarUpload = false">
         <div class="space-y-4">
@@ -266,7 +261,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
           </div>
         </section>
 
-        <UiTabs v-model="aba" :items="abas" sticky />
+        <UiTabs v-model="aba" :items="abas" />
 
         <!-- Tratar -->
         <section v-if="aba === 'tratar'" class="space-y-4">
@@ -343,17 +338,6 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
               </tbody>
             </table>
           </div>
-        </section>
-
-        <!-- Resolvidos -->
-        <section v-else class="space-y-3">
-          <p v-if="!resolvidos.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">Quando um item não vier na próxima planilha, ele aparece aqui como vinculado.</p>
-          <ul v-else class="ui-card divide-y divide-slate-100">
-            <li v-for="i in resolvidos" :key="i.codigo" class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-              <div class="min-w-0"><p class="truncate font-semibold">{{ i.produto }}</p><p class="text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}</p></div>
-              <p class="text-slate-600">Saiu da lista em {{ br(i.resolvidoEm) }}, após {{ i.vezes }} {{ i.vezes === 1 ? 'importação' : 'importações' }}</p>
-            </li>
-          </ul>
         </section>
       </template>
 

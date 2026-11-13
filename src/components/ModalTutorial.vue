@@ -12,7 +12,7 @@ const PASSOS = [
     icone: 'fas fa-store',
     resumo: 'O sistema transforma as planilhas da loja (auditorias, validades e itens sem local) em listas, gráficos, relatórios e imagens para o time.',
     itens: [
-      ['Menu de cima', 'Início, Auditorias, Análise, Vencimentos e Não vinculados. No celular, abra pelo botão de três linhas.'],
+      ['Menu de cima', 'Início, Auditorias, Análise, Vencimentos e Estoque. No celular, abra pelo botão de três linhas.'],
       ['Dados no navegador', 'Tudo fica salvo neste navegador, neste computador. Nada vai para a internet. Por isso, faça backup (último passo do tutorial).'],
       ['Planilhas', 'Exporte do sistema da loja em .xlsx ou .csv e arraste para a tela certa. O sistema acha o cabeçalho sozinho.'],
       ['Este tutorial', 'Use Próximo e Anterior. No computador, os tópicos ficam numa lista à esquerda. "Abrir esta página" leva até a tela explicada.']
@@ -114,12 +114,26 @@ const PASSOS = [
     ]
   },
   {
-    titulo: 'Não vinculados',
-    rota: '/nao-vinculados',
+    titulo: 'Estoque',
+    rota: '/estoque',
+    icone: 'fas fa-boxes-stacked',
+    resumo: 'Problemas de estoque calculados a partir das auditorias de Presença e Ruptura, das validades e dos não vinculados.',
+    itens: [
+      ['Visão geral', 'Quantos problemas há de cada tipo, os itens mais graves e os locais com mais problemas.'],
+      ['Reincidências', 'Itens com estoque que não são lidos há 14 dias ou mais (dá para mudar para 21, 30 ou 60). O diagnóstico diz se o item vende, se foi achado em outro local ou se o estoque provavelmente não existe.'],
+      ['Estoque zerado', 'Itens lidos na gôndola com estoque zerado no sistema: falta lançar a entrada ou ajustar.'],
+      ['Parados', 'Itens com estoque e 30+ dias sem venda, cruzados com as validades.'],
+      ['Onde agir', 'Os problemas somados por local, setor ou fornecedor. Clique num número para ver os itens.'],
+      ['Consultar item', 'Busque um código ou nome para ver a ficha do produto em todas as auditorias.']
+    ]
+  },
+  {
+    titulo: 'Não vinculados (em Estoque)',
+    rota: '/estoque?aba=nao-vinculados',
     icone: 'fas fa-link-slash',
     resumo: 'Itens que chegaram sem local no sistema ficam fora da auditoria. Aqui você vê onde cada um deve ficar.',
     itens: [
-      ['Importar todo dia', 'Envie a planilha de itens não vinculados do dia. Quem sumiu da planilha vai para Resolvidos sozinho.'],
+      ['Importar todo dia', 'Envie a planilha de itens não vinculados do dia. Quem sumiu da planilha sai da lista sozinho (conta como vinculado).'],
       ['Local sugerido', 'Vem do histórico das auditorias: onde o item foi lido, onde já esteve vinculado ou onde ficam os itens da mesma classe.'],
       ['Itens', 'Lista do mais importante (vende toda semana) ao menos importante, com estoque e dias sem venda. Clique no nome para ver o item nas auditorias.'],
       ['Por local sugerido', 'Os itens agrupados por local, para conferir um local de cada vez.'],
