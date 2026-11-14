@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { corrigirEstoqueDosItens } from '../utils/itemAuditoria'
 
 export const db = new Dexie('dashboard_ti_db')
 
@@ -65,4 +66,21 @@ db.version(8).stores({
   naoVinculados: 'codigo, status',
   itensAuditoria: 'auditoriaId',
   estoqueTotal: 'codigo'
+})
+
+// Histórico do estoque: uma foto por data da planilha (utils/historicoEstoque.js).
+// estoqueFotos guarda o resumo (data, arquivo, total); estoqueFotoItens, os itens da foto.
+db.version(9).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status',
+  config: 'chave',
+  naoVinculados: 'codigo, status',
+  itensAuditoria: 'auditoriaId',
+  estoqueTotal: 'codigo',
+  estoqueFotos: 'id',
+  estoqueFotoItens: 'id'
+}).upgrade(async (tx) => {
+  // Estoque das auditorias: "9.051,374 KG" era lido como 9,051 (ponto de milhar como decimal).
+  await tx.table('itensAuditoria').toCollection().modify((r) => { corrigirEstoqueDosItens(r.dados) })
 })

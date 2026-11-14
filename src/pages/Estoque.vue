@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAnaliseEstoque } from '../composables/useAnaliseEstoque'
 import { useRelatorio } from '../composables/useRelatorio'
-import { TIPOS_PROBLEMA, agruparProblemas, buscarItens } from '../utils/estoque'
+import { LOCAL_NAO_IDENTIFICADO, SEM_LOCAL, TIPOS_PROBLEMA, agruparProblemas, buscarItens, listaConferencia } from '../utils/estoque'
 import { formatarQuantidade } from '../utils/estoqueTotal'
 import UiTabela from '../components/ui/UiTabela.vue'
 import { blocoBarras, blocoTabela } from '../utils/print'
 import UiButton from '../components/ui/UiButton.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import { GRUPOS, fornecerAcoesDaAba } from '../composables/useAcoes'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
@@ -15,6 +17,8 @@ import ListaProblemasEstoque from '../components/estoque/ListaProblemasEstoque.v
 import FichaItemEstoque from '../components/estoque/FichaItemEstoque.vue'
 import AbaNaoVinculados from '../components/estoque/AbaNaoVinculados.vue'
 import AbaEstoqueTotal from '../components/estoque/AbaEstoqueTotal.vue'
+import AbaHistoricoEstoque from '../components/estoque/AbaHistoricoEstoque.vue'
+import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import ImportarEstoqueTotal from '../components/estoque/ImportarEstoqueTotal.vue'
 
 const route = useRoute()
@@ -24,26 +28,53 @@ const {
   naoVinculados, suspeitos, prioridades, problemasPorCodigo, resumo, limiarReincidencia, limiarParado
 } = useAnaliseEstoque()
 const mostrarImportar = ref(false)
+const fotosEstoque = computed(() => useEstoqueTotalStore().fotos)
 
 // --- Abas (na URL, para o Início e a busca abrirem direto) ---
-const ABAS = ['visao', 'estoque-total', 'reincidencias', 'sem-estoque', 'parados', 'nunca-lidos', 'insumos', 'nao-vinculados', 'onde-agir', 'consultar']
+const ABAS = ['visao', 'estoque-total', 'historico', 'reincidencias', 'sem-estoque', 'parados', 'nunca-lidos', 'insumos', 'nao-vinculados', 'onde-agir', 'consultar']
 const aba = ref(ABAS.includes(route.query.aba) ? route.query.aba : 'visao')
 watch(() => route.query.aba, v => { if (ABAS.includes(v)) aba.value = v })
 watch(aba, v => { if (route.query.aba !== v) router.replace({ query: { ...route.query, aba: v } }) })
-const abas = computed(() => [
-  { value: 'visao', label: 'Visão geral', icon: 'fas fa-gauge' },
-  { value: 'estoque-total', label: total.value ? `Estoque da loja (${total.value.size.toLocaleString('pt-BR')})` : 'Estoque da loja', icon: 'fas fa-warehouse' },
-  { value: 'reincidencias', label: `Reincidências (${resumo.value.reincidentes})`, icon: TIPOS_PROBLEMA.reincidencia.icone },
-  { value: 'sem-estoque', label: `Estoque zerado (${resumo.value.semEstoque})`, icon: TIPOS_PROBLEMA.semEstoque.icone },
-  { value: 'parados', label: `Parados (${resumo.value.parados})`, icon: TIPOS_PROBLEMA.parado.icone },
-  ...(total.value ? [
-    { value: 'nunca-lidos', label: `Nunca lidos (${resumo.value.nuncaLidos})`, icon: TIPOS_PROBLEMA.nuncaLido.icone },
-    { value: 'insumos', label: `Insumos (${resumo.value.insumos})`, icon: 'fas fa-box-archive' }
-  ] : []),
-  { value: 'nao-vinculados', label: `Não vinculados (${resumo.value.naoVinculados})`, icon: 'fas fa-link-slash' },
-  { value: 'onde-agir', label: 'Onde agir', icon: 'fas fa-map-location-dot' },
-  { value: 'consultar', label: 'Consultar item', icon: 'fas fa-magnifying-glass' }
-])
+// Abas em grupos: a base (planilha e insumos), os problemas e onde agir. As subabas mantêm os
+// mesmos endereços (?aba=reincidencias etc.), usados pelo Início e pela busca rápida.
+const abas = computed(() => {
+  const problemas = [
+    { value: 'reincidencias', label: 'Reincidências', badge: resumo.value.reincidentes, icon: TIPOS_PROBLEMA.reincidencia.icone },
+    { value: 'sem-estoque', label: 'Estoque zerado', badge: resumo.value.semEstoque, icon: TIPOS_PROBLEMA.semEstoque.icone },
+    { value: 'parados', label: 'Parados', badge: resumo.value.parados, icon: TIPOS_PROBLEMA.parado.icone },
+    ...(total.value ? [{ value: 'nunca-lidos', label: 'Nunca lidos', badge: resumo.value.nuncaLidos, icon: TIPOS_PROBLEMA.nuncaLido.icone }] : []),
+    { value: 'nao-vinculados', label: 'Não vinculados', badge: resumo.value.naoVinculados, icon: 'fas fa-link-slash' }
+  ]
+  const somaProblemas = problemas.reduce((s, p) => s + (Number(p.badge) || 0), 0)
+  return [
+    { value: 'visao', label: 'Visão geral', icon: 'fas fa-gauge' },
+    total.value
+      ? { value: 'g-base', label: 'Estoque da loja', icon: 'fas fa-warehouse', itens: [
+        { value: 'estoque-total', label: 'Todos os itens', badge: total.value.size, icon: 'fas fa-list' },
+        { value: 'insumos', label: 'Insumos', badge: resumo.value.insumos, icon: 'fas fa-box-archive' },
+        { value: 'historico', label: 'Histórico', badge: fotosEstoque.value.length || '', icon: 'fas fa-clock-rotate-left' }
+      ] }
+      : { value: 'estoque-total', label: 'Estoque da loja', icon: 'fas fa-warehouse' },
+    { value: 'g-problemas', label: 'Problemas', badge: somaProblemas, icon: 'fas fa-triangle-exclamation', itens: problemas },
+    { value: 'onde-agir', label: 'Onde agir', icon: 'fas fa-map-location-dot' },
+    { value: 'consultar', label: 'Consultar item', icon: 'fas fa-magnifying-glass' }
+  ]
+})
+
+// --- Ações: as da página e as da aba aberta numa linha só, no cabeçalho ---
+const acoesDaAba = fornecerAcoesDaAba()
+const acoesCabecalho = computed(() => {
+  const daAba = acoesDaAba.value
+  const abaTemPrincipal = daAba.some(a => a.nivel === 'principal')
+  const daPagina = [
+    { id: 'estoque-importar', rotulo: total.value ? 'Atualizar estoque total' : 'Importar estoque total', detalhe: total.value ? `Planilha de ${dataHora(infoEstoqueTotal.value?.importadoEm)}` : '', icone: 'fas fa-file-import', nivel: abaTemPrincipal ? 'menu' : total.value ? 'secundaria' : 'principal', grupo: GRUPOS.dados, termos: 'planilha estoque total importar atualizar', executar: () => { mostrarImportar.value = true } },
+    { id: 'estoque-relatorio', rotulo: 'Relatório geral do estoque', icone: 'fas fa-file-pdf', grupo: GRUPOS.exportar, desativado: !temBase.value, termos: 'pdf imprimir relatorio estoque', executar: () => relatorioGeral() }
+  ]
+  const ondeAgir = aba.value === 'onde-agir'
+    ? [{ id: 'estoque-conferencia', rotulo: 'Lista de conferência', detalhe: `Itens por ${CAMPOS.find(c => c.valor === campoGrupo.value).rotulo.toLowerCase()}, para conferir na loja`, icone: 'fas fa-clipboard-list', nivel: 'principal', grupo: GRUPOS.exportar, desativado: !grupos.value.length, termos: 'imprimir conferir checklist corredor local', executar: () => imprimirConferencia() }]
+    : []
+  return [...ondeAgir, ...daAba, ...daPagina.map(a => (ondeAgir.length && a.nivel === 'principal' ? { ...a, nivel: 'menu' } : a))]
+})
 
 // Filtro vindo de "Onde agir" (local, setor ou fornecedor clicado): vale na próxima lista aberta.
 const preFiltro = ref([])
@@ -109,8 +140,14 @@ const COLUNAS_GRUPO = [
   { chave: 'naoVinculados', rotulo: 'Não vinc.', aba: 'nao-vinculados', cor: 'bg-blue-400' },
   { chave: 'suspeitos', rotulo: 'Suspeitos', aba: 'nao-vinculados', cor: 'bg-slate-400' }
 ]
+// Grupos que não são um local/setor/fornecedor de verdade (aparecem em itálico, com a explicação).
+const GRUPOS_ESPECIAIS = {
+  [SEM_LOCAL]: 'Itens da lista de não vinculados sem local sugerido: não têm local vinculado no sistema.',
+  [LOCAL_NAO_IDENTIFICADO]: 'Itens que têm local no sistema, mas ele não aparece nas auditorias nem na planilha de validades (ex.: nunca lidos). Consulte o local no sistema.',
+  'Não informado': 'Itens sem esse dado nas planilhas.'
+}
 const irPara = (campo, chave, destino) => {
-  preFiltro.value = destino !== 'nao-vinculados' && chave !== 'Sem local' && chave !== 'Não informado' ? [{ chave: campo, op: 'em', valor: [chave] }] : []
+  preFiltro.value = destino !== 'nao-vinculados' && chave !== SEM_LOCAL && chave !== 'Não informado' ? [{ chave: campo, op: 'em', valor: [chave] }] : []
   vindoDeOndeAgir = true
   aba.value = destino
 }
@@ -121,9 +158,46 @@ const colunasGrupo = computed(() => [
   { chave: 'total', titulo: 'Total', tipo: 'numero' }
 ])
 
+// --- Lista de conferência: os itens de cada grupo do "Onde agir", para conferir na loja ---
+// Cada local/setor/fornecedor é uma seção do relatório (dá para escolher quais imprimir).
+const COLS_CONFERENCIA = [
+  { chave: 'ok', titulo: '✓' }, { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'local', titulo: 'Local' },
+  { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' }, { chave: 'problema', titulo: 'Problema' }, { chave: 'fazer', titulo: 'O que fazer' }, { chave: 'anotacao', titulo: 'Anotação' }
+]
+const imprimirConferencia = () => {
+  const rotulo = CAMPOS.find(c => c.valor === campoGrupo.value).rotulo.toLowerCase()
+  const lista = listaConferencia(listasProblemas(), campoGrupo.value)
+  const totalItens = lista.reduce((s, g) => s + g.itens.length, 0)
+  abrirRelatorio({
+    id: `estoque-conferencia-${campoGrupo.value}`,
+    titulo: 'Lista de conferência do estoque',
+    subtitulo: `Por ${rotulo} · ${new Date().toLocaleDateString('pt-BR')}`,
+    contexto: [
+      { rotulo: 'Itens', valor: `${int(totalItens)} em ${int(lista.length)} ${rotulo === 'local' ? 'locais' : rotulo + 'es'}` },
+      { rotulo: 'Problemas', valor: 'reincidências, estoque zerado, parados, nunca lidos, não vinculados e vínculos suspeitos' },
+      { rotulo: 'Como usar', valor: 'marque ✓ no que conferiu e anote o que achou (onde estava, quantidade, ajuste feito)' }
+    ],
+    assinaturaPadrao: true,
+    secoes: lista.map((g, i) => ({
+      id: g.chave,
+      titulo: `${g.chave} (${g.itens.length} ${g.itens.length === 1 ? 'item' : 'itens'})`,
+      padrao: i < 20,
+      gerar: () => blocoTabela({
+        colunas: COLS_CONFERENCIA,
+        linhas: g.itens.map(l => ({
+          ok: '☐', codigo: l.codigo, produto: l.produto, local: l.local || '—',
+          estoque: l.estoque === null ? '—' : formatarQuantidade(l.estoque, l.unidade),
+          problema: l.problemas.join(' · '), fazer: l.oQueFazer.join(' / '), anotacao: ''
+        }))
+      })
+    }))
+  })
+}
+
 // --- Consultar ---
 const termo = ref('')
 const resultados = computed(() => buscarItens(indice.value, termo.value, 30, total.value))
+const codigosNaoVinculados = computed(() => new Set(naoVinculados.value.map(i => i.codigo)))
 
 // --- Relatório geral ---
 const { abrir: abrirRelatorio } = useRelatorio()
@@ -131,7 +205,7 @@ const COLS = [
   { chave: 'codigo', titulo: 'Código' }, { chave: 'produto', titulo: 'Produto' }, { chave: 'local', titulo: 'Local' },
   { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' }, { chave: 'situacao', titulo: 'Situação' }, { chave: 'diagnostico', titulo: 'O que fazer' }
 ]
-const linhasRel = (lista, situacao) => lista.map(l => ({ codigo: l.codigo, produto: l.produto, local: l.local || l.sugerido || '—', estoque: formatarQuantidade(l.estoque, l.unidade), situacao: situacao(l), diagnostico: l.diagnostico }))
+const linhasRel = (lista, situacao) => lista.map(l => ({ codigo: l.codigo, produto: l.produto, local: l.local || l.sugerido || 'não identificado', estoque: formatarQuantidade(l.estoque, l.unidade), situacao: situacao(l), diagnostico: l.diagnostico }))
 const relatorioGeral = () => abrirRelatorio({
   id: 'estoque-geral',
   titulo: 'Relatório de estoque',
@@ -158,8 +232,7 @@ const relatorioGeral = () => abrirRelatorio({
   <div class="ui-page">
     <UiPageHeader title="Estoque" subtitle="Itens que somem da gôndola, estoque que não bate com o sistema, produtos parados e itens sem local. A planilha de estoque total é a base; auditorias, validades e não vinculados completam cada item.">
       <template #actions>
-        <UiButton :variant="total ? 'secondary' : 'primary'" @click="mostrarImportar = true"><i class="fas fa-file-import"></i>{{ total ? 'Atualizar estoque total' : 'Importar estoque total' }}</UiButton>
-        <UiButton variant="secondary" :disabled="!temBase" @click="relatorioGeral"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
+        <UiAcoes :acoes="acoesCabecalho" contexto="Estoque" />
       </template>
     </UiPageHeader>
 
@@ -195,7 +268,7 @@ const relatorioGeral = () => abrirRelatorio({
             <div class="flex items-end justify-between gap-2">
               <div>
                 <h2 class="text-lg font-semibold text-slate-900">Mais graves</h2>
-                <p class="text-xs text-slate-500">Os itens mais graves de todas as listas: reincidências, estoque zerado, parados{{ total ? ' e sem local' : '' }}.</p>
+                <p class="text-xs text-slate-500">Os itens mais graves de todas as listas: reincidências, estoque zerado, parados{{ total ? ' e nunca lidos' : '' }}.</p>
               </div>
               <span class="text-xs text-slate-500">{{ int(prioridades.length) }} itens</span>
             </div>
@@ -237,6 +310,9 @@ const relatorioGeral = () => abrirRelatorio({
     <!-- Estoque da loja -->
     <AbaEstoqueTotal v-else-if="aba === 'estoque-total'" @abrir="fichaCodigo = $event" @importar="mostrarImportar = true" />
 
+    <!-- Histórico do estoque -->
+    <AbaHistoricoEstoque v-else-if="aba === 'historico'" @abrir="fichaCodigo = $event" @importar="mostrarImportar = true" />
+
     <!-- Reincidências -->
     <section v-else-if="aba === 'reincidencias'" class="space-y-4">
       <div class="flex flex-wrap items-end justify-between gap-3">
@@ -274,7 +350,7 @@ const relatorioGeral = () => abrirRelatorio({
 
     <!-- Insumos -->
     <section v-else-if="aba === 'insumos'" class="space-y-4">
-      <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens do setor Outros (sacolas, bobinas, pallets, tabloides, material de uso da loja). Não entram na auditoria e ficam fora das listas de reincidência, parados e sem local. Aqui dá para acompanhar o estoque e o consumo deles.</p>
+      <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens do setor Outros (sacolas, bobinas, pallets, tabloides, material de uso da loja). Não entram na auditoria e ficam fora das listas de reincidência, parados, nunca lidos e não vinculados. Aqui dá para acompanhar o estoque e o consumo deles.</p>
       <UiTabela id="estoque-insumos" titulo="Insumos" :itens="insumos" :colunas="COLUNAS_INSUMOS" :atalhos="ATALHOS_INSUMOS" :ordem-inicial="{ chave: 'estoque', direcao: 'desc' }" chave-item="codigo" clicavel vazio="Nenhum insumo na planilha de estoque total." @linha="fichaCodigo = $event.codigo" />
     </section>
 
@@ -290,6 +366,10 @@ const relatorioGeral = () => abrirRelatorio({
         </div>
       </div>
       <UiTabela :id="`estoque-onde-agir-${campoGrupo}`" :key="campoGrupo" :titulo="`Problemas por ${CAMPOS.find(c => c.valor === campoGrupo).rotulo.toLowerCase()}`" :itens="grupos" :colunas="colunasGrupo" :ordem-inicial="{ chave: 'total', direcao: 'desc' }" chave-item="chave" :agrupavel="false" vazio="Nenhum problema encontrado.">
+        <template #celula-chave="{ item: g }">
+          <span v-if="GRUPOS_ESPECIAIS[g.chave]" class="italic text-slate-500" :title="GRUPOS_ESPECIAIS[g.chave]"><i class="fas fa-circle-question mr-1 text-[11px] text-slate-400"></i>{{ g.chave }}</span>
+          <span v-else>{{ g.chave }}</span>
+        </template>
         <template v-for="c in COLUNAS_GRUPO" :key="c.chave" #[`celula-${c.chave}`]="{ item: g }">
           <button v-if="g[c.chave]" type="button" class="rounded px-1.5 font-semibold text-blue-700 hover:bg-blue-50 hover:underline" @click="irPara(campoGrupo, g.chave, c.aba)">{{ int(g[c.chave]) }}</button>
           <span v-else class="text-slate-300">0</span>
@@ -305,7 +385,7 @@ const relatorioGeral = () => abrirRelatorio({
       <ul v-else class="ui-card divide-y divide-slate-100">
         <li v-for="r in resultados" :key="r.codigo">
           <button type="button" class="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-50" @click="fichaCodigo = r.codigo">
-            <span class="min-w-0"><span class="block truncate font-semibold text-slate-900">{{ r.produto }}</span><span class="text-xs text-slate-500">{{ r.codigo }}, {{ r.local || 'sem local' }}, {{ r.setor }}</span></span>
+            <span class="min-w-0"><span class="block truncate font-semibold text-slate-900">{{ r.produto }}</span><span class="text-xs text-slate-500">{{ r.codigo }}, {{ r.local || (codigosNaoVinculados.has(r.codigo) ? 'sem local (não vinculado)' : 'local não identificado') }}, {{ r.setor }}</span></span>
             <span class="flex flex-wrap gap-1.5">
               <span v-for="p in problemasDoCodigo(r.codigo)" :key="p.tipo" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800">{{ TIPOS_PROBLEMA[p.tipo].curto }}</span>
               <span class="text-xs text-slate-500">{{ formatarQuantidade(r.estoque, r.unidade) }} em estoque<template v-if="total && !r.noEstoqueTotal"> (na última auditoria; fora da planilha)</template> · última leitura {{ r.ultimaLeitura ? br(r.ultimaLeitura) : 'nunca' }}</span>

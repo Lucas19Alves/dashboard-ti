@@ -27,6 +27,8 @@ import {
 } from '../utils/analiseHistorica'
 import UiTabela from '../components/ui/UiTabela.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 import GraficoColunasMeta from '../components/ui/GraficoColunasMeta.vue'
@@ -464,18 +466,20 @@ const gerarRelatorioPDF = () => {
     ]
   })
 }
+
+// --- Ações (padrão do sistema; também no Ctrl+K) ---
+const acoesCabecalho = computed(() => [
+  { id: 'analise-pdf', rotulo: 'Relatório PDF', detalhe: 'Do período e filtros escolhidos', icone: 'fas fa-file-pdf', nivel: 'secundaria', grupo: GRUPOS.exportar, desativado: !linhasAuditorias.value.length, termos: 'imprimir relatorio analise', executar: gerarRelatorioPDF },
+  { id: 'analise-csv', rotulo: 'Baixar CSV das auditorias', detalhe: 'Uma linha por auditoria do período', icone: 'fas fa-file-csv', grupo: GRUPOS.exportar, desativado: !linhasAuditorias.value.length, termos: 'excel planilha exportar', executar: exportarCsv },
+  { id: 'analise-limpar-filtros', rotulo: 'Limpar filtros', icone: 'fas fa-rotate-left', grupo: GRUPOS.ver, oculta: !filtrosAlterados.value, termos: 'periodo tipo status meta', executar: limparFiltros }
+])
 </script>
 
 <template>
   <div class="ui-page">
     <UiPageHeader title="Análise de Auditorias" :subtitle="`Desempenho histórico · ${descricaoPeriodo}`" icon="fas fa-chart-line" tone="blue">
       <template #actions>
-        <UiButton variant="secondary" :disabled="!linhasAuditorias.length" @click="exportarCsv">
-          <i class="fas fa-file-csv"></i>CSV
-        </UiButton>
-        <UiButton variant="dark" :disabled="!linhasAuditorias.length" @click="gerarRelatorioPDF">
-          <i class="fas fa-file-pdf"></i>Relatório PDF
-        </UiButton>
+        <UiAcoes :acoes="acoesCabecalho" contexto="Análise de auditorias" />
       </template>
     </UiPageHeader>
 

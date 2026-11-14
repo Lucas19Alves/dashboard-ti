@@ -1,8 +1,11 @@
 <script setup>
 import { computed } from 'vue'
-import { TIPOS_PROBLEMA } from '../../utils/estoque'
+import { LOCAL_NAO_IDENTIFICADO, SEM_LOCAL, TIPOS_PROBLEMA } from '../../utils/estoque'
 import { formatarQuantidade } from '../../utils/estoqueTotal'
 import UiTabela from '../ui/UiTabela.vue'
+
+// Sem local é só o não vinculado; os outros têm local no sistema que não aparece nas planilhas.
+const rotuloSemLocal = l => (l.tipo === 'naoVinculado' ? SEM_LOCAL : LOCAL_NAO_IDENTIFICADO)
 
 // Lista de problemas de estoque (reincidências, zerados, parados, sem local) na tabela padrão:
 // busca, filtros por qualquer coluna, ordenação, agrupamento, paginação, CSV e relatório.
@@ -58,7 +61,7 @@ const TODAS = [
   { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
   { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
   { chave: 'tipo', titulo: 'Problema', tipo: 'categoria', valor: l => TIPOS_PROBLEMA[l.tipo]?.rotulo, so: 'misto' },
-  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true, valor: l => l.local || l.sugerido || '' },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true, valor: l => l.local || l.sugerido || rotuloSemLocal(l) },
   { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
   { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria', rapido: true },
   { chave: 'estoque', titulo: 'Estoque', tipo: 'numero', formato: (v, l) => qtd(l) },
@@ -111,7 +114,7 @@ const compactas = computed(() => (props.limite ? props.linhas.slice(0, props.lim
           <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corGravidade(l.gravidade)" :title="`Prioridade ${nivel(l.gravidade).toLowerCase()}`"></span>
           <div class="min-w-0">
             <button type="button" class="block max-w-full truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" @click="emit('abrir', l.codigo)">{{ l.produto }}</button>
-            <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b></template><template v-else-if="l.sugerido">, sugerido <b class="font-semibold text-slate-700">{{ l.sugerido }}</b></template>, {{ l.setor }}</p>
+            <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b><span v-if="l.localOrigem === 'validades'" class="text-slate-400" title="Local tirado da planilha de validades: o item não aparece nas auditorias"> (validades)</span></template><template v-else-if="l.sugerido">, sugerido <b class="font-semibold text-slate-700">{{ l.sugerido }}</b></template><template v-else>, <span class="italic" :title="l.tipo === 'naoVinculado' ? 'Sem local vinculado no sistema' : 'Tem local no sistema, mas ele não aparece nas auditorias nem nas validades'">{{ rotuloSemLocal(l).toLowerCase() }}</span></template>, {{ l.setor }}</p>
           </div>
         </div>
         <div class="min-w-0 text-sm">
@@ -143,7 +146,7 @@ const compactas = computed(() => (props.limite ? props.linhas.slice(0, props.lim
           <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corGravidade(l.gravidade)" :title="`Prioridade ${nivel(l.gravidade).toLowerCase()}`"></span>
           <div class="min-w-0">
             <button type="button" class="block max-w-full truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver tudo sobre ${l.produto}`" @click="emit('abrir', l.codigo)">{{ l.produto }}</button>
-            <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b></template><template v-else-if="l.sugerido">, sugerido <b class="font-semibold text-slate-700">{{ l.sugerido }}</b></template>, {{ l.setor }}</p>
+            <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b><span v-if="l.localOrigem === 'validades'" class="text-slate-400" title="Local tirado da planilha de validades: o item não aparece nas auditorias"> (validades)</span></template><template v-else-if="l.sugerido">, sugerido <b class="font-semibold text-slate-700">{{ l.sugerido }}</b></template><template v-else>, <span class="italic" :title="l.tipo === 'naoVinculado' ? 'Sem local vinculado no sistema' : 'Tem local no sistema, mas ele não aparece nas auditorias nem nas validades'">{{ rotuloSemLocal(l).toLowerCase() }}</span></template>, {{ l.setor }}</p>
           </div>
         </div>
         <div class="min-w-0 text-sm">

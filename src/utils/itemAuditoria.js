@@ -13,6 +13,35 @@ export const codigoDoItem = item => texto(item?.['Código'] ?? item?.Codigo)
 export const produtoDoItem = item => texto(item?.['Produto']) || 'Produto não informado'
 export const fornecedorDoItem = item => texto(item?.['Fornecedor']) || 'Não informado'
 
+// Quantidade de estoque escrita na planilha: "9.051,374 KG" → 9051.374; "### 25,502 KG" → 25.502;
+// "1.234" → 1234 (ponto de milhar); "12" → 12. Negativo ou inválido → 0.
+export const numeroEstoque = (valor) => {
+  if (typeof valor === 'number') return Number.isFinite(valor) && valor > 0 ? valor : 0
+  const limpo = texto(valor).replace(/^###\s*/, '').replace(/KG|UN/gi, '').trim()
+  const m = limpo.match(/-?[\d.,]*\d/)
+  if (!m) return 0
+  const bruto = m[0]
+  const normalizado = bruto.includes(',')
+    ? bruto.replace(/\./g, '').replace(',', '.')
+    : /^-?\d{1,3}(\.\d{3})+$/.test(bruto) ? bruto.replace(/\./g, '') : bruto
+  const n = Number(normalizado)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+// Recalcula o _estoque guardado nos itens (as importações antigas liam "9.051,374 KG" como 9,051).
+export const corrigirEstoqueDosItens = (dados) => {
+  if (!Array.isArray(dados)) return 0
+  let mudou = 0
+  for (const item of dados) {
+    if (!item || typeof item !== 'object') continue
+    const bruto = item['Estoque atual'] ?? item['Estoque Atual']
+    if (typeof bruto !== 'string' || item._estoque === undefined) continue
+    const certo = numeroEstoque(bruto)
+    if (certo !== item._estoque) { item._estoque = certo; mudou++ }
+  }
+  return mudou
+}
+
 export const numeroBR = (valor) => {
   if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0
   const limpo = texto(valor).replace(/R\$\s*/i, '')

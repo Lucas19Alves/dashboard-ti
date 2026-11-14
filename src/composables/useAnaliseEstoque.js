@@ -3,7 +3,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
 import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
-import { LIMIAR_PARADO_DIAS, LIMIAR_REINCIDENCIA_DIAS, estoqueParado, indexarEstoque, reincidencias, semEstoqueNoSistema, validadePorCodigo } from '../utils/estoque'
+import { LIMIAR_PARADO_DIAS, LIMIAR_REINCIDENCIA_DIAS, estoqueParado, indexarEstoque, localPorValidade, reincidencias, semEstoqueNoSistema, validadePorCodigo } from '../utils/estoque'
 import { cruzarEstoqueTotal, insumosNaPlanilha, mapaEstoqueTotal, nuncaLidosNaPlanilha } from '../utils/estoqueTotal'
 import { indexarHistorico, vinculosSuspeitos } from '../utils/naoVinculados'
 
@@ -45,7 +45,7 @@ const criarAnalise = () => {
   const insumos = computed(() => insumosNaPlanilha({ total: total.value, indice: indice.value }))
   // Itens com estoque, comprados antes da última Presença, que nunca apareceram nas auditorias e não estão
   // na lista de não vinculados (sem os insumos e sem os que chegaram depois da última auditoria).
-  const nuncaLidos = computed(() => nuncaLidosNaPlanilha({ total: total.value, indice: indice.value, naoVinculados: naoVinculados.value }))
+  const nuncaLidos = computed(() => nuncaLidosNaPlanilha({ total: total.value, indice: indice.value, naoVinculados: naoVinculados.value, locais: localPorValidade(vencimentos.itens) }))
   // Zerados que a planilha mostra com estoque de novo (entrada lançada depois da auditoria).
   const zeradosResolvidos = computed(() => {
     if (!total.value) return 0

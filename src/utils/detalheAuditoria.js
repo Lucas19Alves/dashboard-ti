@@ -1,4 +1,5 @@
 // Auxiliares das tabelas do detalhe da auditoria (sem estado; compartilhados entre as abas).
+import { numeroEstoque } from './itemAuditoria'
 
 export const isPlaceholder = (valor) => {
   if (!valor) return true
@@ -34,17 +35,8 @@ export const extrairEstoque = (item) => {
         return valor > 0 ? valor : 0
       }
       if (typeof valor === 'string') {
-        let limpo = valor.replace(/^###\s*/, '').trim()
-        limpo = limpo.replace(/KG/gi, '').replace(/\s+/g, ' ')
-        const match = limpo.match(/(\d+)[,.]?(\d*)/)
-        if (match) {
-          const parteInteira = match[1] || '0'
-          const parteDecimal = match[2] || '0'
-          const numero = parseFloat(parteInteira + '.' + parteDecimal)
-          if (!isNaN(numero) && numero > 0) {
-            return numero
-          }
-        }
+        const numero = numeroEstoque(valor)
+        if (numero > 0) return numero
       }
     }
   }

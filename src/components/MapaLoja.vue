@@ -16,6 +16,8 @@ import {
 } from '../utils/mapaLoja'
 import { META_PENDENTE_PERCENTUAL } from '../utils/metricasAuditoria'
 import { correspondeBusca } from '../utils/busca'
+import UiAcoes from './ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 
 // Mapa visual da loja: cada área (corredor, freezer, açougue...) colorida pelos dados da auditoria.
@@ -71,6 +73,13 @@ const restaurarPadrao = () => {
   limparLayoutSalvo()
   salvo.value = null
 }
+// Ações do mapa (padrão do sistema; também no Ctrl+K).
+const acoesMapa = computed(() => (editando.value
+  ? [
+    { id: 'mapa-concluir', rotulo: 'Concluir edição', icone: 'fas fa-check', nivel: 'principal', executar: () => { editando.value = false } },
+    { id: 'mapa-padrao', rotulo: 'Voltar ao layout padrão', icone: 'fas fa-rotate-left', grupo: GRUPOS.dados, confirmar: 'Voltar o mapa ao layout padrão? As posições que você ajustou serão perdidas.', executar: restaurarPadrao }
+  ]
+  : [{ id: 'mapa-editar', rotulo: 'Editar layout', icone: 'fas fa-pen-ruler', nivel: 'secundaria', termos: 'mapa da loja corredores posicao', executar: () => { editando.value = true } }]))
 // Bordas do mapa: aumentar à esquerda/topo empurra as áreas; diminuir só remove espaço vazio.
 const PASSO_BORDA = 2
 const redimensionar = (lado, sinal) => {
@@ -259,10 +268,8 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       <div class="flex flex-wrap items-center gap-2">
         <template v-if="editando">
           <span class="text-xs text-slate-500"><i class="fas fa-hand-pointer mr-1"></i>Arraste para mover · canto para redimensionar · setas ajustam · bordas do mapa abaixo</span>
-          <button type="button" class="ui-btn-secondary py-2" @click="restaurarPadrao"><i class="fas fa-rotate-left"></i>Layout padrão</button>
-          <button type="button" class="ui-btn-primary py-2" @click="editando = false"><i class="fas fa-check"></i>Concluir</button>
         </template>
-        <button v-else type="button" class="ui-btn-secondary py-2" @click="editando = true"><i class="fas fa-pen-ruler"></i>Editar layout</button>
+        <UiAcoes :acoes="acoesMapa" contexto="Mapa da loja" />
       </div>
     </div>
 

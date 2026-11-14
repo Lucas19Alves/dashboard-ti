@@ -8,6 +8,8 @@ import { baixarCsv } from '../../utils/csv'
 import { abrirRelatorioTabela } from '../../composables/useRelatorio'
 import UiFiltroMulti from './UiFiltroMulti.vue'
 import UiPaginacao from './UiPaginacao.vue'
+import UiMenu from './UiMenu.vue'
+import { GRUPOS, registrarAcoes } from '../../composables/useAcoes'
 
 // Tabela padrão do sistema: busca geral, filtros rápidos por coluna, filtros avançados por condição
 // (texto, número, data, lista, sim/não), ordenação por vários critérios, colunas visíveis,
@@ -31,6 +33,8 @@ const props = defineProps({
   agrupavel: { type: Boolean, default: true },
   clicavel: { type: Boolean, default: false },
   exportar: { type: Boolean, default: true },
+  // Ações extras da tabela, no menu "Mais" (formato de composables/useAcoes.js).
+  acoes: { type: Array, default: () => [] },
   vazio: { type: String, default: 'Nenhum item.' },
   chaveItem: { type: [String, Function], default: null },
   placeholder: { type: String, default: '' },
@@ -137,7 +141,7 @@ const opcoesFiltradas = chave => () => opcoesDaColuna(filtrarItens(props.itens, 
 const opcoesTodas = chave => () => opcoesDaColuna(props.itens, porChave.value.get(chave))
 
 // ---------- Filtros avançados ----------
-const painel = ref('') // '', 'filtros', 'ordem', 'colunas'
+const painel = ref('') // '', 'filtros', 'exibicao'
 const alternarPainel = p => { painel.value = painel.value === p ? '' : p }
 const adicionarCondicao = () => {
   const col = filtraveis.value.find(c => !estado.condicoes.some(x => x.chave === c.chave)) || filtraveis.value[0]
@@ -242,6 +246,20 @@ const imprimir = () => abrirRelatorioTabela({
   agrupamento: colAgrupar.value ? { nome: colAgrupar.value.titulo.toLowerCase(), valor: item => textoDe(item, colAgrupar.value) } : null
 })
 
+// Menu "Mais" da barra: ações da tela que usa a tabela + exportações da lista filtrada.
+const acoesMenu = computed(() => [
+  ...props.acoes,
+  ...(props.exportar ? [
+    { id: 'csv', rotulo: 'Baixar CSV', detalhe: 'Lista filtrada, colunas visíveis', icone: 'fas fa-file-csv', grupo: GRUPOS.exportar, desativado: !filtrados.value.length, termos: 'csv excel planilha exportar baixar', executar: exportarCsv },
+    { id: 'imprimir', rotulo: 'Imprimir / PDF', detalhe: 'Relatório da lista filtrada', icone: 'fas fa-print', grupo: GRUPOS.exportar, desativado: !filtrados.value.length, termos: 'pdf imprimir relatorio', executar: imprimir }
+  ] : [])
+])
+if (props.id || props.titulo !== 'Itens') registrarAcoes(props.titulo, () => acoesMenu.value)
+
+// Quantos ajustes de exibição estão fora do padrão (ordem, agrupamento, colunas).
+const ajustesExibicao = computed(() =>
+  (JSON.stringify(estado.ordem) !== JSON.stringify(ordemPadrao()) ? 1 : 0) + ((estado.agrupar || '') !== (props.agruparInicial || '') ? 1 : 0) + (ocultas.value.size ? 1 : 0))
+
 // ---------- Células ----------
 const alinhar = c => (c.alinhamento === 'right' || (!c.alinhamento && c.tipo === 'numero') ? 'text-right tabular-nums' : c.alinhamento === 'center' ? 'text-center' : 'text-left')
 const exibir = (item, c) => {
@@ -273,22 +291,12 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
       <button type="button" class="ferramenta" :class="painel === 'filtros' || completas.length ? 'ativa' : ''" :aria-expanded="painel === 'filtros'" @click="estado.condicoes.length ? alternarPainel('filtros') : adicionarCondicao()">
         <i class="fas fa-filter"></i>Filtros<span v-if="completas.length" class="contador">{{ completas.length }}</span>
       </button>
-      <button type="button" class="ferramenta" :class="painel === 'ordem' || estado.ordem.length ? 'ativa' : ''" :aria-expanded="painel === 'ordem'" @click="alternarPainel('ordem')">
-        <i class="fas fa-arrow-down-wide-short"></i>Ordenar<span v-if="estado.ordem.length" class="contador">{{ estado.ordem.length }}</span>
+      <button type="button" class="ferramenta" :class="painel === 'exibicao' || ajustesExibicao ? 'ativa' : ''" :aria-expanded="painel === 'exibicao'" title="Ordenar, agrupar e escolher colunas" @click="alternarPainel('exibicao')">
+        <i class="fas fa-sliders"></i><span class="hidden sm:inline">Exibição</span><span v-if="ajustesExibicao" class="contador">{{ ajustesExibicao }}</span>
       </button>
-      <button v-if="modo === 'tabela'" type="button" class="ferramenta" :class="painel === 'colunas' || ocultas.size ? 'ativa' : ''" :aria-expanded="painel === 'colunas'" @click="alternarPainel('colunas')">
-        <i class="fas fa-table-columns"></i><span class="hidden sm:inline">Colunas</span>
-      </button>
-      <select v-if="agrupavel && categorias.length" v-model="estado.agrupar" class="ferramenta pr-7" :class="estado.agrupar ? 'ativa' : ''" aria-label="Agrupar">
-        <option value="">Sem agrupar</option>
-        <option v-for="c in categorias" :key="c.chave" :value="c.chave">Agrupar: {{ c.titulo }}</option>
-      </select>
       <div class="ml-auto flex items-center gap-1.5">
         <slot name="acoes" :filtrados="ordenados" />
-        <template v-if="exportar">
-          <button type="button" class="ferramenta" :disabled="!filtrados.length" title="Baixar a lista filtrada em CSV" @click="exportarCsv"><i class="fas fa-file-csv"></i><span class="hidden sm:inline">CSV</span></button>
-          <button type="button" class="ferramenta" :disabled="!filtrados.length" title="Relatório em PDF da lista filtrada" @click="imprimir"><i class="fas fa-print"></i><span class="hidden sm:inline">Imprimir</span></button>
-        </template>
+        <UiMenu :acoes="acoesMenu" estilo="ferramenta" compacto />
       </div>
     </div>
 
@@ -330,8 +338,10 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
       </div>
     </section>
 
-    <!-- Painel: ordenação -->
-    <section v-if="painel === 'ordem'" class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+    <!-- Painel: exibição (ordem, agrupamento e colunas) -->
+    <section v-if="painel === 'exibicao'" class="space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+      <div>
+      <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Ordenar</h3>
       <p class="mb-2 text-xs text-slate-500">Ordena pelo primeiro critério; empates seguem o próximo. Dica: clique no título da coluna (Shift + clique soma um critério).</p>
       <p v-if="!estado.ordem.length" class="text-sm text-slate-500">Na ordem original.</p>
       <div class="space-y-2">
@@ -348,24 +358,33 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
           <button type="button" class="size-8 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600" title="Remover" @click="estado.ordem.splice(i, 1)"><i class="fas fa-xmark"></i></button>
         </div>
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-3">
+      <div class="mt-2 flex flex-wrap items-center gap-3">
         <button v-if="estado.ordem.length < ordenaveis.length" type="button" class="text-sm font-semibold text-blue-700 hover:underline" @click="adicionarOrdem"><i class="fas fa-plus mr-1"></i>Adicionar critério</button>
         <button type="button" class="text-sm font-semibold text-slate-500 hover:text-slate-900" @click="estado.ordem = ordemPadrao()">Ordem padrão</button>
-        <button type="button" class="ml-auto text-sm font-semibold text-slate-600 hover:text-slate-900" @click="painel = ''">Fechar</button>
       </div>
-    </section>
+      </div>
 
-    <!-- Painel: colunas -->
-    <section v-if="painel === 'colunas'" class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-      <p class="mb-2 text-xs text-slate-500">Colunas mostradas na tabela, no CSV e na impressão.</p>
-      <div class="flex flex-wrap gap-2">
-        <label v-for="c in visiveisNoMenu" :key="c.chave" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
-          <input type="checkbox" class="accent-blue-600" :checked="!ocultas.has(c.chave)" @change="alternarColuna(c.chave)" />{{ c.titulo }}
-        </label>
+      <div v-if="agrupavel && categorias.length" class="border-t border-slate-200 pt-3">
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Agrupar</h3>
+        <select v-model="estado.agrupar" class="ui-input h-9 w-auto min-w-48 py-0 text-sm" aria-label="Agrupar por">
+          <option value="">Sem agrupar</option>
+          <option v-for="c in categorias" :key="c.chave" :value="c.chave">Por {{ c.titulo.toLowerCase() }}</option>
+        </select>
       </div>
-      <div class="mt-3 flex items-center gap-3">
-        <button type="button" class="text-sm font-semibold text-slate-500 hover:text-slate-900" @click="ocultas = new Set()">Mostrar todas</button>
-        <button type="button" class="ml-auto text-sm font-semibold text-slate-600 hover:text-slate-900" @click="painel = ''">Fechar</button>
+
+      <div v-if="modo === 'tabela'" class="border-t border-slate-200 pt-3">
+        <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Colunas</h3>
+        <p class="mb-2 text-xs text-slate-500">Colunas mostradas na tabela, no CSV e na impressão.</p>
+        <div class="flex flex-wrap gap-2">
+          <label v-for="c in visiveisNoMenu" :key="c.chave" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <input type="checkbox" class="accent-blue-600" :checked="!ocultas.has(c.chave)" @change="alternarColuna(c.chave)" />{{ c.titulo }}
+          </label>
+        </div>
+        <button v-if="ocultas.size" type="button" class="mt-2 text-sm font-semibold text-slate-500 hover:text-slate-900" @click="ocultas = new Set()">Mostrar todas</button>
+      </div>
+
+      <div class="flex justify-end border-t border-slate-200 pt-3">
+        <button type="button" class="text-sm font-semibold text-slate-600 hover:text-slate-900" @click="painel = ''">Fechar</button>
       </div>
     </section>
 

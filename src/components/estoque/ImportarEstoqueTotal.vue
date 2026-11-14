@@ -19,8 +19,11 @@ const soltar = (e) => { e.preventDefault(); hoverDrop.value = false; arquivo.val
 const importar = async () => {
   carregando.value = true
   try {
-    const { total, comEstoque } = await store.importar(arquivo.value)
-    auditorias.addToast(`Estoque total importado: ${total.toLocaleString('pt-BR')} itens (${comEstoque.toLocaleString('pt-BR')} com estoque).`, 'success')
+    const { total, comEstoque, data, somenteHistorico } = await store.importar(arquivo.value)
+    const dia = `${data.slice(8, 10)}/${data.slice(5, 7)}/${data.slice(0, 4)}`
+    auditorias.addToast(somenteHistorico
+      ? `Planilha de ${dia} é mais antiga que a atual: entrou só no histórico do estoque (${total.toLocaleString('pt-BR')} itens).`
+      : `Estoque total de ${dia} importado: ${total.toLocaleString('pt-BR')} itens (${comEstoque.toLocaleString('pt-BR')} com estoque). Foto guardada no histórico.`, 'success')
     emit('importado')
     emit('close')
   } catch (e) {
@@ -47,6 +50,7 @@ const importar = async () => {
       <div class="space-y-1.5 text-xs leading-relaxed text-slate-500">
         <p>Precisa das colunas <b>Código</b>, <b>Nome</b> e <b>Estoque</b>. Dias sem venda, última venda e compra, classe, fornecedor e gerenciado são usados quando vierem.</p>
         <p>A planilha passa a ser a base da aba Estoque: só entram os itens dela, com o estoque e os dias sem venda dela. Local, leituras e validades vêm das auditorias e das validades já importadas. Uma nova importação substitui a anterior.</p>
+        <p>Cada planilha também vira uma foto no <b>histórico do estoque</b>, na data da última venda registrada nela. Planilhas de dias anteriores podem ser importadas para montar o histórico: entram só nele, sem trocar a atual.</p>
       </div>
       <UiButton :disabled="!arquivo || carregando" @click="importar">
         <i :class="carregando ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>{{ carregando ? 'Processando...' : 'Importar' }}

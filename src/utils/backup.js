@@ -6,6 +6,7 @@ import { useAparencia } from '../composables/useAparencia'
 
 import { lerArquivoBackup, montarArquivoBackup } from './backupFormato'
 import { CHAVE_INFO_ESTOQUE } from '../stores/estoqueTotalStore'
+import { corrigirEstoqueDosItens } from './itemAuditoria'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 // 3: dados em formato colunar compacto (ver backupCompacto.js). 1 e 2 continuam sendo lidos.
@@ -241,9 +242,9 @@ const restaurarConfiguracoes = (cfg = {}) => {
 
 // Monta o arquivo de backup: formato colunar compacto + gzip, gerado no Web Worker.
 export const gerarBackupArquivo = async () => {
-  const [auditorias, vencimentos, planosAcao, naoVinculados, estoqueTotal, estoqueTotalInfo] = await Promise.all([
+  const [auditorias, vencimentos, planosAcao, naoVinculados, estoqueTotal, estoqueTotalInfo, estoqueFotos, estoqueFotoItens] = await Promise.all([
     db.auditorias.toArray(), db.vencimentos.toArray(), db.planosAcao.toArray(), db.naoVinculados.toArray(),
-    db.estoqueTotal.toArray(), db.config.get(CHAVE_INFO_ESTOQUE)
+    db.estoqueTotal.toArray(), db.config.get(CHAVE_INFO_ESTOQUE), db.estoqueFotos.toArray(), db.estoqueFotoItens.toArray()
   ])
   // Os itens ficam em outra tabela no banco; no arquivo, continuam dentro de cada auditoria.
   const itens = new Map((await db.itensAuditoria.toArray()).map(r => [r.auditoriaId, r.dados]))
@@ -253,7 +254,9 @@ export const gerarBackupArquivo = async () => {
     planosAcao,
     naoVinculados,
     estoqueTotal,
-    estoqueTotalInfo: estoqueTotalInfo || null
+    estoqueTotalInfo: estoqueTotalInfo || null,
+    estoqueFotos,
+    estoqueFotoItens
   }
   const extras = {
     versao: BACKUP_VERSION,
@@ -302,10 +305,15 @@ export const importarBackupJson = async (file) => {
   // Estoque total: só nos backups que o trazem (os anteriores mantêm a planilha atual).
   const estoqueTotal = Array.isArray(dados.estoqueTotal) ? dados.estoqueTotal.filter(n => n && typeof n === 'object' && n.codigo) : null
   const estoqueTotalInfo = dados.estoqueTotalInfo && typeof dados.estoqueTotalInfo === 'object' ? dados.estoqueTotalInfo : null
-  await db.transaction('rw', [db.auditorias, db.itensAuditoria, db.vencimentos, db.planosAcao, db.naoVinculados, db.estoqueTotal, db.config], async () => {
+  // Histórico do estoque: idem (backups sem ele mantêm o histórico atual).
+  const estoqueFotos = Array.isArray(dados.estoqueFotos) ? dados.estoqueFotos.filter(f => f && typeof f === 'object' && f.id) : null
+  const estoqueFotoItens = Array.isArray(dados.estoqueFotoItens) ? dados.estoqueFotoItens.filter(f => f && typeof f === 'object' && f.id && Array.isArray(f.itens)) : null
+  await db.transaction('rw', [db.auditorias, db.itensAuditoria, db.vencimentos, db.planosAcao, db.naoVinculados, db.estoqueTotal, db.estoqueFotos, db.estoqueFotoItens, db.config], async () => {
     await db.auditorias.clear()
     await db.itensAuditoria.clear()
     await db.vencimentos.clear()
+    // Backups antigos guardam o estoque dos itens por KG lido errado ("9.051,374 KG" → 9,051).
+    for (const a of auditorias) corrigirEstoqueDosItens(a.dados)
     if (auditorias.length) {
       // Resumo numa tabela, itens na outra (o id vem do arquivo; sem ele, o banco cria um).
       const ids = await db.auditorias.bulkAdd(auditorias.map(({ dados, ...resumo }) => resumo), { allKeys: true })
@@ -325,6 +333,12 @@ export const importarBackupJson = async (file) => {
       await db.config.delete(CHAVE_INFO_ESTOQUE)
       if (estoqueTotal.length) await db.estoqueTotal.bulkPut(estoqueTotal)
       if (estoqueTotal.length && estoqueTotalInfo) await db.config.put({ ...estoqueTotalInfo, chave: CHAVE_INFO_ESTOQUE })
+    }
+    if (estoqueFotos && estoqueFotoItens) {
+      await db.estoqueFotos.clear()
+      await db.estoqueFotoItens.clear()
+      if (estoqueFotos.length) await db.estoqueFotos.bulkPut(estoqueFotos)
+      if (estoqueFotoItens.length) await db.estoqueFotoItens.bulkPut(estoqueFotoItens)
     }
   })
 

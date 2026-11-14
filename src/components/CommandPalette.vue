@@ -8,6 +8,7 @@ import { usePaleta } from '../composables/usePaleta'
 import { exportarBackupJson } from '../utils/backup'
 import { useAparencia } from '../composables/useAparencia'
 import { correspondeBusca, formatarDataBR } from '../utils/busca'
+import { acoesDaTela, executarAcao } from '../composables/useAcoes'
 
 const router = useRouter()
 const auditoriasStore = useAuditoriasStore()
@@ -103,7 +104,17 @@ const produtosEncontrados = computed(() => {
 
 const grupos = computed(() => {
   const filtrar = itens => itens.filter(i => correspondeBusca(consulta.value, [i.titulo, i.detalhe, i.termos]))
+  // Ações da tela aberta (cabeçalhos, abas, tabelas): tudo que está nos botões e no menu "Mais".
+  const daTela = acoesDaTela.value.map((a, i) => ({
+    id: `t-${i}-${a.id || a.rotulo}`,
+    titulo: a.rotulo,
+    detalhe: [a.contexto, a.grupo].filter(Boolean).join(' · '),
+    icone: a.icone || 'fas fa-bolt',
+    termos: [a.termos, a.dica, a.grupo].filter(Boolean).join(' '),
+    acao: () => executarAcao(a)
+  }))
   return [
+    { nome: 'Nesta tela', itens: filtrar(daTela) },
     { nome: 'Ações', itens: filtrar(acoes.value) },
     { nome: 'Páginas', itens: filtrar(paginas) },
     { nome: 'Auditorias', itens: auditoriasEncontradas.value },
@@ -171,7 +182,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', atalhoGlobal))
             v-model="consulta"
             type="search"
             class="h-14 min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
-            placeholder="Buscar páginas, auditorias, produtos..."
+            placeholder="Buscar ações, páginas, auditorias, produtos..."
             aria-label="Buscar"
             autocomplete="off"
             @keydown="aoTeclarCampo"

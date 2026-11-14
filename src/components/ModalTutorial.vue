@@ -121,14 +121,17 @@ const PASSOS = [
     itens: [
       ['Importar estoque total', 'Envie o relatório de produtos com estoque do sistema (Código, Nome, Estoque, Dias sem venda...). Ele passa a ser a base: só entram os itens dele, com o estoque e os dias sem venda dele. Importe de novo para atualizar.'],
       ['Visão geral', 'Quantos problemas há de cada tipo, os itens mais graves e os locais com mais problemas.'],
-      ['Estoque da loja', 'Todos os itens da planilha com local, situação na última auditoria, validade e problemas. Filtre por situação, setor e local e exporte em CSV.'],
+      ['Estoque da loja', 'Todos os itens da planilha com local, situação na última auditoria, validade e problemas. Filtre por situação, setor e local e exporte em CSV. As subabas Insumos e Histórico ficam aqui.'],
+      ['Histórico', 'Cada planilha importada vira uma foto do estoque. Veja se os parados e o valor parado sobem ou descem, a projeção para as próximas 4 semanas e quantos dias o estoque de cada item dura. Planilhas de dias anteriores também podem ser importadas.'],
+      ['Problemas', 'Reincidências, estoque zerado, parados, nunca lidos e não vinculados ficam agrupados em Problemas, cada um na sua subaba.'],
       ['Reincidências', 'Itens com estoque que não são lidos há 14 dias ou mais (dá para mudar para 21, 30 ou 60). O diagnóstico diz se o item vende, se foi achado em outro local ou se o estoque provavelmente não existe.'],
       ['Estoque zerado', 'Itens lidos na gôndola com estoque zerado no sistema: falta lançar a entrada ou ajustar.'],
       ['Parados', 'Itens com estoque e 30+ dias sem venda, cruzados com as validades.'],
       ['Nunca lidos', 'Itens com estoque, comprados antes da última Presença, que nunca apareceram em nenhuma auditoria. Os que chegaram depois da última auditoria ficam de fora (ainda não houve como ler); os sem local estão em Não vinculados; os que já foram auditados e saíram da Presença entram nas Reincidências.'],
       ['Insumos', 'Itens do setor Outros (sacolas, pallets, tabloides...): não entram em nenhuma lista de problema; a aba serve para acompanhar o estoque e o consumo deles.'],
-      ['Filtros das listas', 'Toda tabela do sistema tem a mesma barra: busca, filtros rápidos por coluna, atalhos, filtros avançados (condições por qualquer coluna), ordenação por vários critérios, colunas, agrupamento, CSV, impressão e paginação.'],
-      ['Onde agir', 'Os problemas somados por local, setor ou fornecedor. Clique num número para ver os itens.'],
+      ['Filtros das listas', 'Toda tabela do sistema tem a mesma barra: busca, filtros rápidos por coluna, atalhos, Filtros (condições por qualquer coluna), Exibição (ordem, agrupamento e colunas), Mais (CSV e impressão) e paginação.'],
+      ['Botões', 'Cada tela tem uma ação principal em destaque; as outras ficam em "⋯ Mais" (Dados, Exportar; Limpar sempre por último). Todas também aparecem na busca rápida (Ctrl+K), em "Nesta tela".'],
+      ['Onde agir', 'Os problemas somados por local, setor ou fornecedor. Clique num número para ver os itens. Lista de conferência imprime os itens de cada local, na ordem dos corredores, para conferir na loja.'],
       ['Consultar item', 'Busque um código ou nome para ver a ficha do produto em todas as auditorias.']
     ]
   },

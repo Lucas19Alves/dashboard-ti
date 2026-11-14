@@ -7,6 +7,8 @@ import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
 import { blocoBarras, blocoTabela } from '../../utils/print'
 import { useRelatorio } from '../../composables/useRelatorio'
 import UiButton from '../ui/UiButton.vue'
+import UiAcoes from '../ui/UiAcoes.vue'
+import { GRUPOS, usarAcoesDaAba } from '../../composables/useAcoes'
 import UiEmptyState from '../ui/UiEmptyState.vue'
 import UiModal from '../ui/UiModal.vue'
 import UiTabs from '../ui/UiTabs.vue'
@@ -195,6 +197,18 @@ const relatorioGeral = () => {
   })
 }
 
+// --- Ações (no cabeçalho da página Estoque; sozinha, a aba mostra os próprios botões) ---
+const acoes = computed(() => [
+  { id: 'nv-importar', rotulo: 'Importar planilha', icone: 'fas fa-file-upload', nivel: 'principal', termos: 'nao vinculados sem local importar', executar: () => { mostrarUpload.value = true } },
+  ...(store.itens.length ? [
+    { id: 'nv-relatorio', rotulo: 'Relatório dos não vinculados', icone: 'fas fa-file-pdf', grupo: GRUPOS.exportar, termos: 'pdf imprimir', executar: relatorioGeral },
+    { id: 'nv-imagem', rotulo: 'Salvar imagem', detalhe: 'Para compartilhar no WhatsApp', icone: 'fas fa-image', grupo: GRUPOS.exportar, desativado: Boolean(imagem.value?.gerando), executar: salvarImagem },
+    { id: 'nv-recalcular', rotulo: 'Recalcular sugestões', detalhe: 'Usa as auditorias importadas depois da planilha', icone: 'fas fa-rotate', grupo: GRUPOS.dados, executar: recalcular },
+    { id: 'nv-limpar', rotulo: 'Limpar não vinculados', icone: 'fas fa-trash-alt', perigo: true, executar: limpar }
+  ] : [])
+])
+const noCabecalho = usarAcoesDaAba(() => acoes.value)
+
 // --- Formatação ---
 const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
 const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem local sugerido' }
@@ -207,15 +221,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
     <div class="space-y-6">
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <p class="max-w-[72ch] text-sm leading-relaxed text-slate-600">Itens que chegaram sem local no sistema. Sem local, o item fica fora da auditoria: vincule no local certo para a auditoria acertar.</p>
-        <div class="flex flex-wrap items-center gap-2">
-          <UiButton @click="mostrarUpload = true"><i class="fas fa-file-upload"></i>Importar planilha</UiButton>
-          <template v-if="store.itens.length">
-            <UiButton variant="secondary" @click="relatorioGeral"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
-            <UiButton variant="secondary" :disabled="imagem?.gerando" @click="salvarImagem"><i :class="imagem?.gerando ? 'fas fa-spinner fa-spin' : 'fas fa-image'"></i>Salvar imagem</UiButton>
-            <UiButton variant="secondary" title="Refaz as sugestões com as auditorias importadas depois desta planilha" @click="recalcular"><i class="fas fa-rotate"></i>Recalcular</UiButton>
-            <UiButton variant="dangerSoft" @click="limpar"><i class="fas fa-trash-alt"></i>Limpar</UiButton>
-          </template>
-        </div>
+        <UiAcoes v-if="!noCabecalho" :acoes="acoes" contexto="Não vinculados" />
       </div>
 
       <UiModal v-if="mostrarUpload" title="Importar itens não vinculados" subtitle="Planilha do dia exportada do sistema (.xlsx ou .csv)" @close="mostrarUpload = false">

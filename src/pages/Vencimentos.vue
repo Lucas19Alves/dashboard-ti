@@ -8,6 +8,8 @@ import { useRelatorio } from '../composables/useRelatorio'
 import { cruzarValidadeRuptura } from '../utils/vencimentosCruzados'
 import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import StatCard from '../components/ui/StatCard.vue'
 import ImagemVencimentos from '../components/ImagemVencimentos.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
@@ -441,6 +443,17 @@ const exportarDetalhamentoSetor = async () => {
     gerandoImagemVenc.value = false
   }
 }
+
+// --- Ações (padrão do sistema: principal + menu "Mais"; também no Ctrl+K) ---
+const acoesCabecalho = computed(() => (store.itens.length ? [
+  { id: 'venc-importar', rotulo: 'Nova importação', icone: 'fas fa-file-upload', nivel: 'principal', termos: 'importar planilha validade', executar: () => { mostrarUpload.value = true } },
+  { id: 'venc-relatorio', rotulo: 'Relatório de vencimentos', icone: 'fas fa-file-pdf', grupo: GRUPOS.exportar, termos: 'pdf imprimir', executar: imprimirRelatorio },
+  { id: 'venc-limpar', rotulo: 'Limpar vencimentos', icone: 'fas fa-trash-alt', perigo: true, executar: limparDados }
+] : []))
+// "Salvar imagem" fica no menu da tabela por setor (é a imagem dela).
+const acoesSetores = computed(() => [
+  { id: 'venc-imagem', rotulo: 'Salvar imagem', detalhe: 'Imagem quadrada para o WhatsApp', icone: gerandoImagemVenc.value ? 'fas fa-spinner fa-spin' : 'fas fa-image', grupo: GRUPOS.exportar, desativado: gerandoImagemVenc.value, termos: 'whatsapp foto setor vencimentos', executar: exportarDetalhamentoSetor }
+])
 </script>
 
 <template>
@@ -450,15 +463,7 @@ const exportarDetalhamentoSetor = async () => {
       <!-- ===== HEADER ===== -->
       <UiPageHeader title="Vencimentos" subtitle="Controle de validades e itens críticos." icon="fas fa-calendar-alt" tone="orange">
         <template #actions>
-          <UiButton v-if="store.itens.length > 0" @click="mostrarUpload = true">
-            <i class="fas fa-file-upload mr-2"></i>Nova Importação
-          </UiButton>
-          <UiButton v-if="store.itens.length > 0" variant="secondary" @click="imprimirRelatorio">
-            <i class="fas fa-file-pdf mr-2"></i>Relatório
-          </UiButton>
-          <UiButton v-if="store.itens.length > 0" variant="dangerSoft" @click="limparDados">
-            <i class="fas fa-trash-alt mr-1"></i>Limpar
-          </UiButton>
+          <UiAcoes :acoes="acoesCabecalho" contexto="Vencimentos" />
         </template>
       </UiPageHeader>
 
@@ -535,17 +540,10 @@ const exportarDetalhamentoSetor = async () => {
                 <p class="text-xs text-slate-500 mt-0.5">Distribuicao de itens por status em cada setor. Clique para ver
                   detalhes.</p>
               </div>
-              <div class="flex items-center gap-2">
-                <button type="button" :disabled="gerandoImagemVenc" title="Imagem quadrada para compartilhar no WhatsApp" @click="exportarDetalhamentoSetor"
-                  class="ui-btn-secondary py-1.5 text-xs print:hidden">
-                  <i :class="gerandoImagemVenc ? 'fas fa-spinner fa-spin' : 'fas fa-image'"></i>
-                  Salvar imagem
-                </button>
-                <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
-              </div>
+              <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
             </div>
             <div class="px-5 pb-5 md:px-6">
-              <UiTabela id="vencimentos-setores" titulo="Vencimentos por setor" :itens="setoresAnalise" :colunas="colunasSetores" :ordem-inicial="[{ chave: 'vencidos', direcao: 'desc' }, { chave: 'hoje', direcao: 'desc' }, { chave: 'ate3', direcao: 'desc' }]" chave-item="nome" clicavel :agrupavel="false" @linha="abrirModalSetor($event.nome)" />
+              <UiTabela id="vencimentos-setores" titulo="Vencimentos por setor" :acoes="acoesSetores" :itens="setoresAnalise" :colunas="colunasSetores" :ordem-inicial="[{ chave: 'vencidos', direcao: 'desc' }, { chave: 'hoje', direcao: 'desc' }, { chave: 'ate3', direcao: 'desc' }]" chave-item="nome" clicavel :agrupavel="false" @linha="abrirModalSetor($event.nome)" />
             </div>
           </div>
         </div>

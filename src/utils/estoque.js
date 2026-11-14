@@ -27,6 +27,14 @@ const numeroOuNulo = v => (v === '' || v === null || v === undefined ? null : nu
 const localValido = l => l && !/^n[aã]o especificado$/i.test(l)
 const texto = v => String(v ?? '').trim()
 
+// "Sem local" é só o item da lista de não vinculados (sem local vinculado no sistema).
+// Os outros itens têm local no sistema; quando ele não aparece nas auditorias nem nas validades,
+// o local é "não identificado" (ex.: nunca lidos), nunca "sem local".
+export const SEM_LOCAL = 'Sem local (não vinculado)'
+export const LOCAL_NAO_IDENTIFICADO = 'Local não identificado'
+// Primeiro local de "G05A; G06B" ou "G05A - G05A".
+const primeiroLocal = valor => codigoLocal(texto(String(valor || '').split(/[;,|/]/)[0]))
+
 // Situação de um código numa auditoria (junta as linhas repetidas do mesmo código).
 const lerAuditoria = (dados) => {
   const vistos = new Map()
@@ -77,6 +85,8 @@ export const indexarEstoque = (auditorias) => {
       r.comEstoque = comEstoque
       r.diasSemVenda = numeroOuNulo(item?.['Dias sem venda'])
       r.custo = custoRupturaDoItem(item)
+      // Custo unitário estimado: o "Custo Ruptura" é quantidade × custo (vale a última linha com os dois).
+      if (estoque > 0 && r.custo > 0) r.custoUnitario = r.custo / estoque
       r.ultimaCompra = texto(item?.['Última compra'] ?? item?.['Última Compra'])
       r.ultimaData = data
       r.aparicoes++
@@ -137,12 +147,14 @@ export const indexarEstoque = (auditorias) => {
 
 // Dados comuns de uma linha: cadastro pelas auditorias (mesmos nomes de setor e fornecedor das outras
 // telas) e estoque/dias sem venda pela planilha de estoque total, quando ela existe.
-const base = (r, t = null) => ({
+// Local: o vinculado nas auditorias; sem ele, o da planilha de validades (`localExtra`).
+const base = (r, t = null, localExtra = '') => ({
   codigo: r?.codigo || t.codigo,
   produto: r?.produto || t.produto,
   setor: r?.setor || t.setor,
   fornecedor: r?.fornecedor || t.fornecedor,
-  local: r?.local || '',
+  local: r?.local || localExtra || '',
+  localOrigem: r?.local ? 'auditoria' : localExtra ? 'validades' : '',
   estoque: t ? t.estoque : r.estoque,
   unidade: t?.unidade || '',
   diasSemVenda: t ? t.diasSemVenda : r.diasSemVenda,
@@ -257,7 +269,18 @@ export const validadePorCodigo = (vencimentos) => {
     const codigo = texto(v?._codigo)
     if (!codigo || !v._validadeISO) continue
     const atual = mapa.get(codigo)
-    if (!atual || v._validadeISO < atual.validade) mapa.set(codigo, { validade: v._validadeISO, dias: v._diasParaVencer ?? null, estoque: Number(v._estoque) || 0 })
+    if (!atual || v._validadeISO < atual.validade) mapa.set(codigo, { validade: v._validadeISO, dias: v._diasParaVencer ?? null, estoque: Number(v._estoque) || 0, local: primeiroLocal(v._local) || atual?.local || '' })
+  }
+  return mapa
+}
+
+// Local de cada código pela planilha de validades (coluna Locais), para itens que não aparecem nas auditorias.
+export const localPorValidade = (vencimentos) => {
+  const mapa = new Map()
+  for (const v of vencimentos || []) {
+    const codigo = texto(v?._codigo)
+    const local = primeiroLocal(v?._local)
+    if (codigo && local && !mapa.has(codigo)) mapa.set(codigo, local)
   }
   return mapa
 }
@@ -289,7 +312,7 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
     else if (diasSemVenda >= 90) diagnostico = `Sem venda há ${diasSemVenda} dias: suspender o pedido e avaliar saída do mix`
     else diagnostico = `Sem venda há ${diasSemVenda} dias: melhorar a exposição ou rebaixar`
     linhas.push({
-      ...base(r, t),
+      ...base(r, t, v?.local),
       tipo: 'parado',
       dias: diasSemVenda,
       validade: v?.validade || '',
@@ -309,7 +332,7 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
 export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados = [], nuncaLidos = [], naoVinculados = [], suspeitos = [] }, campo) => {
   const mapa = new Map()
   const somar = (chave, tipo, extra = 0) => {
-    const k = chave || (campo === 'local' ? 'Sem local' : 'Não informado')
+    const k = chave || (campo !== 'local' ? 'Não informado' : tipo === 'naoVinculados' ? SEM_LOCAL : LOCAL_NAO_IDENTIFICADO)
     const r = mapa.get(k) || { chave: k, reincidentes: 0, semEstoque: 0, parados: 0, nuncaLidos: 0, naoVinculados: 0, suspeitos: 0, custo: 0, total: 0 }
     r[tipo]++
     r.total++
@@ -352,4 +375,44 @@ export const buscarItens = (indice, termo, limite = 30, total = null) => {
     if (casa(e.codigo, e.produto)) incluir(e.codigo)
   }
   return resultado
+}
+
+// ---------- Lista de conferência (impressa a partir do "Onde agir") ----------
+// Um grupo por local, setor ou fornecedor; em cada grupo, uma linha por item com todos os problemas
+// dele juntos (um item pode ser reincidente e parado ao mesmo tempo). Por local, os grupos seguem a
+// ordem dos corredores (para percorrer a loja); por setor/fornecedor, os com mais itens primeiro.
+export const listaConferencia = ({ reincidentes = [], semEstoque = [], parados = [], nuncaLidos = [], naoVinculados = [], suspeitos = [] }, campo, { tipos = null } = {}) => {
+  const grupos = new Map()
+  const vazio = tipo => (campo !== 'local' ? 'Não informado' : tipo === 'naoVinculado' ? SEM_LOCAL : LOCAL_NAO_IDENTIFICADO)
+  const incluir = (tipo, chave, item) => {
+    if (tipos && !tipos.includes(tipo)) return
+    const k = chave || vazio(tipo)
+    const g = grupos.get(k) || { chave: k, itens: new Map() }
+    const linha = g.itens.get(item.codigo) || { codigo: item.codigo, produto: item.produto, local: item.local || '', estoque: item.estoque ?? null, unidade: item.unidade || '', problemas: [], oQueFazer: [] }
+    if (!linha.problemas.includes(item.problema)) linha.problemas.push(item.problema)
+    if (item.oQueFazer && !linha.oQueFazer.includes(item.oQueFazer)) linha.oQueFazer.push(item.oQueFazer)
+    g.itens.set(item.codigo, linha)
+    grupos.set(k, g)
+  }
+  const deLista = (lista, tipo) => {
+    for (const l of lista) incluir(tipo, l[campo], { ...l, problema: TIPOS_PROBLEMA[tipo].rotulo, oQueFazer: l.diagnostico })
+  }
+  deLista(reincidentes, 'reincidencia')
+  deLista(semEstoque, 'semEstoque')
+  deLista(parados, 'parado')
+  deLista(nuncaLidos, 'nuncaLido')
+  const campoNv = { local: i => i.sugestao?.local, setor: i => i.setor, fornecedor: i => i.fornecedor }[campo]
+  for (const i of naoVinculados) {
+    incluir('naoVinculado', campoNv(i), { ...i, local: i.sugestao?.local ? `${i.sugestao.local} (sugerido)` : '', problema: 'Não vinculado', oQueFazer: i.sugestao?.local ? `Vincular em ${i.sugestao.local}` : 'Achar o local e vincular' })
+  }
+  if (campo === 'local' || campo === 'setor') {
+    for (const s of suspeitos) incluir('suspeito', campo === 'local' ? s.vinculadoEm : s.setor, { ...s, local: s.vinculadoEm, problema: 'Vínculo suspeito', oQueFazer: s.motivo })
+  }
+  const natural = (a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })
+  const lista = [...grupos.values()].map(g => ({
+    chave: g.chave,
+    itens: [...g.itens.values()].sort((a, b) => natural(a.local, b.local) || natural(a.produto || '', b.produto || ''))
+  }))
+  const semChave = k => [SEM_LOCAL, LOCAL_NAO_IDENTIFICADO, 'Não informado'].includes(k)
+  return lista.sort((a, b) => semChave(a.chave) - semChave(b.chave) || (campo === 'local' ? natural(a.chave, b.chave) : b.itens.length - a.itens.length || natural(a.chave, b.chave)))
 }

@@ -85,3 +85,41 @@ describe('estoque: agrupamento', () => {
     expect(grupos[1]).toMatchObject({ chave: 'G02B', semEstoque: 1, naoVinculados: 1 })
   })
 })
+
+describe('lista de conferência', () => {
+  it('junta os problemas do mesmo item e ordena os locais como corredores', async () => {
+    const { listaConferencia } = await import('./estoque')
+    const grupos = listaConferencia({
+      reincidentes: [{ codigo: '1', produto: 'A', local: 'G10A', estoque: 5, diagnostico: 'Procurar no depósito' }],
+      parados: [{ codigo: '1', produto: 'A', local: 'G10A', estoque: 5, diagnostico: 'Rebaixar' }, { codigo: '2', produto: 'B', local: 'G2A', estoque: 1 }],
+      naoVinculados: [{ codigo: '3', produto: 'C', sugestao: { local: 'G2A' } }, { codigo: '4', produto: 'D', sugestao: null }]
+    }, 'local')
+    expect(grupos.map(g => g.chave)).toEqual(['G2A', 'G10A', 'Sem local (não vinculado)'])
+    expect(grupos[1].itens[0]).toMatchObject({ codigo: '1', problemas: ['Reincidência', 'Estoque parado'], oQueFazer: ['Procurar no depósito', 'Rebaixar'] })
+    expect(grupos[0].itens.map(i => i.codigo)).toEqual(['2', '3'])
+    expect(listaConferencia({ parados: [{ codigo: '2', local: 'G2A' }], naoVinculados: [{ codigo: '3', sugestao: { local: 'G2A' } }] }, 'local', { tipos: ['naoVinculado'] })[0].itens).toHaveLength(1)
+  })
+})
+
+describe('sem local é só não vinculado', () => {
+  it('nunca lido sem local conhecido vai para "Local não identificado"', async () => {
+    const { agruparProblemas, listaConferencia, LOCAL_NAO_IDENTIFICADO, SEM_LOCAL } = await import('./estoque')
+    const listas = {
+      nuncaLidos: [{ codigo: '1', produto: 'A', local: '' }, { codigo: '2', produto: 'B', local: 'G05A' }],
+      naoVinculados: [{ codigo: '3', produto: 'C', sugestao: null }]
+    }
+    const grupos = agruparProblemas(listas, 'local')
+    expect(grupos.find(g => g.chave === LOCAL_NAO_IDENTIFICADO)).toMatchObject({ nuncaLidos: 1, naoVinculados: 0 })
+    expect(grupos.find(g => g.chave === SEM_LOCAL)).toMatchObject({ nuncaLidos: 0, naoVinculados: 1 })
+    expect(listaConferencia(listas, 'local').map(g => g.chave)).toEqual(['G05A', LOCAL_NAO_IDENTIFICADO, SEM_LOCAL])
+  })
+  it('nunca lido usa o local da planilha de validades', async () => {
+    const { nuncaLidosNaPlanilha } = await import('./estoqueTotal')
+    const { localPorValidade } = await import('./estoque')
+    const total = new Map([['9', { codigo: '9', produto: 'X', setor: 'MERCEARIA', estoque: 4, diasSemVenda: 3, ultimaCompra: '2026-01-01' }]])
+    const indice = { auditorias: 1, itens: new Map(), inicioCiclo: '2026-10-01' }
+    const locais = localPorValidade([{ _codigo: '9', _local: 'G07B - G07B; G08A' }])
+    const [linha] = nuncaLidosNaPlanilha({ total, indice, locais })
+    expect(linha).toMatchObject({ local: 'G07B', localOrigem: 'validades' })
+  })
+})
