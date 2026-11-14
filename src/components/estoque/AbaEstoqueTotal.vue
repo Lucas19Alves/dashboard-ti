@@ -6,6 +6,8 @@ import { useAuditoriasStore } from '../../stores/auditoriasStore'
 import { SITUACAO_ITEM, formatarQuantidade } from '../../utils/estoqueTotal'
 import { TIPOS_PROBLEMA } from '../../utils/estoque'
 import UiButton from '../ui/UiButton.vue'
+import UiAcoes from '../ui/UiAcoes.vue'
+import { GRUPOS, temCabecalhoDeAba, usarAcoesDaAba } from '../../composables/useAcoes'
 import UiEmptyState from '../ui/UiEmptyState.vue'
 import UiTabela from '../ui/UiTabela.vue'
 
@@ -40,7 +42,7 @@ const cartoes = computed(() => [
   { chave: 'lido', rotulo: 'Lidos na auditoria', valor: contagem.value.lido, nota: `${pct(contagem.value.lido)} achados na gôndola` },
   { chave: 'pendente', rotulo: 'Não lidos', valor: contagem.value.pendente, nota: 'com estoque e sem leitura na última' },
   { chave: 'saiu', rotulo: 'Saíram da auditoria', valor: contagem.value.saiu, nota: 'já auditados, fora da última Presença' },
-  { chave: 'nuncaLido', rotulo: 'Nunca lidos', valor: contagem.value.nuncaLido, nota: `${int(contagem.value.aguardando)} chegaram depois da última auditoria, ${int(contagem.value.naoVinculado)} sem local` },
+  { chave: 'nuncaLido', rotulo: 'Nunca lidos', valor: contagem.value.nuncaLido, nota: `${int(contagem.value.aguardando)} chegaram depois da última auditoria, ${int(contagem.value.naoVinculado)} não vinculados (sem local)` },
   { chave: 'problema', rotulo: 'Com problema', valor: contagem.value.problema, nota: 'aparecem em alguma lista' }
 ])
 
@@ -60,7 +62,7 @@ const COLUNAS = [
   { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
   { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
   { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
-  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true, valor: i => i.local || (i.situacao === 'naoVinculado' ? 'Sem local (não vinculado)' : i.situacao === 'insumo' ? '' : 'Local não identificado') },
   { chave: 'situacaoTxt', titulo: 'Situação na auditoria', tipo: 'categoria', rapido: true },
   { chave: 'problemaTxt', titulo: 'Problemas', tipo: 'categoria' },
   { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria' },
@@ -103,6 +105,13 @@ const apagar = async () => {
   await store.limpar()
   toast('Planilha de estoque total apagada.', 'info')
 }
+// No cabeçalho da página Estoque fica "Atualizar estoque total"; aqui só o que é desta aba.
+const noCabecalho = temCabecalhoDeAba()
+const acoes = computed(() => (store.itens.length ? [
+  { id: 'et-atualizar', rotulo: 'Atualizar planilha', icone: 'fas fa-rotate', grupo: GRUPOS.dados, oculta: noCabecalho, executar: () => emit('importar') },
+  { id: 'et-apagar', rotulo: 'Apagar planilha de estoque total', icone: 'fas fa-trash-alt', perigo: true, executar: apagar }
+] : []))
+usarAcoesDaAba(() => acoes.value)
 </script>
 
 <template>
@@ -117,8 +126,7 @@ const apagar = async () => {
           <i class="fas fa-file-excel mr-1 text-green-600"></i><b class="text-slate-900">{{ infoEstoqueTotal?.arquivo || 'Planilha' }}</b>, importada em {{ dataHora(infoEstoqueTotal?.importadoEm) }}
           <span v-if="!indice.auditorias" class="ml-1 text-amber-700">· sem auditorias para cruzar</span>
         </p>
-        <UiButton variant="secondary" size="sm" @click="emit('importar')"><i class="fas fa-rotate"></i>Atualizar planilha</UiButton>
-        <UiButton variant="dangerSoft" size="sm" @click="apagar"><i class="fas fa-trash-alt"></i>Apagar</UiButton>
+        <UiAcoes v-if="!noCabecalho" :acoes="acoes" contexto="Estoque da loja" tamanho="sm" />
       </div>
       <p v-if="antiga" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
         A planilha é de {{ diasDesde(infoEstoqueTotal?.importadoEm) }} dias atrás. Importe a de hoje para o estoque e os dias sem venda baterem com o sistema.
@@ -144,7 +152,7 @@ const apagar = async () => {
               <p class="text-xs text-slate-500">{{ i.diasSemVenda === null ? 'sem venda registrada' : i.diasSemVenda <= 1 ? 'vendeu ontem ou hoje' : `sem venda há ${i.diasSemVenda} d` }}</p>
             </div>
             <div class="min-w-0 text-sm">
-              <p class="truncate"><b class="text-slate-900">{{ i.local || 'Sem local' }}</b> <span class="text-xs font-medium" :class="COR_SITUACAO[i.situacao]">{{ i.situacaoTxt }}</span></p>
+              <p class="truncate"><b v-if="i.local" class="text-slate-900">{{ i.local }}</b><b v-else class="italic text-slate-600" :title="i.situacao === 'naoVinculado' ? 'Sem local vinculado no sistema' : 'Tem local no sistema, mas ele não aparece nas auditorias nem nas validades'">{{ i.situacao === 'naoVinculado' ? 'Sem local (não vinculado)' : 'Local não identificado' }}</b> <span class="text-xs font-medium" :class="COR_SITUACAO[i.situacao]">{{ i.situacaoTxt }}</span></p>
               <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : i.situacao === 'insumo' ? 'insumo, não entra na auditoria' : i.situacao === 'aguardando' ? `comprado em ${br(i.ultimaCompra)}, ainda sem auditoria` : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
             </div>
             <div class="flex flex-wrap gap-1.5">

@@ -87,7 +87,8 @@ export const motivoForaDaAuditoria = (t, { nv, inicioCiclo }) => {
 }
 const codigosNaoVinculados = naoVinculados => new Set((naoVinculados || []).filter(i => i.status !== 'resolvido').map(i => i.codigo))
 
-export const nuncaLidosNaPlanilha = ({ total, indice, naoVinculados = [] }) => {
+// `locais`: local de cada código pela planilha de validades (o item nunca apareceu nas auditorias).
+export const nuncaLidosNaPlanilha = ({ total, indice, naoVinculados = [], locais = null }) => {
   if (!total?.size || !indice?.auditorias) return []
   const nv = codigosNaoVinculados(naoVinculados)
   const linhas = []
@@ -95,12 +96,14 @@ export const nuncaLidosNaPlanilha = ({ total, indice, naoVinculados = [] }) => {
     if (!(t.estoque > 0) || ehInsumo(t) || indice.itens.has(t.codigo)) continue
     if (motivoForaDaAuditoria(t, { nv, inicioCiclo: indice.inicioCiclo }) !== 'nuncaLido') continue
     const vende = t.diasSemVenda !== null && t.diasSemVenda <= 7
+    const local = locais?.get(t.codigo) || ''
     linhas.push({
       codigo: t.codigo,
       produto: t.produto,
       setor: t.setor,
       fornecedor: t.fornecedor,
-      local: '',
+      local,
+      localOrigem: local ? 'validades' : '',
       estoque: t.estoque,
       unidade: t.unidade,
       diasSemVenda: t.diasSemVenda,
@@ -111,9 +114,13 @@ export const nuncaLidosNaPlanilha = ({ total, indice, naoVinculados = [] }) => {
       tipo: 'nuncaLido',
       gerenciado: t.gerenciado,
       gravidade: 2 + (vende ? 2 : 0) + (t.gerenciado ? 1 : 0) + (t.estoque >= 50 ? 1 : 0),
-      diagnostico: vende
-        ? 'Vende, mas nunca foi lido em nenhuma auditoria: conferir em qual local está vinculado e se o local entra na Presença'
-        : 'Tem estoque e nunca foi lido em nenhuma auditoria: conferir o local vinculado e contar o físico'
+      diagnostico: local
+        ? (vende
+          ? `Vende, mas nunca foi lido em nenhuma auditoria: conferir se o local ${local} (pelas validades) entra na Presença e se o produto está nele`
+          : `Tem estoque e nunca foi lido em nenhuma auditoria: conferir o produto no local ${local} (pelas validades) e contar o físico`)
+        : (vende
+          ? 'Vende, mas nunca foi lido em nenhuma auditoria: consultar no sistema o local vinculado e conferir se ele entra na Presença'
+          : 'Tem estoque e nunca foi lido em nenhuma auditoria: consultar no sistema o local vinculado e contar o físico')
     })
   }
   return linhas.sort((a, b) => b.gravidade - a.gravidade || (a.diasSemVenda ?? 9999) - (b.diasSemVenda ?? 9999) || b.estoque - a.estoque)
@@ -147,7 +154,7 @@ export const cruzarEstoqueTotal = ({ total, indice, validades, naoVinculados = [
     const v = validades?.get(t.codigo)
     linhas.push({
       ...t,
-      local: r?.local || '',
+      local: r?.local || v?.local || '',
       ultimaLeitura: r?.ultimaLeitura || '',
       ultimaData: r?.ultimaData || '',
       situacao: situacaoNoEstoque(r, t, contexto),

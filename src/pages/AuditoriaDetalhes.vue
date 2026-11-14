@@ -19,6 +19,8 @@ import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
 import UiTabela from '../components/ui/UiTabela.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import { isItemLido } from '../utils/itemLido'
 import { blocoBarras, blocoColunas, blocoTabela } from '../utils/print'
 import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
@@ -1067,6 +1069,13 @@ const abrirRelatorio = () => {
 const fecharRelatorio = () => {
   modalRelatorioAberto.value = false
 }
+
+// --- Ações do cabeçalho (padrão do sistema; também no Ctrl+K) ---
+const acoesCabecalho = computed(() => [
+  { id: 'aud-relatorio', rotulo: 'Relatório', detalhe: 'PDF ou imagem para o WhatsApp', icone: 'fas fa-file-alt', nivel: 'secundaria', grupo: GRUPOS.exportar, termos: 'pdf imprimir relatorio auditoria', executar: abrirRelatorio },
+  { id: 'aud-atualizar', rotulo: 'Atualizar dados', detalhe: 'Substitui a planilha desta auditoria', icone: 'fas fa-upload', grupo: GRUPOS.dados, oculta: readOnly.value, termos: 'substituir planilha importar', executar: () => { skuSubstituir.value = String(auditoria.value?.sku || ''); mostrarUploadSubstituir.value = true } },
+  { id: 'aud-sku', rotulo: 'Editar SKU', icone: 'fas fa-pencil-alt', grupo: GRUPOS.dados, oculta: readOnly.value || editandoSku.value, termos: 'quantidade itens loja', executar: iniciarEdicaoSku }
+])
 </script>
 
 <template>
@@ -1118,21 +1127,7 @@ const fecharRelatorio = () => {
           </div>
         </div>
         <div class="text-right flex flex-col items-end gap-3">
-          <div class="flex items-center gap-3">
-            <button
-              @click="abrirRelatorio"
-              class="px-4 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-lg transition font-medium shadow-lg"
-            >
-              <i class="fas fa-file-alt mr-2"></i>Relatório
-            </button>
-            <button
-              v-if="!readOnly"
-              @click="skuSubstituir = String(auditoria?.sku || ''); mostrarUploadSubstituir = true"
-              class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
-            >
-              <i class="fas fa-upload mr-2"></i>Atualizar dados
-            </button>
-          </div>
+          <UiAcoes :acoes="acoesCabecalho" :contexto="`Auditoria de ${auditoria.tipo}`" />
           <div>
             <div class="text-4xl font-black tracking-tight">{{ (metricasGerais?.percentualPendente ?? auditoria.analise?.parcialPercentual ?? 0).toFixed(2) }}%</div>
             <p class="text-blue-100">Pendente</p>
@@ -1218,9 +1213,7 @@ const fecharRelatorio = () => {
                 <summary class="cursor-pointer text-sm font-semibold text-blue-700">Conferir registros ({{ sinal.registros.length }})</summary>
                 <p class="mt-3 text-xs text-slate-500">Dados preservados da planilha importada. A linha de origem aparece quando foi preservada na importação. O CSV da tabela traz as colunas visíveis; o completo tem também a data e o nº da auditoria anterior.</p>
                 <div class="mt-2">
-                  <UiTabela :id="`sinal-${sinal.tipo}`" :titulo="`Registros · ${sinal.titulo || sinal.tipo}`" :itens="sinal.registros" :colunas="colunasSinal(sinal)" :ordem-inicial="{ chave: 'dataHora', direcao: 'asc' }" :tamanho-pagina="25" altura="max-h-96">
-                    <template #acoes><button type="button" class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50" @click="exportarRegistrosSinal(sinal)">CSV completo</button></template>
-                  </UiTabela>
+                  <UiTabela :id="`sinal-${sinal.tipo}`" :titulo="`Registros · ${sinal.titulo || sinal.tipo}`" :itens="sinal.registros" :colunas="colunasSinal(sinal)" :ordem-inicial="{ chave: 'dataHora', direcao: 'asc' }" :tamanho-pagina="25" altura="max-h-96" :acoes="[{ id: 'csv-completo', rotulo: 'Baixar CSV completo', detalhe: 'Com data e nº da auditoria anterior', icone: 'fas fa-file-csv', grupo: GRUPOS.exportar, executar: () => exportarRegistrosSinal(sinal) }]" />
                 </div>
               </details>
             </div>

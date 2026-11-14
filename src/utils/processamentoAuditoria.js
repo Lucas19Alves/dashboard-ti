@@ -1,4 +1,5 @@
 import { lerPlanilha } from './planilha'
+import { numeroEstoque } from './itemAuditoria'
 import { deduplicarPorCodigo } from './deduplicar'
 import { VERSAO_RUPTURA_PRESENCA, presencaBaseDaRuptura, setoresPelaPresenca } from './rupturaPresenca'
 
@@ -134,22 +135,9 @@ export const extrairEstoque = (item) => {
       
       // Se é string, tenta extrair número
       if (typeof valor === 'string') {
-        // Remove prefixo ### se existir
-        let limpo = valor.replace(/^###\s*/, '').trim()
-        
-        // Remove "KG" e espaços
-        limpo = limpo.replace(/KG/gi, '').replace(/\s+/g, ' ')
-        
-        // Extrai número (pode ter vírgula ou ponto como separador decimal)
-        const match = limpo.match(/(\d+)[,.]?(\d*)/)
-        if (match) {
-          const parteInteira = match[1] || '0'
-          const parteDecimal = match[2] || '0'
-          const numero = parseFloat(parteInteira + '.' + parteDecimal)
-          if (!isNaN(numero) && numero > 0) {
-            return numero
-          }
-        }
+        // "9.051,374 KG", "### 25,502 KG", "12": ponto de milhar e vírgula decimal.
+        const numero = numeroEstoque(valor)
+        if (numero > 0) return numero
       }
     }
   }

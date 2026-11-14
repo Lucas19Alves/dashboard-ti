@@ -1,5 +1,7 @@
 <script setup>
 import UiTabela from './ui/UiTabela.vue'
+import UiAcoes from './ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import { computed, ref, watch } from 'vue'
 import { gerarAcoes } from '../utils/planoAcao'
 import { perfisColaboradores } from '../utils/perfilColaborador'
@@ -293,6 +295,12 @@ const COLUNAS = [
 ]
 const exportarCsv = () => baixarCsv(linhasExport(), COLUNAS, `plano-acao-auditoria-${props.auditoria.id}`)
 const { abrir: abrirSeletor } = useRelatorio()
+// Menu do plano (padrão do sistema; também no Ctrl+K).
+const menuPlano = computed(() => [
+  { id: 'plano-imprimir', rotulo: 'Imprimir plano', icone: 'fas fa-print', nivel: 'secundaria', grupo: GRUPOS.exportar, desativado: !acoes.value.length, termos: 'pdf relatorio plano de acao', executar: () => imprimir() },
+  { id: 'plano-csv', rotulo: 'Baixar CSV do plano', icone: 'fas fa-file-csv', grupo: GRUPOS.exportar, desativado: !acoes.value.length, termos: 'excel planilha', executar: exportarCsv },
+  { id: 'plano-limpar', rotulo: 'Remover ações resolvidas', detalhe: resumo.value.feitas ? `${resumo.value.feitas} resolvida(s)` : '', icone: 'fas fa-broom', grupo: GRUPOS.dados, oculta: !resumo.value.feitas, executar: limparConcluidas }
+])
 const imprimir = () => {
   const todas = acoes.value.map(a => ({
     ...a, prioridadeTexto: ROTULO_PRIORIDADE[a.prioridade], statusTexto: rotuloStatus(a.status), prazoBR: formatarDataBR(a.prazo),
@@ -340,10 +348,7 @@ const imprimir = () => {
         <h3 class="text-lg font-bold text-slate-900"><i class="fas fa-list-check mr-2 text-blue-600"></i>Plano de ação</h3>
         <p class="text-xs text-slate-500" title="Prioridade pelo % pendente, local sem leitura, reincidência e custo de ruptura. Responsável pelo perfil de leitura, sem acumular ações na mesma pessoa.">Uma ação por local com pendentes, priorizada e com responsável sugerido. Salvo só neste navegador.</p>
       </div>
-      <div class="flex shrink-0 flex-wrap items-center gap-2">
-        <button type="button" class="ui-btn-secondary py-2" :disabled="!acoes.length" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</button>
-        <button type="button" class="ui-btn-secondary py-2" :disabled="!acoes.length" @click="imprimir"><i class="fas fa-print"></i>Imprimir</button>
-      </div>
+      <UiAcoes class="shrink-0" :acoes="menuPlano" contexto="Plano de ação" />
     </div>
 
     <!-- Sugestões de ação -->
@@ -470,7 +475,6 @@ const imprimir = () => {
         <option value="todas">Todas as prioridades</option>
         <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
       </select>
-      <button v-if="resumo.feitas" type="button" class="ui-btn-secondary ml-auto py-2 text-xs" @click="limparConcluidas"><i class="fas fa-broom"></i>Remover resolvidas</button>
     </div>
 
     <p v-if="carregando" class="py-8 text-center text-sm text-slate-500"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</p>

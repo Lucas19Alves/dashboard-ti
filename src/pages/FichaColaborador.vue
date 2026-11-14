@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import GraficoEvolucaoUsuario from '../components/GraficoEvolucaoUsuario.vue'
 import MapaLoja from '../components/MapaLoja.vue'
@@ -106,6 +108,11 @@ const imprimir = () => {
     ]
   })
 }
+
+// Ações (padrão do sistema; também no Ctrl+K).
+const acoesCabecalho = computed(() => [
+  { id: 'colab-relatorio', rotulo: 'Relatório', detalhe: 'PDF da ficha do colaborador', icone: 'fas fa-file-pdf', nivel: 'secundaria', grupo: GRUPOS.exportar, desativado: !comLeituras.value.length, termos: 'pdf imprimir colaborador', executar: imprimir }
+])
 </script>
 
 <template>
@@ -116,7 +123,7 @@ const imprimir = () => {
 
     <UiPageHeader :title="pessoa.nome || usuario" :subtitle="`${pessoa.matricula ? `Matrícula ${pessoa.matricula} · ` : ''}Ficha do colaborador · ${periodo}`" icon="fas fa-id-badge">
       <template #actions>
-        <button type="button" class="ui-btn-secondary print:hidden" :disabled="!comLeituras.length" @click="imprimir"><i class="fas fa-file-pdf" aria-hidden="true"></i>Relatório</button>
+        <UiAcoes class="print:hidden" :acoes="acoesCabecalho" contexto="Ficha do colaborador" />
       </template>
     </UiPageHeader>
 

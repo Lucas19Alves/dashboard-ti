@@ -10,7 +10,7 @@ const GZIP_MAGIC = [0x1f, 0x8b]
 
 const gzip = texto => new Response(new Blob([texto]).stream().pipeThrough(new CompressionStream('gzip'))).blob()
 
-// conteudo: { auditorias, vencimentos, planosAcao, naoVinculados, estoqueTotal, estoqueTotalInfo }; extras: { versao, geradoEm, configuracoes }
+// conteudo: { auditorias, vencimentos, planosAcao, naoVinculados, estoqueTotal, estoqueTotalInfo, estoqueFotos, estoqueFotoItens }; extras: { versao, geradoEm, configuracoes }
 export const montarArquivoBackup = async (conteudo, extras) => {
   const texto = JSON.stringify({ ...extras, ...compactar(conteudo) })
   const compactado = typeof CompressionStream !== 'undefined' ? await gzip(texto) : null

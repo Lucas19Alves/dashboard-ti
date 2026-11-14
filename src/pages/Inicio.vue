@@ -27,6 +27,7 @@ import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
 import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
 import BackupPastaConfig from '../components/BackupPastaConfig.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
 import ListaProblemasEstoque from '../components/estoque/ListaProblemasEstoque.vue'
@@ -245,6 +246,12 @@ const handleArquivoBackup = async (e) => {
     e.target.value = ''
   }
 }
+
+// --- Ações do cabeçalho: a auditoria do dia em destaque (Validades e Estoque já estão na barra do topo) ---
+const acoesCabecalho = computed(() => [
+  ...tiposHoje.value.map(tipo => ({ id: `nova-${tipo}`, rotulo: `Nova auditoria de ${tipo}`, icone: 'fas fa-plus', nivel: 'principal', termos: 'criar hoje', executar: () => router.push({ path: '/auditorias', query: { data: paraISOLocal(agora), tipo } }) })),
+  ...(tiposHoje.value.length ? [] : [{ id: 'nova', rotulo: 'Nova auditoria', icone: 'fas fa-plus', nivel: 'secundaria', termos: 'criar importar planilha', executar: () => router.push('/auditorias') }])
+])
 </script>
 
 <template>
@@ -258,17 +265,7 @@ const handleArquivoBackup = async (e) => {
           <template v-else>Nenhuma auditoria planejada para hoje.</template>
         </p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <UiButton v-for="tipo in tiposHoje" :key="tipo" :to="{ path: '/auditorias', query: { data: paraISOLocal(agora), tipo } }">
-          <i class="fas fa-plus"></i>Nova auditoria de {{ tipo }}
-        </UiButton>
-        <UiButton to="/vencimentos" variant="secondary">
-          <i class="fas fa-clock"></i>Validades
-        </UiButton>
-        <UiButton to="/estoque" variant="secondary">
-          <i class="fas fa-boxes-stacked"></i>Estoque
-        </UiButton>
-      </div>
+      <UiAcoes :acoes="acoesCabecalho" contexto="Início" />
     </header>
 
     <!-- Prioridades do dia -->

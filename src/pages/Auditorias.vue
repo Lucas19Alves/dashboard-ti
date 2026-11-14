@@ -13,6 +13,9 @@ import SparklineMeta from '../components/ui/SparklineMeta.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
 import UiTabela from '../components/ui/UiTabela.vue'
+import UiAcoes from '../components/ui/UiAcoes.vue'
+import UiMenu from '../components/ui/UiMenu.vue'
+import { GRUPOS } from '../composables/useAcoes'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -661,13 +664,24 @@ const classesCardDia = (d) => {
   if (lista.some(a => a.status === 'fechada' && !dentroDaMeta(a))) return 'bg-red-50 hover:bg-red-100/70'
   return 'bg-emerald-50 hover:bg-emerald-100/70'
 }
+
+// --- Ações (padrão do sistema; também no Ctrl+K) ---
+const acoesCabecalho = [
+  { id: 'aud-nova', rotulo: 'Nova auditoria', icone: 'fas fa-plus', nivel: 'principal', termos: 'criar importar planilha hoje', executar: novaAuditoriaHoje }
+]
+// Ações de cada auditoria (menu "⋯" do cartão e da linha).
+const acoesDaAuditoria = a => [
+  { id: 'abrir', rotulo: 'Abrir painel', icone: 'fas fa-arrow-up-right-from-square', executar: () => router.push(`/auditoria/${a.id}`) },
+  { id: 'fechar', rotulo: 'Fechar auditoria', icone: 'fas fa-lock', grupo: GRUPOS.dados, oculta: a.status === 'fechada', executar: () => fecharAuditoria(a.id) },
+  { id: 'excluir', rotulo: 'Excluir auditoria', icone: 'fas fa-trash', perigo: true, executar: () => excluirAuditoria(a.id) }
+]
 </script>
 
 <template>
   <div class="ui-page min-h-[calc(100vh-4rem)]">
       <UiPageHeader title="Auditorias" subtitle="Organize, acompanhe e finalize as auditorias da loja." icon="fas fa-search">
         <template #actions>
-<UiButton @click="novaAuditoriaHoje"><i class="fas fa-plus"></i>Nova auditoria</UiButton>
+          <UiAcoes :acoes="acoesCabecalho" contexto="Auditorias" />
         </template>
       </UiPageHeader>
 
@@ -1096,12 +1110,7 @@ const classesCardDia = (d) => {
               <router-link :to="`/auditoria/${auditoria.id}`" class="mr-auto rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50">
                 Abrir painel
               </router-link>
-              <button type="button" class="rounded-lg px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50" title="Fechar auditoria" @click="fecharAuditoria(auditoria.id)">
-                <i class="fas fa-lock mr-1"></i>Fechar
-              </button>
-              <button type="button" class="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(auditoria.id)">
-                <i class="fas fa-trash"></i>
-              </button>
+              <UiMenu :acoes="acoesDaAuditoria(auditoria)" rotulo="" estilo="ferramenta" titulo="Ações da auditoria" />
             </div>
           </article>
         </div>
@@ -1164,12 +1173,7 @@ const classesCardDia = (d) => {
                 <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.meta === 'Na meta' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
                   <i :class="l.meta === 'Na meta' ? 'fas fa-check' : 'fas fa-times'" class="text-[9px]"></i>{{ l.meta === 'Na meta' ? 'Meta' : 'Fora' }}
                 </span>
-                <button type="button" class="rounded-lg p-2 text-amber-600 hover:bg-amber-50" :class="l.auditoria.status === 'fechada' ? 'invisible' : ''" title="Fechar auditoria" aria-label="Fechar auditoria" @click="fecharAuditoria(l.id)">
-                  <i class="fas fa-lock text-xs"></i>
-                </button>
-                <button type="button" class="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(l.id)">
-                  <i class="fas fa-trash text-xs"></i>
-                </button>
+                <UiMenu :acoes="acoesDaAuditoria(l.auditoria)" rotulo="" estilo="ferramenta" titulo="Ações da auditoria" />
               </div>
             </div>
           </template>

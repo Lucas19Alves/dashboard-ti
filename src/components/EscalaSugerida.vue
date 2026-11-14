@@ -1,5 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
+import UiAcoes from './ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 import { agregarPorArea, carregarLayoutSalvo, gerarLayoutPadrao, interpretarLocal, mesclarLayout, nomeArea } from '../utils/mapaLoja'
 import { mediana, ritmosDaAuditoria } from '../utils/planoAcao'
 import { familiaDoTipo, montarEscala, nomeUnidade, perfisColaboradores, textoHora, unidadeDoLocal } from '../utils/perfilColaborador'
@@ -256,6 +258,11 @@ const TOM_AVISO = { ruim: 'bg-red-50 text-red-800', alerta: 'bg-amber-50 text-am
 const ICONE_AVISO = { ruim: 'fas fa-user-slash', alerta: 'fas fa-clock', neutro: 'fas fa-circle-info' }
 
 // Escala impressa para afixar ou entregar à equipe: uma linha por pessoa, com assinatura.
+// Ações da escala (padrão do sistema; também no Ctrl+K).
+const acoesEscala = computed(() => [
+  { id: 'escala-imprimir', rotulo: 'Imprimir escala', icone: 'fas fa-print', nivel: 'secundaria', grupo: GRUPOS.exportar, desativado: !escala.value.grupos.length, termos: 'pdf escala equipe', executar: () => imprimirEscala() },
+  { id: 'escala-desfazer', rotulo: `Desfazer ajustes (${fixasAtivas.value})`, detalhe: 'Volta à divisão automática', icone: 'fas fa-rotate-left', grupo: GRUPOS.dados, oculta: !fixas.value.size, executar: () => { salvarFixas(new Map()); areaEscolhida.value = null } }
+])
 const imprimirEscala = () => {
   const e = escala.value
   if (!e.grupos.length) return
@@ -299,8 +306,7 @@ const imprimirEscala = () => {
         <p class="text-xs text-slate-500">Cada local (face de corredor) vai para quem costuma lê-lo nas auditorias. Faces do mesmo corredor com setores diferentes podem ficar com pessoas diferentes. Ninguém sai do próprio perfil, passa da capacidade ou fica espalhado pela loja.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button v-if="fixas.size" type="button" class="ui-btn-secondary py-1.5 text-xs" title="Volta à divisão automática" @click="salvarFixas(new Map()); areaEscolhida = null"><i class="fas fa-rotate-left"></i>Desfazer ajustes ({{ fixasAtivas }})</button>
-        <button type="button" class="ui-btn-secondary py-1.5 text-xs" :disabled="!escala.grupos.length" @click="imprimirEscala"><i class="fas fa-print"></i>Imprimir escala</button>
+        <UiAcoes :acoes="acoesEscala" contexto="Escala sugerida" tamanho="sm" />
         <label class="flex items-center gap-2 text-xs font-semibold text-slate-600">
           Histórico
           <select v-model.number="base" class="ui-input w-auto py-1.5 text-xs">

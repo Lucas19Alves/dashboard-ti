@@ -3,6 +3,8 @@ import UiTabela from './ui/UiTabela.vue'
 import { computed, ref } from 'vue'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 import TrajetoUsuario from './TrajetoUsuario.vue'
+import UiAcoes from './ui/UiAcoes.vue'
+import { GRUPOS } from '../composables/useAcoes'
 
 // Aba "Usuários" do detalhe da auditoria: produtividade, ritmo por hora e cobertura por setor.
 const props = defineProps({
@@ -12,6 +14,9 @@ const props = defineProps({
   usuarioTrajeto: { type: String, default: '' } // usuário aberto no mapa histórico
 })
 const emit = defineEmits(['detalhes', 'imprimir'])
+const acoesEquipe = [
+  { id: 'equipe-imprimir', rotulo: 'Imprimir equipe', detalhe: 'Relatório da equipe nesta auditoria', icone: 'fas fa-print', nivel: 'secundaria', grupo: GRUPOS.exportar, termos: 'pdf usuarios colaboradores', executar: () => emit('imprimir') }
+]
 
 const HORAS = Array.from({ length: 13 }, (_, i) => i + 8) // 08h às 20h
 
@@ -257,7 +262,7 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
               <i :class="icone"></i><span class="ml-1 hidden lg:inline">{{ rotulo }}</span>
             </button>
           </div>
-          <button type="button" class="ui-btn-secondary py-2" @click="emit('imprimir')"><i class="fas fa-print"></i>Imprimir</button>
+          <UiAcoes :acoes="acoesEquipe" contexto="Usuários da auditoria" />
         </div>
       </div>
 

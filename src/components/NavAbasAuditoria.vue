@@ -44,7 +44,7 @@ const aoTeclar = async (evento, itens) => {
         </div>
       </transition>
 
-      <div ref="lista" role="tablist" aria-label="Seções da auditoria" class="-mb-px flex min-w-0 flex-1 gap-1 overflow-x-auto" @keydown="aoTeclar($event, items)">
+      <div ref="lista" role="tablist" aria-label="Seções da auditoria" class="abas-rolagem -mb-px flex min-w-0 flex-1 gap-1 overflow-x-auto overflow-y-hidden" @keydown="aoTeclar($event, items)">
         <button
           v-for="item in items"
           :key="item.value"
@@ -75,6 +75,7 @@ const aoTeclar = async (evento, itens) => {
 </template>
 
 <style scoped>
+.abas-rolagem { scrollbar-width: thin; }
 .resumo-enter-active,
 .resumo-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
 .resumo-enter-from,
