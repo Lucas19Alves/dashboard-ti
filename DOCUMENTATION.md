@@ -139,7 +139,7 @@ A aba **Estoque** reúne os problemas de estoque calculados a partir das auditor
   - **Reincidências** só com itens que estão nela com estoque, usando o estoque e os dias sem venda dela; entram também os que já foram auditados e saíram da auditoria (não estão na última Presença), qualquer que seja o tempo sem leitura;
   - **Estoque zerado** perde quem já tem estoque nela (entrada lançada depois da auditoria);
   - **Parados** passam a considerar todos os itens dela, também os que não aparecem nas auditorias;
-  - **Sem local** (nova lista): itens com estoque nela que nunca apareceram nas auditorias, ou seja, não vinculados. Local sugerido pelo histórico do item ou pela classe (mesma regra dos não vinculados);
+  - **Itens que nunca apareceram nas auditorias** são separados assim: na lista de não vinculados = **sem local** (aba Não vinculados); comprados no dia da última Presença ou depois = **chegou depois da última auditoria** (não é problema, ainda não houve como ler); os demais (comprados antes ou sem data de compra) = **Nunca lidos** (lista própria);
   - **Insumos** (setor OUTROS: sacolas, pallets, tabloides) não entram na auditoria e ficam fora de todas as listas de problema (reincidência, zerados, parados, sem local); têm uma aba própria, **Insumos**, só para consulta;
   - **Estoque da loja**: todos os itens dela com local, situação na última auditoria, última leitura, validade e problemas, com filtros e CSV.
 - **Reincidências**: itens com estoque não lidos há 14+ dias (14/21/30/60, lembrado no navegador). Mostra dias e auditorias seguidas sem leitura, última leitura, ruptura acumulada (`Custo Ruptura`) e um diagnóstico: achado em outro local, vende mas não é achado (depósito), nunca lido e sem venda (estoque provavelmente inexistente).

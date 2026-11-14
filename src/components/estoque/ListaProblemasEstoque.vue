@@ -26,7 +26,7 @@ const destaque = l => ({
   reincidencia: l.saiuDaAuditoria ? `Saiu da auditoria, ${l.dias} dias sem leitura` : `${l.dias} dias sem leitura`,
   semEstoque: l.vezes > 1 ? `Zerado em ${l.vezes} auditorias` : 'Zerado na última',
   parado: `${l.dias} dias sem venda`,
-  semLocal: l.sugerido ? `Sem local, sugerido ${l.sugerido}` : 'Sem local, sem sugestão'
+  nuncaLido: 'Nunca lido em auditoria'
 })[l.tipo]
 const qtd = l => formatarQuantidade(l.estoque, l.unidade)
 const detalhe = (l) => {
@@ -38,13 +38,13 @@ const detalhe = (l) => {
   } else if (l.tipo === 'semEstoque') {
     partes[0] = `desde ${br(l.desde)}`
     if (l.diasSemVenda !== null) partes.push(`sem venda há ${l.diasSemVenda} d`)
-  } else if (l.tipo === 'semLocal') {
-    partes.push(l.diasSemVenda === null ? 'sem venda registrada' : `sem venda há ${l.diasSemVenda} d`, 'nunca auditado')
-    if (l.naLista) partes.push('na planilha de não vinculados')
+  } else if (l.tipo === 'nuncaLido') {
+    partes.push(l.diasSemVenda === null ? 'sem venda registrada' : `sem venda há ${l.diasSemVenda} d`)
+    if (l.ultimaCompra) partes.push(`última compra em ${br(l.ultimaCompra)}`)
   } else {
     if (l.validade) partes.push(l.venceEm < 0 ? `vencido em ${br(l.validade)}` : `vence em ${br(l.validade)}`)
     if (l.naoAchado) partes.push('não achado na última auditoria')
-    if (l.semLocal) partes.push('sem local')
+    if (l.nuncaAuditado) partes.push('nunca auditado')
     if (l.saiu) partes.push('saiu da auditoria')
   }
   return partes.join(', ')
@@ -79,7 +79,7 @@ const TODAS = [
   { chave: 'venceEm', titulo: 'Dias p/ vencer', tipo: 'numero', oculta: true },
   { chave: 'naoAchado', titulo: 'Não achado na gôndola', tipo: 'booleano', valor: l => Boolean(l.naoAchado), so: 'parado' },
   { chave: 'sugerido', titulo: 'Local sugerido', tipo: 'categoria', oculta: true },
-  { chave: 'naLista', titulo: 'Na planilha de não vinculados', tipo: 'booleano', valor: l => Boolean(l.naLista), so: 'semLocal' }
+  { chave: 'ultimaCompra', titulo: 'Última compra', tipo: 'data', oculta: true }
 ]
 const colunas = computed(() => {
   const tiposNaLista = new Set(props.linhas.map(l => l.tipo))

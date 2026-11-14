@@ -173,7 +173,7 @@ const prioridades = computed(() => {
   const e = estoque.resumo.value
   if (e.reincidentes) lista.push({ tom: 'atencao', icone: 'fas fa-repeat', titulo: `${plural(e.reincidentes, 'item', 'itens')} com estoque sem leitura há ${estoque.limiarReincidencia.value}+ dias`, detalhe: 'Procurar, repor ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'reincidencias' } }, ordem: 3 })
   if (e.semEstoque) lista.push({ tom: 'atencao', icone: 'fas fa-box-open', titulo: `${plural(e.semEstoque, 'item', 'itens')} na gôndola com estoque zerado`, detalhe: 'Lançar a entrada ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'sem-estoque' } }, ordem: 3 })
-  if (e.semLocal) lista.push({ tom: 'info', icone: 'fas fa-link-slash', titulo: `${plural(e.semLocal, 'item', 'itens')} com estoque e sem local`, detalhe: 'Nunca apareceram nas auditorias: vincular ao local sugerido.', to: { path: '/estoque', query: { aba: 'sem-local' } }, ordem: 4 })
+  if (e.nuncaLidos) lista.push({ tom: 'info', icone: 'fas fa-eye-slash', titulo: `${plural(e.nuncaLidos, 'item', 'itens')} com estoque e nunca lidos`, detalhe: 'Comprados antes da última Presença e nunca apareceram nas auditorias.', to: { path: '/estoque', query: { aba: 'nunca-lidos' } }, ordem: 4 })
   const hoje = paraISOLocal(agora)
   const nvHoje = nvStore.itens.filter(i => i.status !== 'resolvido' && i.primeiroVisto === hoje).length
   if (e.naoVinculados) lista.push({ tom: 'info', icone: 'fas fa-link-slash', titulo: `Vincular ${plural(e.naoVinculados, 'item sem local', 'itens sem local')}`, detalhe: nvHoje ? `${nvHoje} chegaram hoje.` : 'Ficam fora da auditoria até ter local.', to: { path: '/estoque', query: { aba: 'nao-vinculados' } }, ordem: 5 })
