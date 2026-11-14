@@ -34,7 +34,7 @@ const detalhe = (l) => {
   if (l.tipo === 'reincidencia') {
     partes.push(l.nuncaLido ? 'nunca lido' : `lido pela última vez em ${br(l.ultimaLeitura)}`, l.saiuDaAuditoria ? `fora da auditoria desde ${br(l.ultimaData)}` : `${l.auditoriasSemLeitura} auditorias seguidas`)
     if (l.diasSemVenda !== null) partes.push(`sem venda há ${l.diasSemVenda} d`)
-    if (l.custoAcumulado) partes.push(`${real(l.custoAcumulado)} em ruptura`)
+    if (l.valorEmFalta) partes.push(`${real(l.valorEmFalta)} em estoque não achado`)
   } else if (l.tipo === 'semEstoque') {
     partes[0] = `desde ${br(l.desde)}`
     if (l.diasSemVenda !== null) partes.push(`sem venda há ${l.diasSemVenda} d`)
@@ -70,7 +70,7 @@ const TODAS = [
   { chave: 'ultimaVenda', titulo: 'Última venda', tipo: 'data', oculta: true },
   { chave: 'ultimaLeitura', titulo: 'Última leitura', tipo: 'data', oculta: true },
   { chave: 'auditoriasSemLeitura', titulo: 'Auditorias sem leitura', tipo: 'numero', oculta: true },
-  { chave: 'custoAcumulado', titulo: 'Ruptura acumulada (R$)', tipo: 'numero', oculta: true },
+  { chave: 'valorEmFalta', titulo: 'Valor em falta (R$)', tipo: 'numero', oculta: true },
   { chave: 'saiuDaAuditoria', titulo: 'Saiu da auditoria', tipo: 'booleano', valor: l => Boolean(l.saiuDaAuditoria), so: 'reincidencia' },
   { chave: 'nuncaLido', titulo: 'Nunca lido', tipo: 'booleano', valor: l => Boolean(l.nuncaLido), so: 'reincidencia' },
   { chave: 'achadoEm', titulo: 'Achado em outro local', tipo: 'categoria', oculta: true },
@@ -95,7 +95,7 @@ const atalhos = computed(() => {
   if (props.linhas.some(l => l.diasSemVenda !== null && l.diasSemVenda !== undefined)) lista.push({ rotulo: 'Vende (≤ 7 dias)', icone: 'fas fa-cart-shopping', condicoes: [{ chave: 'diasSemVenda', op: 'menorIgual', valor: '7' }] })
   if (props.linhas.some(l => l.saiuDaAuditoria)) lista.push({ rotulo: 'Saíram da auditoria', icone: 'fas fa-eye-slash', condicoes: [{ chave: 'saiuDaAuditoria', op: 'sim' }] })
   if (props.linhas.some(l => l.validade)) lista.push({ rotulo: 'Vence em 30 dias', icone: 'fas fa-calendar-xmark', condicoes: [{ chave: 'venceEm', op: 'menorIgual', valor: '30' }] })
-  if (props.linhas.some(l => l.custoAcumulado > 0)) lista.push({ rotulo: 'Com ruptura', icone: 'fas fa-sack-dollar', condicoes: [{ chave: 'custoAcumulado', op: 'maior', valor: '0' }] })
+  if (props.linhas.some(l => l.valorEmFalta > 0)) lista.push({ rotulo: 'Com valor em falta', icone: 'fas fa-sack-dollar', condicoes: [{ chave: 'valorEmFalta', op: 'maior', valor: '0' }] })
   return lista
 })
 const compactas = computed(() => (props.limite ? props.linhas.slice(0, props.limite) : props.linhas))

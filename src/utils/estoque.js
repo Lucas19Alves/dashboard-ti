@@ -65,7 +65,7 @@ export const indexarEstoque = (auditorias) => {
       const r = itens.get(codigo) || {
         codigo, produto: '', setor: '', classe: '', fornecedor: '', local: '',
         primeiraData: data, ultimaData: '', ultimaLeitura: '', pendenteDesde: '',
-        aparicoes: 0, leituras: 0, seguidasSemLeitura: 0, custoAcumulado: 0,
+        aparicoes: 0, leituras: 0, seguidasSemLeitura: 0, valorEmFalta: 0,
         semEstoqueVezes: 0, semEstoqueDesde: '', naoPertence: new Map(), historico: []
       }
       r.produto = produtoDoItem(item)
@@ -89,20 +89,25 @@ export const indexarEstoque = (auditorias) => {
         r.naoPertence.set(v.localLido, n)
       }
       let situacao
+      // Valor em falta: o "Custo Ruptura" do sistema é o valor do estoque do item (quantidade × custo).
+      // Vale o da última auditoria em que ele não foi achado (não se soma semana a semana);
+      // zera quando o item é lido ou fica sem estoque.
       if (lido) {
         r.leituras++
         r.ultimaLeitura = data
         r.seguidasSemLeitura = 0
         r.pendenteDesde = ''
+        r.valorEmFalta = 0
         situacao = comEstoque ? 'lido' : 'lidoSemEstoque'
       } else if (comEstoque) {
+        r.valorEmFalta = r.custo
         r.seguidasSemLeitura++
         r.pendenteDesde ||= data
-        r.custoAcumulado += r.custo
         situacao = 'pendente'
       } else {
         r.seguidasSemLeitura = 0
         r.pendenteDesde = ''
+        r.valorEmFalta = 0
         situacao = 'semEstoque'
       }
       if (situacao === 'lidoSemEstoque') {
@@ -185,9 +190,9 @@ export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS, total
       nuncaLido,
       desde,
       auditoriasSemLeitura: r.seguidasSemLeitura,
-      custoAcumulado: r.custoAcumulado,
+      valorEmFalta: r.valorEmFalta,
       achadoEm: achado,
-      gravidade: 2 + (vende ? 2 : 0) + Math.min(3, Math.floor(dias / 14)) + (r.custoAcumulado > 0 ? 1 : 0) + (achado ? 1 : 0),
+      gravidade: 2 + (vende ? 2 : 0) + Math.min(3, Math.floor(dias / 14)) + (r.valorEmFalta > 0 ? 1 : 0) + (achado ? 1 : 0),
       diagnostico: diagnosticoReincidencia({ nuncaLido, diasSemVenda, achado, dias })
     })
   }
@@ -207,9 +212,9 @@ export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS, total
       nuncaLido,
       desde,
       auditoriasSemLeitura: r.seguidasSemLeitura,
-      custoAcumulado: r.custoAcumulado,
+      valorEmFalta: r.valorEmFalta,
       achadoEm: achado,
-      gravidade: 3 + (vende ? 2 : 0) + Math.min(3, Math.floor(dias / 14)) + (r.custoAcumulado > 0 ? 1 : 0) + (achado ? 1 : 0),
+      gravidade: 3 + (vende ? 2 : 0) + Math.min(3, Math.floor(dias / 14)) + (r.valorEmFalta > 0 ? 1 : 0) + (achado ? 1 : 0),
       diagnostico: achado
         ? `Saiu da auditoria e foi lido em ${achado}: devolver ao local ou corrigir o vínculo`
         : nuncaLido
@@ -219,7 +224,7 @@ export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS, total
             : 'Saiu da auditoria sem ser lido: procurar o produto, repor a gôndola ou contar e ajustar o estoque'
     })
   }
-  return linhas.sort((a, b) => b.gravidade - a.gravidade || b.dias - a.dias || b.custoAcumulado - a.custoAcumulado)
+  return linhas.sort((a, b) => b.gravidade - a.gravidade || b.dias - a.dias || b.valorEmFalta - a.valorEmFalta)
 }
 
 // Itens lidos na gôndola com estoque zerado no sistema na última auditoria em que apareceram.
@@ -311,7 +316,7 @@ export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados =
     r.custo += extra
     mapa.set(k, r)
   }
-  for (const l of reincidentes) somar(l[campo], 'reincidentes', l.custoAcumulado || 0)
+  for (const l of reincidentes) somar(l[campo], 'reincidentes', l.valorEmFalta || 0)
   for (const l of semEstoque) somar(l[campo], 'semEstoque')
   for (const l of parados) somar(l[campo], 'parados')
   for (const l of nuncaLidos) somar(l[campo], 'nuncaLidos')
