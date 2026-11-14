@@ -1,13 +1,13 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import MapaLoja from './MapaLoja.vue'
 import UiModal from './ui/UiModal.vue'
+import UiTabela from './ui/UiTabela.vue'
 import UiListaItens from './ui/UiListaItens.vue'
 import { mapaReincidencia, reincidenciaLocais, reincidenciaProdutos } from '../utils/historicoAuditorias'
 import { META_PENDENTE_PERCENTUAL } from '../utils/metricasAuditoria'
 import { TIPOS_AREA, interpretarLocal } from '../utils/mapaLoja'
-import { correspondeBusca, formatarDataBR } from '../utils/busca'
-import { baixarCsv } from '../utils/csv'
+import { formatarDataBR } from '../utils/busca'
 
 // Reincidência no período: locais que ficam fora da meta auditoria após auditoria,
 // mapa de calor dessas ocorrências e produtos que se repetem nos pendentes.
@@ -67,54 +67,24 @@ const locaisDaArea = area => mapa.value.dados
 const modal = ref(null) // { local, itens }
 const abrirLocais = ({ local, itens }) => { modal.value = { local, itens: itens.map(l => ({ ...l, situacao: situacao(l), tipoArea: tipoArea(l) })) } }
 
-// ---------- Tabela de locais: busca, filtros e ordenação ----------
-const busca = ref('')
-const minimo = ref(2)
-const filtroSituacao = ref('')
-const filtroTipo = ref('')
-const tiposDisponiveis = computed(() => [...new Set(locais.value.map(l => l.tipoArea))].sort())
-const SITUACOES = ['Em sequência', 'Crônico', 'Pontual', 'Na meta']
-const ordem = ref({ chave: 'foraMeta', direcao: 'desc' })
-const ordenar = (chave) => {
-  ordem.value = ordem.value.chave === chave ? { chave, direcao: ordem.value.direcao === 'desc' ? 'asc' : 'desc' } : { chave, direcao: chave === 'local' ? 'asc' : 'desc' }
-}
-const iconeOrdem = chave => (ordem.value.chave !== chave ? 'fas fa-sort text-slate-300' : ordem.value.direcao === 'desc' ? 'fas fa-sort-down text-blue-600' : 'fas fa-sort-up text-blue-600')
-const listaLocais = computed(() => {
-  const { chave, direcao } = ordem.value
-  const fator = direcao === 'desc' ? -1 : 1
-  return locais.value
-    .filter(l => l.foraMeta >= minimo.value)
-    .filter(l => !filtroSituacao.value || l.situacao === filtroSituacao.value)
-    .filter(l => !filtroTipo.value || l.tipoArea === filtroTipo.value)
-    .filter(l => correspondeBusca(busca.value, [l.local, l.chave, l.tipoArea, l.situacao]))
-    .sort((a, b) => {
-      const va = a[chave]; const vb = b[chave]
-      const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR', { numeric: true })
-      return r * fator || b.foraMeta - a.foraMeta || String(a.local).localeCompare(String(b.local), 'pt-BR', { numeric: true })
-    })
-})
-const filtrosAtivos = computed(() => Boolean(busca.value || filtroSituacao.value || filtroTipo.value || minimo.value !== 2))
-const limparFiltros = () => { busca.value = ''; filtroSituacao.value = ''; filtroTipo.value = ''; minimo.value = 2 }
-const pagina = ref(1)
-const POR_PAGINA = 15
-watch([busca, minimo, filtroSituacao, filtroTipo, ordem], () => { pagina.value = 1 })
-const paginaLocais = computed(() => listaLocais.value.slice((pagina.value - 1) * POR_PAGINA, pagina.value * POR_PAGINA))
-const totalPaginas = computed(() => Math.max(1, Math.ceil(listaLocais.value.length / POR_PAGINA)))
-const COLUNAS_TABELA = [
-  { chave: 'local', titulo: 'Local', alinhar: 'left' },
-  { chave: 'situacao', titulo: 'Situação', alinhar: 'left' },
-  { chave: 'foraMeta', titulo: 'Fora / auditorias', alinhar: 'right' },
-  { chave: 'taxaFora', titulo: '% fora', alinhar: 'right' },
-  { chave: 'sequencia', titulo: 'Seguidas', alinhar: 'right' },
-  { chave: 'percMedio', titulo: '% pendente médio', alinhar: 'right' },
-  { chave: null, titulo: 'Histórico', alinhar: 'left' },
-  { chave: 'ultimaData', titulo: 'Última', alinhar: 'right' }
+// ---------- Tabela de locais (tabela padrão: busca, filtros, ordem, paginação, CSV) ----------
+const COLUNAS_LOCAIS = [
+  { chave: 'local', titulo: 'Local', tipo: 'texto' },
+  { chave: 'tipoArea', titulo: 'Tipo de área', tipo: 'categoria', rapido: true, oculta: true },
+  { chave: 'situacao', titulo: 'Situação', tipo: 'categoria', rapido: true, badge: v => CLASSE_SITUACAO[v] },
+  { chave: 'foraMeta', titulo: 'Fora da meta', tipo: 'numero', formato: (v, l) => `${v} / ${l.auditorias}` },
+  { chave: 'auditorias', titulo: 'Auditorias', tipo: 'numero', oculta: true },
+  { chave: 'taxaFora', titulo: '% fora', tipo: 'numero', formato: v => `${v.toFixed(0)}%` },
+  { chave: 'sequencia', titulo: 'Seguidas', tipo: 'numero' },
+  { chave: 'percMedio', titulo: '% pendente médio', tipo: 'numero', formato: v => `${v.toFixed(2)}%` },
+  { chave: 'historico', titulo: 'Histórico', tipo: 'texto', ordenavel: false, filtravel: false, busca: false, valor: () => '' },
+  { chave: 'ultimaData', titulo: 'Última', tipo: 'data' }
 ]
-
-const exportarLocais = () => baixarCsv(listaLocais.value.map(l => ({ ...l, taxaFora: l.taxaFora.toFixed(1).replace('.', ','), percMedio: l.percMedio.toFixed(2).replace('.', ',') })), [
-  { chave: 'local', titulo: 'Local' }, { chave: 'tipoArea', titulo: 'Tipo de área' }, { chave: 'situacao', titulo: 'Situação' }, { chave: 'auditorias', titulo: 'Auditorias' }, { chave: 'foraMeta', titulo: 'Fora da meta' },
-  { chave: 'taxaFora', titulo: '% fora da meta' }, { chave: 'sequencia', titulo: 'Seguidas fora (recentes)' }, { chave: 'percMedio', titulo: '% pendente médio' }, { chave: 'ultimaData', titulo: 'Última auditoria' }
-], 'reincidencia-locais')
+const ATALHOS_LOCAIS = [
+  { rotulo: 'Fora em 2+ auditorias', icone: 'fas fa-repeat', condicoes: [{ chave: 'foraMeta', op: 'maiorIgual', valor: '2' }] },
+  { rotulo: 'Em sequência', icone: 'fas fa-fire', condicoes: [{ chave: 'situacao', op: 'em', valor: ['Em sequência'] }] },
+  { rotulo: 'Mais da metade fora', icone: 'fas fa-percent', condicoes: [{ chave: 'taxaFora', op: 'maior', valor: '50' }] }
+]
 
 const colunasModal = [
   { chave: 'local', titulo: 'Local' },
@@ -196,77 +166,21 @@ const facetasProdutos = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'vezes', 
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 class="text-base font-bold text-slate-900">Locais reincidentes</h2>
-          <p class="text-xs text-slate-500">Clique no título da coluna para ordenar. A faixa mostra as últimas auditorias (vermelho = fora da meta).</p>
+          <p class="text-xs text-slate-500">A faixa mostra as últimas auditorias (vermelho = fora da meta).</p>
         </div>
-        <button type="button" class="ui-btn-secondary py-1.5 text-xs" :disabled="!listaLocais.length" @click="exportarLocais"><i class="fas fa-file-csv"></i>CSV</button>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))_auto]">
-        <label class="relative block">
-          <span class="sr-only">Buscar local</span>
-          <i class="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
-          <input v-model="busca" type="search" class="ui-input py-2 pl-8 text-sm" placeholder="Buscar local, área ou situação...">
-        </label>
-        <label class="block">
-          <span class="sr-only">Situação</span>
-          <select v-model="filtroSituacao" class="ui-input py-2 text-sm">
-            <option value="">Todas as situações</option>
-            <option v-for="s in SITUACOES" :key="s" :value="s">{{ s }}</option>
-          </select>
-        </label>
-        <label class="block">
-          <span class="sr-only">Tipo de área</span>
-          <select v-model="filtroTipo" class="ui-input py-2 text-sm">
-            <option value="">Todos os tipos de área</option>
-            <option v-for="t in tiposDisponiveis" :key="t" :value="t">{{ t }}</option>
-          </select>
-        </label>
-        <label class="block">
-          <span class="sr-only">Fora da meta em pelo menos</span>
-          <select v-model.number="minimo" class="ui-input py-2 text-sm">
-            <option :value="0">Todos os locais</option>
-            <option v-for="n in [1, 2, 3, 4, 5]" :key="n" :value="n">Fora em {{ n }}+ auditoria(s)</option>
-          </select>
-        </label>
-        <button type="button" class="ui-btn-secondary py-2 text-xs" :disabled="!filtrosAtivos" @click="limparFiltros"><i class="fas fa-filter-circle-xmark"></i>Limpar</button>
-      </div>
-      <p class="mt-2 text-xs text-slate-500">{{ listaLocais.length.toLocaleString('pt-BR') }} de {{ locais.length.toLocaleString('pt-BR') }} locais</p>
-
-      <div class="mt-2 overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="text-xs text-slate-500">
-            <tr class="border-b-2 border-slate-100">
-              <th v-for="c in COLUNAS_TABELA" :key="c.titulo" scope="col" class="px-3 py-2 font-semibold" :class="c.alinhar === 'right' ? 'text-right' : 'text-left'" :aria-sort="c.chave && ordem.chave === c.chave ? (ordem.direcao === 'desc' ? 'descending' : 'ascending') : undefined">
-                <button v-if="c.chave" type="button" class="inline-flex items-center gap-1.5 hover:text-slate-800" @click="ordenar(c.chave)">{{ c.titulo }}<i :class="iconeOrdem(c.chave)" aria-hidden="true"></i></button>
-                <template v-else>{{ c.titulo }}</template>
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50">
-            <tr v-for="l in paginaLocais" :key="l.chave">
-              <td class="px-3 py-2"><p class="font-bold text-slate-900">{{ l.local }}</p><p class="text-[11px] text-slate-500">{{ l.tipoArea }}</p></td>
-              <td class="px-3 py-2"><span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="CLASSE_SITUACAO[l.situacao]">{{ l.situacao }}</span></td>
-              <td class="px-3 py-2 text-right tabular-nums">{{ l.foraMeta }} / {{ l.auditorias }}</td>
-              <td class="px-3 py-2 text-right font-bold tabular-nums" :class="l.taxaFora > 50 ? 'text-red-700' : l.taxaFora > 25 ? 'text-amber-700' : 'text-emerald-700'">{{ l.taxaFora.toFixed(0) }}%</td>
-              <td class="px-3 py-2 text-right"><span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="l.sequencia >= 3 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'">{{ l.sequencia }}</span></td>
-              <td class="px-3 py-2 text-right tabular-nums text-slate-600">{{ l.percMedio.toFixed(2) }}%</td>
-              <td class="px-3 py-2">
-                <div class="flex gap-0.5" :aria-label="`Histórico de ${l.local}`">
-                  <span v-for="(h, i) in l.historico" :key="i" class="h-4 w-2 rounded-sm" :class="h.fora ? 'bg-red-500' : 'bg-emerald-400'" :title="`${formatarDataBR(h.data)}: ${h.perc.toFixed(1)}%`"></span>
-                </div>
-              </td>
-              <td class="px-3 py-2 text-right text-xs text-slate-500">{{ formatarDataBR(l.ultimaData) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!listaLocais.length" class="py-8 text-center text-sm text-slate-500">Nenhum local com esses filtros.</p>
-      </div>
-      <div v-if="totalPaginas > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <span>Página {{ pagina }} de {{ totalPaginas }}</span>
-        <div class="flex gap-1">
-          <button type="button" class="ui-btn-secondary px-3 py-1.5" :disabled="pagina === 1" aria-label="Página anterior" @click="pagina--"><i class="fas fa-angle-left"></i></button>
-          <button type="button" class="ui-btn-secondary px-3 py-1.5" :disabled="pagina === totalPaginas" aria-label="Próxima página" @click="pagina++"><i class="fas fa-angle-right"></i></button>
-        </div>
+      <div class="mt-4">
+        <UiTabela id="reincidencia-locais" titulo="Locais reincidentes" :itens="locais" :colunas="COLUNAS_LOCAIS" :atalhos="ATALHOS_LOCAIS" :filtros-iniciais="[{ chave: 'foraMeta', op: 'maiorIgual', valor: '2' }]" :ordem-inicial="[{ chave: 'foraMeta', direcao: 'desc' }, { chave: 'taxaFora', direcao: 'desc' }]" chave-item="chave" :agrupavel="true" vazio="Nenhum local no período.">
+          <template #celula-local="{ item: l }"><p class="font-bold text-slate-900">{{ l.local }}</p><p class="text-[11px] font-normal text-slate-500">{{ l.tipoArea }}</p></template>
+          <template #celula-taxaFora="{ item: l, texto }"><span class="font-bold" :class="l.taxaFora > 50 ? 'text-red-700' : l.taxaFora > 25 ? 'text-amber-700' : 'text-emerald-700'">{{ texto }}</span></template>
+          <template #celula-sequencia="{ item: l }"><span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="l.sequencia >= 3 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'">{{ l.sequencia }}</span></template>
+          <template #celula-historico="{ item: l }">
+            <div class="flex gap-0.5" :aria-label="`Histórico de ${l.local}`">
+              <span v-for="(h, i) in l.historico" :key="i" class="h-4 w-2 rounded-sm" :class="h.fora ? 'bg-red-500' : 'bg-emerald-400'" :title="`${formatarDataBR(h.data)}: ${h.perc.toFixed(1)}%`"></span>
+            </div>
+          </template>
+        </UiTabela>
       </div>
     </section>
 

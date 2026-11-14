@@ -6,7 +6,7 @@ import { blocoBarras, blocoColunas, blocoDestaques, blocoTabela, escapeHtml, sel
 import { useRelatorio } from '../composables/useRelatorio'
 import { reincidenciaLocais, rupturaEmValor } from '../utils/historicoAuditorias'
 import { baixarCsv } from '../utils/csv'
-import { correspondeBusca, formatarDataBR } from '../utils/busca'
+import { formatarDataBR } from '../utils/busca'
 import { consolidarParaMapa } from '../utils/mapaLoja'
 import { isItemLido } from '../utils/itemLido'
 import { separarUsuario } from '../utils/usuario'
@@ -25,6 +25,7 @@ import {
   tendencia,
   variacao
 } from '../utils/analiseHistorica'
+import UiTabela from '../components/ui/UiTabela.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
@@ -185,16 +186,25 @@ const ordenar = (lista, { coluna, direcao }) => [...lista].sort((a, b) => {
   const r = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR')
   return direcao === 'asc' ? r : -r
 })
-const alternarOrdem = (estado, coluna, padraoDesc = true) => {
-  if (estado.coluna === coluna) estado.direcao = estado.direcao === 'asc' ? 'desc' : 'asc'
-  else Object.assign(estado, { coluna, direcao: padraoDesc ? 'desc' : 'asc' })
-}
-const iconeOrdem = (estado, coluna) => (estado.coluna !== coluna ? 'fa-sort text-slate-300' : estado.direcao === 'asc' ? 'fa-sort-up text-blue-600' : 'fa-sort-down text-blue-600')
 
 // ---------- Setores ----------
-const buscaSetor = ref('')
-const ordemSetores = reactive({ coluna: 'reincidencia', direcao: 'desc' })
-const setoresVisiveis = computed(() => ordenar(setores.value.filter(s => correspondeBusca(buscaSetor.value, [s.setor])), ordemSetores))
+const fmtPerc = (v, casas = 2) => (v === null || v === undefined ? '—' : `${Number(v).toFixed(casas)}%`)
+const colunasSetores = [
+  { chave: 'setor', titulo: 'Setor', tipo: 'texto' },
+  { chave: 'auditorias', titulo: 'Auditorias', tipo: 'numero' },
+  { chave: 'lidos', titulo: 'Lidos', tipo: 'numero' },
+  { chave: 'pendentes', titulo: 'Pendentes', tipo: 'numero' },
+  { chave: 'percPendente', titulo: '% Pendente', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'percProblema', titulo: '% Problema', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'reincidencia', titulo: 'Acima da meta (%)', tipo: 'numero', formato: (v, s) => `${s.acimaDaMeta}/${s.auditorias}` },
+  { chave: 'ultimo', titulo: 'Última', tipo: 'numero', formato: v => fmtPerc(v, 1) },
+  { chave: 'reincidente', titulo: 'Reincidente', tipo: 'booleano', oculta: true, valor: s => s.reincidencia >= 50 && s.auditorias >= 2 },
+  { chave: 'historico', titulo: 'Últimas 12', tipo: 'texto', ordenavel: false, filtravel: false, busca: false, valor: () => '' }
+]
+const atalhosSetores = [
+  { rotulo: 'Reincidentes', icone: 'fas fa-repeat', condicoes: [{ chave: 'reincidente', op: 'sim' }] },
+  { rotulo: `Acima da meta na última`, icone: 'fas fa-arrow-trend-up', condicoes: [{ chave: 'ultimo', op: 'maior', valor: String(META) }] }
+]
 const totalSetores = computed(() => {
   const lista = setores.value
   if (!lista.length) return null
@@ -207,22 +217,20 @@ const totalSetores = computed(() => {
 const setoresReincidentes = computed(() => setores.value.filter(s => s.auditorias >= 2 && s.reincidencia >= 50).length)
 
 // ---------- Usuários ----------
-const buscaUsuario = ref('')
-const ordemUsuarios = reactive({ coluna: 'leituras', direcao: 'desc' })
-const paginaUsuarios = ref(1)
-const POR_PAGINA_USUARIOS = 15
-const usuariosOrdenados = computed(() => ordenar(usuarios.value.filter(u => correspondeBusca(buscaUsuario.value, [u.usuario])), ordemUsuarios))
-const totalPaginasUsuarios = computed(() => Math.max(1, Math.ceil(usuariosOrdenados.value.length / POR_PAGINA_USUARIOS)))
-const usuariosPagina = computed(() => usuariosOrdenados.value.slice((paginaUsuarios.value - 1) * POR_PAGINA_USUARIOS, paginaUsuarios.value * POR_PAGINA_USUARIOS))
+const colunasUsuarios = [
+  { chave: 'posicao', titulo: '#', tipo: 'numero', valor: u => rankingLeituras.value.get(u.usuario) },
+  { chave: 'usuario', titulo: 'Usuário', tipo: 'texto' },
+  { chave: 'auditorias', titulo: 'Auditorias', tipo: 'numero' },
+  { chave: 'leituras', titulo: 'Leituras', tipo: 'numero', alinhamento: 'left' },
+  { chave: 'mediaPorAuditoria', titulo: 'Média/auditoria', tipo: 'numero', formato: v => Math.round(v).toLocaleString('pt-BR') },
+  { chave: 'comProblema', titulo: 'Com problema', tipo: 'numero' },
+  { chave: 'percProblema', titulo: '% Problema', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'ultimaData', titulo: 'Última', tipo: 'data' }
+]
 const rankingLeituras = computed(() => new Map([...usuarios.value].sort((a, b) => b.leituras - a.leituras).map((u, i) => [u.usuario, i + 1])))
 const maiorLeitura = computed(() => Math.max(1, ...usuarios.value.map(u => u.leituras)))
-watch([buscaUsuario, () => ordemUsuarios.coluna, () => ordemUsuarios.direcao, auditoriasFiltradas], () => { paginaUsuarios.value = 1 })
 
 // ---------- Auditorias ----------
-const buscaAuditoria = ref('')
-const ordemAuditorias = reactive({ coluna: 'data', direcao: 'desc' })
-const paginaAuditorias = ref(1)
-const POR_PAGINA_AUDITORIAS = 20
 const linhasAuditorias = computed(() => auditoriasFiltradas.value.map(a => {
   const m = metricasAuditoria(a)
   const fechada = a.status === 'fechada'
@@ -242,13 +250,34 @@ const linhasAuditorias = computed(() => auditoriasFiltradas.value.map(a => {
     lidos: m.lidos
   }
 }))
-const auditoriasOrdenadas = computed(() => ordenar(
-  linhasAuditorias.value.filter(l => correspondeBusca(buscaAuditoria.value, [l.tipo, l.dataFormatada, `#${l.id}`, l.status, l.meta])),
-  ordemAuditorias
-))
-const totalPaginasAuditorias = computed(() => Math.max(1, Math.ceil(auditoriasOrdenadas.value.length / POR_PAGINA_AUDITORIAS)))
-const auditoriasPagina = computed(() => auditoriasOrdenadas.value.slice((paginaAuditorias.value - 1) * POR_PAGINA_AUDITORIAS, paginaAuditorias.value * POR_PAGINA_AUDITORIAS))
-watch([buscaAuditoria, () => ordemAuditorias.coluna, () => ordemAuditorias.direcao, auditoriasFiltradas], () => { paginaAuditorias.value = 1 })
+const colunasAuditorias = [
+  { chave: 'selecionar', titulo: 'Comparar', tipo: 'texto', ordenavel: false, filtravel: false, busca: false, valor: () => '' },
+  { chave: 'data', titulo: 'Data', tipo: 'data' },
+  { chave: 'id', titulo: 'Nº', tipo: 'numero', formato: v => `#${v}` },
+  { chave: 'tipo', titulo: 'Tipo', tipo: 'categoria', rapido: true },
+  { chave: 'status', titulo: 'Status', tipo: 'categoria', rapido: true },
+  { chave: 'meta', titulo: 'Meta', tipo: 'categoria', rapido: true },
+  { chave: 'pendente', titulo: '% Pendente', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'conclusao', titulo: '% Conclusão', tipo: 'numero', formato: v => fmtPerc(v), oculta: true },
+  { chave: 'total', titulo: 'Itens', tipo: 'numero' },
+  { chave: 'pendentes', titulo: 'Pendentes', tipo: 'numero' },
+  { chave: 'lidos', titulo: 'Lidos', tipo: 'numero' },
+  { chave: 'abrir', titulo: '', tipo: 'texto', ordenavel: false, filtravel: false, busca: false, valor: () => '' }
+]
+const colunasMeses = [
+  { chave: 'rotulo', titulo: 'Mês', tipo: 'texto', ordenavel: false },
+  { chave: 'mes', titulo: 'Mês (ordem)', tipo: 'texto', oculta: true, filtravel: false },
+  { chave: 'total', titulo: 'Auditorias', tipo: 'numero' },
+  { chave: 'mediaPendente', titulo: '% Pendente médio', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'mediaConclusao', titulo: '% Conclusão média', tipo: 'numero', formato: v => fmtPerc(v) },
+  { chave: 'taxaMeta', titulo: 'Na meta', tipo: 'numero', formato: (v, m) => (v === null ? '—' : `${m.dentroMeta}/${m.fechadas} (${v.toFixed(0)}%)`) }
+]
+const colunasComparacao = [
+  { chave: 'setor', titulo: 'Setor', tipo: 'texto' },
+  { chave: 'anterior', titulo: 'Antes', tipo: 'numero', formato: v => fmtPerc(v, 1) },
+  { chave: 'atual', titulo: 'Depois', tipo: 'numero', formato: v => fmtPerc(v, 1) },
+  { chave: 'diferenca', titulo: 'Diferença (p.p.)', tipo: 'numero', formato: (v, s) => (v === null ? (s.atual === null ? 'ausente' : 'novo') : `${v > 0 ? '+' : ''}${v.toFixed(1)} p.p.`) }
+]
 
 const abrirAuditoria = (id) => {
   if (id) router.push(`/auditoria/${id}`)
@@ -272,7 +301,7 @@ const comparacao = computed(() => {
   const [anterior, atual] = [x, y].sort((a, b) => String(a.data).localeCompare(String(b.data)) || a.id - b.id)
   return { anterior, atual, resultado: compararAuditorias(atual, anterior) }
 })
-const setoresComparacao = computed(() => (comparacao.value?.resultado.setores || []).slice(0, 12))
+const setoresComparacao = computed(() => comparacao.value?.resultado.setores || [])
 
 const exportarCsv = () => {
   const colunas = [
@@ -280,7 +309,7 @@ const exportarCsv = () => {
     { chave: 'meta', titulo: 'Meta' }, { chave: 'pendenteFmt', titulo: '% Pendente' }, { chave: 'conclusaoFmt', titulo: '% Conclusão' },
     { chave: 'total', titulo: 'Itens (SKU)' }, { chave: 'pendentes', titulo: 'Pendentes' }, { chave: 'lidos', titulo: 'Lidos' }
   ]
-  const linhas = auditoriasOrdenadas.value.map(l => ({ ...l, pendenteFmt: l.pendente.toFixed(2).replace('.', ','), conclusaoFmt: l.conclusao.toFixed(2).replace('.', ',') }))
+  const linhas = ordenar(linhasAuditorias.value, { coluna: 'data', direcao: 'desc' }).map(l => ({ ...l, pendenteFmt: l.pendente.toFixed(2).replace('.', ','), conclusaoFmt: l.conclusao.toFixed(2).replace('.', ',') }))
   baixarCsv(linhas, colunas, `analise-auditorias-${new Date().toISOString().slice(0, 10)}`)
   store.addToast(`${linhas.length} auditorias exportadas em CSV.`, 'success')
 }
@@ -561,27 +590,8 @@ const gerarRelatorioPDF = () => {
           </button>
         </div>
         <GraficoColunasMeta v-if="!mostrarTabelaMeses" class="mt-5" :pontos="pontosGrafico" :meta="META" @selecionar="filtrarMes" />
-        <div v-else class="mt-4 overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b border-slate-100 text-slate-500">
-                <th class="px-3 py-2 text-left font-semibold">Mês</th>
-                <th class="px-3 py-2 text-right font-semibold">Auditorias</th>
-                <th class="px-3 py-2 text-right font-semibold">% Pendente médio</th>
-                <th class="px-3 py-2 text-right font-semibold">% Conclusão média</th>
-                <th class="px-3 py-2 text-right font-semibold">Na meta</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-for="m in meses" :key="m.mes" class="hover:bg-slate-50">
-                <td class="px-3 py-2 font-medium text-slate-700">{{ m.rotulo }}</td>
-                <td class="px-3 py-2 text-right">{{ m.total }}</td>
-                <td class="px-3 py-2 text-right font-semibold" :class="(m.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ m.mediaPendente === null ? '—' : m.mediaPendente.toFixed(2) + '%' }}</td>
-                <td class="px-3 py-2 text-right">{{ m.mediaConclusao === null ? '—' : m.mediaConclusao.toFixed(2) + '%' }}</td>
-                <td class="px-3 py-2 text-right">{{ m.taxaMeta === null ? '—' : `${m.dentroMeta}/${m.fechadas} (${m.taxaMeta.toFixed(0)}%)` }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else class="mt-4">
+          <UiTabela id="analise-meses" titulo="Pendente médio por mês" :itens="meses" :colunas="colunasMeses" :ordem-inicial="{ chave: 'mes', direcao: 'desc' }" chave-item="mes" :agrupavel="false" />
         </div>
       </section>
 
@@ -624,58 +634,27 @@ const gerarRelatorioPDF = () => {
             <span v-if="setoresReincidentes" class="font-semibold text-red-600">{{ setoresReincidentes }} setor(es) reincidente(s).</span>
           </p>
         </div>
-        <div class="relative w-full sm:w-64">
-          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-          <input v-model="buscaSetor" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Buscar setor...">
-        </div>
       </div>
-      <div class="mt-4 overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="border-b-2 border-slate-100 text-slate-600">
-              <th v-for="[col, titulo, dir] in [['setor', 'Setor', 'left'], ['auditorias', 'Auditorias', 'right'], ['lidos', 'Lidos', 'right'], ['pendentes', 'Pendentes', 'right'], ['percPendente', '% Pendente', 'right'], ['percProblema', '% Problema', 'right'], ['reincidencia', 'Acima da meta', 'right'], ['ultimo', 'Última', 'right']]" :key="col"
-                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
-                @click="alternarOrdem(ordemSetores, col, col !== 'setor')">
-                {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemSetores, col)"></i>
-              </th>
-              <th class="px-3 py-2.5 text-left font-semibold">Últimas 12</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50">
-            <tr v-if="totalSetores && !buscaSetor" class="bg-slate-50 font-bold text-slate-800">
-              <td class="px-3 py-2.5">GERAL</td>
-              <td class="px-3 py-2.5 text-right">{{ auditoriasFiltradas.length }}</td>
-              <td class="px-3 py-2.5 text-right">{{ totalSetores.lidos.toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right">{{ totalSetores.pendentes.toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right" :class="totalSetores.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ totalSetores.percPendente.toFixed(2) }}%</td>
-              <td class="px-3 py-2.5 text-right">{{ totalSetores.percProblema.toFixed(2) }}%</td>
-              <td class="px-3 py-2.5 text-right">—</td>
-              <td class="px-3 py-2.5 text-right">—</td>
-              <td></td>
-            </tr>
-            <tr v-for="s in setoresVisiveis" :key="s.setor" class="hover:bg-slate-50">
-              <td class="max-w-56 truncate px-3 py-2.5 font-medium text-slate-800" :title="s.setor">{{ s.setor }}</td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.auditorias }}</td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.lidos.toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.pendentes.toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right font-semibold" :class="s.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ s.percPendente.toFixed(2) }}%</td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ s.percProblema.toFixed(2) }}%</td>
-              <td class="px-3 py-2.5 text-right">
-                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold" :class="s.reincidencia >= 50 && s.auditorias >= 2 ? 'bg-red-50 text-red-700' : s.acimaDaMeta ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
-                  <i v-if="s.reincidencia >= 50 && s.auditorias >= 2" class="fas fa-repeat text-[9px]"></i>{{ s.acimaDaMeta }}/{{ s.auditorias }}
-                </span>
-              </td>
-              <td class="px-3 py-2.5 text-right">
-                <span class="font-semibold" :class="(s.ultimo ?? 0) > META ? 'text-red-700' : 'text-slate-700'">{{ s.ultimo === null ? '—' : s.ultimo.toFixed(1) + '%' }}</span>
-                <i class="ml-1 text-[10px]" :class="[iconeTendencia[s.tendencia].icone, iconeTendencia[s.tendencia].classe]" :title="iconeTendencia[s.tendencia].rotulo"></i>
-              </td>
-              <td class="w-32 px-3 py-1.5">
-                <SparklineMeta v-if="s.historico.length > 1" altura-classe="h-7" :pontos="s.historico.slice(-12)" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!setoresVisiveis.length" class="py-10 text-center text-sm text-slate-500">Nenhum setor encontrado.</p>
+      <p v-if="totalSetores" class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <b>Geral:</b> {{ auditoriasFiltradas.length }} auditorias, {{ totalSetores.lidos.toLocaleString('pt-BR') }} lidos, {{ totalSetores.pendentes.toLocaleString('pt-BR') }} pendentes,
+        <b :class="totalSetores.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ totalSetores.percPendente.toFixed(2) }}% pendente</b>, {{ totalSetores.percProblema.toFixed(2) }}% com problema.
+      </p>
+      <div class="mt-4">
+        <UiTabela id="analise-setores" titulo="Setores no período" :itens="setores" :colunas="colunasSetores" :atalhos="atalhosSetores" :ordem-inicial="{ chave: 'reincidencia', direcao: 'desc' }" chave-item="setor" :agrupavel="false" vazio="Nenhum setor no período.">
+          <template #celula-percPendente="{ item: s, texto }"><span class="font-semibold" :class="s.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ texto }}</span></template>
+          <template #celula-reincidencia="{ item: s }">
+            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold" :class="s.reincidencia >= 50 && s.auditorias >= 2 ? 'bg-red-50 text-red-700' : s.acimaDaMeta ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
+              <i v-if="s.reincidencia >= 50 && s.auditorias >= 2" class="fas fa-repeat text-[9px]"></i>{{ s.acimaDaMeta }}/{{ s.auditorias }}
+            </span>
+          </template>
+          <template #celula-ultimo="{ item: s, texto }">
+            <span class="font-semibold" :class="(s.ultimo ?? 0) > META ? 'text-red-700' : 'text-slate-700'">{{ texto }}</span>
+            <i class="ml-1 text-[10px]" :class="[iconeTendencia[s.tendencia].icone, iconeTendencia[s.tendencia].classe]" :title="iconeTendencia[s.tendencia].rotulo"></i>
+          </template>
+          <template #celula-historico="{ item: s }">
+            <SparklineMeta v-if="s.historico.length > 1" class="w-32" altura-classe="h-7" :pontos="s.historico.slice(-12)" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
+          </template>
+        </UiTabela>
       </div>
     </section>
 
@@ -687,56 +666,24 @@ const gerarRelatorioPDF = () => {
           <h2 class="text-base font-bold text-slate-900">Produtividade por usuário</h2>
           <p class="text-xs text-slate-500">Leituras = itens lidos + leituras com problema, somadas no período.</p>
         </div>
-        <div class="relative w-full sm:w-64">
-          <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-          <input v-model="buscaUsuario" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Buscar usuário...">
-        </div>
       </div>
-      <div class="mt-4 overflow-x-auto">
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="border-b-2 border-slate-100 text-slate-600">
-              <th class="w-10 px-3 py-2.5 text-left font-semibold">#</th>
-              <th v-for="[col, titulo, dir] in [['usuario', 'Usuário', 'left'], ['auditorias', 'Auditorias', 'right'], ['leituras', 'Leituras', 'left'], ['mediaPorAuditoria', 'Média/auditoria', 'right'], ['comProblema', 'Com problema', 'right'], ['percProblema', '% Problema', 'right'], ['ultimaData', 'Última', 'right']]" :key="col"
-                class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
-                @click="alternarOrdem(ordemUsuarios, col, col !== 'usuario')">
-                {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemUsuarios, col)"></i>
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-50">
-            <tr v-for="u in usuariosPagina" :key="u.usuario" class="hover:bg-slate-50">
-              <td class="px-3 py-2.5">
-                <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
-              </td>
-              <td class="px-3 py-2.5">
-                <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-blue-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
-                <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
-              </td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ u.auditorias }}</td>
-              <td class="px-3 py-2.5">
-                <div class="flex items-center gap-2">
-                  <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
-                    <div class="h-full rounded-full bg-blue-500" :style="{ width: `${(u.leituras / maiorLeitura) * 100}%` }"></div>
-                  </div>
-                  <span class="font-semibold text-slate-800">{{ u.leituras.toLocaleString('pt-BR') }}</span>
-                </div>
-              </td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ Math.round(u.mediaPorAuditoria).toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right text-slate-600">{{ u.comProblema.toLocaleString('pt-BR') }}</td>
-              <td class="px-3 py-2.5 text-right font-semibold" :class="u.percProblema > 5 ? 'text-red-700' : u.percProblema > 2 ? 'text-amber-700' : 'text-slate-700'">{{ u.percProblema.toFixed(2) }}%</td>
-              <td class="px-3 py-2.5 text-right text-slate-500">{{ formatarDataBR(u.ultimaData) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!usuariosOrdenados.length" class="py-10 text-center text-sm text-slate-500">Nenhum usuário encontrado. Auditorias importadas de backups regionais podem não ter dados por usuário.</p>
-      </div>
-      <div v-if="totalPaginasUsuarios > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-        <span>Página {{ paginaUsuarios }} de {{ totalPaginasUsuarios }}</span>
-        <div class="flex gap-1">
-          <UiButton size="sm" variant="secondary" :disabled="paginaUsuarios === 1" @click="paginaUsuarios--"><i class="fas fa-angle-left"></i></UiButton>
-          <UiButton size="sm" variant="secondary" :disabled="paginaUsuarios === totalPaginasUsuarios" @click="paginaUsuarios++"><i class="fas fa-angle-right"></i></UiButton>
-        </div>
+      <div class="mt-4">
+        <UiTabela id="analise-usuarios" titulo="Produtividade por usuário" :itens="usuarios" :colunas="colunasUsuarios" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="usuario" :agrupavel="false" vazio="Nenhum usuário encontrado. Auditorias importadas de backups regionais podem não ter dados por usuário.">
+          <template #celula-posicao="{ item: u }">
+            <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
+          </template>
+          <template #celula-usuario="{ item: u }">
+            <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-blue-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
+            <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
+          </template>
+          <template #celula-leituras="{ item: u }">
+            <div class="flex items-center gap-2">
+              <div class="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" :style="{ width: `${(u.leituras / maiorLeitura) * 100}%` }"></div></div>
+              <span class="font-semibold text-slate-800">{{ u.leituras.toLocaleString('pt-BR') }}</span>
+            </div>
+          </template>
+          <template #celula-percProblema="{ item: u, texto }"><span class="font-semibold" :class="u.percProblema > 5 ? 'text-red-700' : u.percProblema > 2 ? 'text-amber-700' : 'text-slate-700'">{{ texto }}</span></template>
+        </UiTabela>
       </div>
     </section>
 
@@ -801,27 +748,10 @@ const gerarRelatorioPDF = () => {
             <p v-if="comparacao.resultado.novos.length || comparacao.resultado.ausentes.length" class="text-xs text-slate-500">{{ comparacao.resultado.novos.length }} novos · {{ comparacao.resultado.ausentes.length }} ausentes</p>
           </div>
         </div>
-        <div v-if="setoresComparacao.length" class="mt-4 overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b border-slate-100 text-slate-500">
-                <th class="px-3 py-2 text-left font-semibold">Setor (maiores mudanças)</th>
-                <th class="px-3 py-2 text-right font-semibold">Antes</th>
-                <th class="px-3 py-2 text-right font-semibold">Depois</th>
-                <th class="px-3 py-2 text-right font-semibold">Diferença</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-for="s in setoresComparacao" :key="s.setor">
-                <td class="px-3 py-2 font-medium text-slate-700">{{ s.setor }}</td>
-                <td class="px-3 py-2 text-right">{{ s.anterior === null ? '—' : s.anterior.toFixed(1) + '%' }}</td>
-                <td class="px-3 py-2 text-right">{{ s.atual === null ? '—' : s.atual.toFixed(1) + '%' }}</td>
-                <td class="px-3 py-2 text-right font-semibold" :class="s.diferenca === null ? 'text-slate-400' : s.diferenca > 0 ? 'text-red-700' : 'text-emerald-700'">
-                  {{ s.diferenca === null ? (s.atual === null ? 'ausente' : 'novo') : `${s.diferenca > 0 ? '+' : ''}${s.diferenca.toFixed(1)} p.p.` }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-if="setoresComparacao.length" class="mt-4">
+          <UiTabela id="analise-comparacao" titulo="Comparação por setor" :itens="setoresComparacao" :colunas="colunasComparacao" :tamanho-pagina="10" chave-item="setor" :agrupavel="false">
+            <template #celula-diferenca="{ item: s, texto }"><span class="font-semibold" :class="s.diferenca === null ? 'text-slate-400' : s.diferenca > 0 ? 'text-red-700' : 'text-emerald-700'">{{ texto }}</span></template>
+          </UiTabela>
         </div>
       </section>
 
@@ -834,63 +764,26 @@ const gerarRelatorioPDF = () => {
               <span v-if="selecionadas.length === 1" class="font-semibold text-blue-600">Selecione mais uma.</span>
             </p>
           </div>
-          <div class="relative w-full sm:w-64">
-            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-            <input v-model="buscaAuditoria" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Data, tipo, #id, fora...">
-          </div>
         </div>
-        <div class="mt-4 overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="border-b-2 border-slate-100 text-slate-600">
-                <th class="w-8 px-3 py-2.5"><span class="sr-only">Comparar</span></th>
-                <th v-for="[col, titulo, dir] in [['data', 'Data', 'left'], ['tipo', 'Tipo', 'left'], ['status', 'Status', 'left'], ['meta', 'Meta', 'left'], ['pendente', '% Pendente', 'right'], ['total', 'Itens', 'right'], ['pendentes', 'Pendentes', 'right'], ['lidos', 'Lidos', 'right']]" :key="col"
-                  class="cursor-pointer select-none px-3 py-2.5 font-semibold hover:text-blue-600" :class="dir === 'right' ? 'text-right' : 'text-left'"
-                  @click="alternarOrdem(ordemAuditorias, col)">
-                  {{ titulo }} <i class="fas text-[10px]" :class="iconeOrdem(ordemAuditorias, col)"></i>
-                </th>
-                <th class="px-3 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-50">
-              <tr v-for="l in auditoriasPagina" :key="l.id" class="group" :class="selecionadas.includes(l.id) ? 'bg-blue-50/70' : 'hover:bg-slate-50'">
-                <td class="px-3 py-2.5">
-                  <input type="checkbox" class="size-4 cursor-pointer rounded accent-blue-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
-                </td>
-                <td class="px-3 py-2.5 font-medium text-slate-800">{{ l.dataFormatada }} <span class="text-[10px] text-slate-400">#{{ l.id }}</span></td>
-                <td class="px-3 py-2.5">
-                  <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold" :class="getTipoConfig(l.tipo).cor">
-                    <i class="fas text-[9px]" :class="getTipoConfig(l.tipo).icone"></i>{{ l.tipo }}
-                  </span>
-                </td>
-                <td class="px-3 py-2.5">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.fechada ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'">
-                    <i :class="l.fechada ? 'fas fa-lock' : 'fas fa-spinner'" class="text-[9px]"></i>{{ l.status }}
-                  </span>
-                </td>
-                <td class="px-3 py-2.5">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.dentroMeta ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
-                    <i class="fas text-[9px]" :class="l.dentroMeta ? 'fa-check' : 'fa-times'"></i>{{ l.meta }}
-                  </span>
-                </td>
-                <td class="px-3 py-2.5 text-right font-semibold" :class="l.pendente > META ? 'text-red-700' : 'text-emerald-700'">{{ l.pendente.toFixed(2) }}%</td>
-                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.total.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.pendentes.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right text-slate-600">{{ l.lidos.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 py-2.5 text-right">
-                  <button type="button" class="rounded-lg px-2 py-1 font-semibold text-blue-600 hover:bg-blue-50" @click="abrirAuditoria(l.id)">Abrir</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="!auditoriasOrdenadas.length" class="py-10 text-center text-sm text-slate-500">Nenhuma auditoria corresponde à busca.</p>
-        </div>
-        <div v-if="totalPaginasAuditorias > 1" class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-          <span>{{ auditoriasOrdenadas.length }} auditorias · página {{ paginaAuditorias }} de {{ totalPaginasAuditorias }}</span>
-          <div class="flex gap-1">
-            <UiButton size="sm" variant="secondary" :disabled="paginaAuditorias === 1" @click="paginaAuditorias--"><i class="fas fa-angle-left"></i></UiButton>
-            <UiButton size="sm" variant="secondary" :disabled="paginaAuditorias === totalPaginasAuditorias" @click="paginaAuditorias++"><i class="fas fa-angle-right"></i></UiButton>
-          </div>
+        <div class="mt-4">
+          <UiTabela id="analise-auditorias" titulo="Auditorias do período" :itens="linhasAuditorias" :colunas="colunasAuditorias" :ordem-inicial="{ chave: 'data', direcao: 'desc' }" chave-item="id" :tamanho-pagina="25" vazio="Nenhuma auditoria no período.">
+            <template #celula-selecionar="{ item: l }">
+              <input type="checkbox" class="size-4 cursor-pointer rounded accent-blue-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
+            </template>
+            <template #celula-tipo="{ item: l }">
+              <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold" :class="getTipoConfig(l.tipo).cor"><i class="fas text-[9px]" :class="getTipoConfig(l.tipo).icone"></i>{{ l.tipo }}</span>
+            </template>
+            <template #celula-status="{ item: l }">
+              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.fechada ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'"><i :class="l.fechada ? 'fas fa-lock' : 'fas fa-spinner'" class="text-[9px]"></i>{{ l.status }}</span>
+            </template>
+            <template #celula-meta="{ item: l }">
+              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.dentroMeta ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"><i class="fas text-[9px]" :class="l.dentroMeta ? 'fa-check' : 'fa-times'"></i>{{ l.meta }}</span>
+            </template>
+            <template #celula-pendente="{ item: l, texto }"><span class="font-semibold" :class="l.pendente > META ? 'text-red-700' : 'text-emerald-700'">{{ texto }}</span></template>
+            <template #celula-abrir="{ item: l }">
+              <button type="button" class="rounded-lg px-2 py-1 font-semibold text-blue-600 hover:bg-blue-50" @click="abrirAuditoria(l.id)">Abrir</button>
+            </template>
+          </UiTabela>
         </div>
       </section>
     </template>

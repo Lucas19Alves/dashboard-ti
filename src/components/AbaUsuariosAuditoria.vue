@@ -1,7 +1,6 @@
 <script setup>
+import UiTabela from './ui/UiTabela.vue'
 import { computed, ref } from 'vue'
-import { correspondeBusca } from '../utils/busca'
-import { baixarCsv } from '../utils/csv'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
 import TrajetoUsuario from './TrajetoUsuario.vue'
 
@@ -107,19 +106,39 @@ const usuariosTrajeto = computed(() => [...usuarios.value].sort((a, b) => b.leit
 
 const podio = computed(() => [...usuarios.value].sort((a, b) => b.leituras - a.leituras).slice(0, 3).filter(u => u.leituras > 0))
 
-// ---------- Lista ----------
-const busca = ref('')
-const ordem = ref('leituras')
+// ---------- Lista (tabela padrão nas três visões: filtros, ordem e paginação iguais) ----------
 const visao = ref('cards')
-const ordens = [
-  { valor: 'leituras', rotulo: 'Mais leituras' },
-  { valor: 'ritmo', rotulo: 'Maior ritmo' },
-  { valor: 'percProblema', rotulo: 'Mais problemas' },
-  { valor: 'nome', rotulo: 'Nome' }
+const periodo = u => (u.inicio === null ? '' : `${formatarHora(u.inicio)}–${formatarHora(u.fim + 1)}`)
+const COLUNAS_BASE = [
+  { chave: 'posicao', titulo: '#', tipo: 'numero' },
+  { chave: 'matricula', titulo: 'Matrícula', tipo: 'texto' },
+  { chave: 'exibicao', titulo: 'Nome', tipo: 'texto' },
+  { chave: 'leituras', titulo: 'Leituras', tipo: 'numero' },
+  { chave: 'participacao', titulo: 'Participação', tipo: 'numero', alinhamento: 'left', formato: v => `${v.toFixed(1)}%` },
+  { chave: 'ritmo', titulo: 'Ritmo (/h)', tipo: 'numero', formato: v => `${Math.round(v)}/h` },
+  { chave: 'periodo', titulo: 'Período', tipo: 'texto', valor: periodo, ordenavel: false },
+  { chave: 'percProblema', titulo: 'Problemas', tipo: 'numero', formato: (v, u) => `${u.comProblema} · ${v.toFixed(1)}%` },
+  { chave: 'setorPrincipal', titulo: 'Setor principal', tipo: 'categoria', rapido: true },
+  { chave: 'comProblema', titulo: 'Com problema', tipo: 'numero', oculta: true },
+  { chave: 'estoqueZero', titulo: 'Lidos com estoque zero', tipo: 'numero', oculta: true },
+  { chave: 'naoPertence', titulo: 'Lido não pertence', tipo: 'numero', oculta: true },
+  { chave: 'pico', titulo: 'Hora de pico', tipo: 'numero', oculta: true, formato: v => (v === null ? '—' : formatarHora(v)) },
+  { chave: 'qtdSetores', titulo: 'Setores lidos', tipo: 'numero', oculta: true }
 ]
-const listaVisivel = computed(() => usuarios.value
-  .filter(u => correspondeBusca(busca.value, [u.nome, u.exibicao, u.matricula, u.setorPrincipal]))
-  .sort((a, b) => (ordem.value === 'nome' ? a.exibicao.localeCompare(b.exibicao, 'pt-BR') : b[ordem.value] - a[ordem.value])))
+// Mapa de horas: uma coluna por hora (dá para ordenar e filtrar por hora também).
+const COLUNAS_CALOR = [
+  { chave: 'exibicao', titulo: 'Usuário', tipo: 'texto' },
+  ...HORAS.map((h, i) => ({ chave: `h${h}`, titulo: formatarHora(h), tipo: 'numero', alinhamento: 'center', valor: u => u.horas[i] })),
+  { chave: 'leituras', titulo: 'Total', tipo: 'numero' },
+  { chave: 'matricula', titulo: 'Matrícula', tipo: 'texto', oculta: true },
+  { chave: 'setorPrincipal', titulo: 'Setor principal', tipo: 'categoria', rapido: true, oculta: true },
+  { chave: 'percProblema', titulo: '% problema', tipo: 'numero', oculta: true },
+  { chave: 'ritmo', titulo: 'Ritmo (/h)', tipo: 'numero', oculta: true }
+]
+const ATALHOS = [
+  { rotulo: 'Problema acima de 5%', icone: 'fas fa-triangle-exclamation', condicoes: [{ chave: 'percProblema', op: 'maior', valor: '5' }] },
+  { rotulo: 'Com estoque zero ou fora do local', icone: 'fas fa-box-open', condicoes: [{ chave: 'estoqueZero', op: 'maior', valor: '0' }] }
+]
 
 const maiorHora = computed(() => Math.max(1, ...usuarios.value.flatMap(u => u.horas)))
 // Intensidade sequencial (um só tom de azul): mais escuro = mais leituras.
@@ -139,22 +158,6 @@ const cobertura = computed(() => [...atividade.value.porSetor]
   .sort((a, b) => b.total - a.total))
 const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.length >= 1 && s.dependencia >= 80 && s.total >= 10).length)
 
-const exportarCsv = () => {
-  const colunas = [
-    { chave: 'posicao', titulo: 'Posição' }, { chave: 'matricula', titulo: 'Matrícula' }, { chave: 'exibicao', titulo: 'Nome' }, { chave: 'leituras', titulo: 'Leituras' },
-    { chave: 'lidos', titulo: 'Lidos corretamente' }, { chave: 'comProblema', titulo: 'Com problema' }, { chave: 'percProblemaFmt', titulo: '% Problema' },
-    { chave: 'participacaoFmt', titulo: '% do total' }, { chave: 'periodo', titulo: 'Período ativo' }, { chave: 'ritmoFmt', titulo: 'Leituras/hora' },
-    { chave: 'setorPrincipal', titulo: 'Setor principal' }
-  ]
-  const linhas = listaVisivel.value.map(u => ({
-    ...u,
-    percProblemaFmt: u.percProblema.toFixed(2).replace('.', ','),
-    participacaoFmt: u.participacao.toFixed(2).replace('.', ','),
-    ritmoFmt: u.ritmo.toFixed(1).replace('.', ','),
-    periodo: u.inicio === null ? '' : `${formatarHora(u.inicio)}–${formatarHora(u.fim + 1)}`
-  }))
-  baixarCsv(linhas, colunas, `auditoria-${props.auditoria?.id}-usuarios`)
-}
 </script>
 
 <template>
@@ -247,13 +250,6 @@ const exportarCsv = () => {
           <p class="text-xs text-slate-500">Clique em um usuário para ver itens com problema e locais mais lidos.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <div class="relative min-w-0 flex-1 sm:w-52 sm:flex-none">
-            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-            <input v-model="busca" type="search" class="ui-input py-2 pl-8 text-sm" placeholder="Usuário ou setor...">
-          </div>
-          <select v-model="ordem" class="ui-input w-auto py-2 text-sm" aria-label="Ordenar">
-            <option v-for="o in ordens" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
-          </select>
           <div class="flex rounded-xl bg-slate-100 p-1">
             <button v-for="[v, icone, rotulo] in [['cards', 'fas fa-grip', 'Cartões'], ['tabela', 'fas fa-list', 'Tabela'], ['calor', 'fas fa-table-cells', 'Mapa de horas']]" :key="v" type="button"
               class="rounded-lg px-2.5 py-1.5 text-xs font-semibold transition" :class="visao === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
@@ -261,126 +257,60 @@ const exportarCsv = () => {
               <i :class="icone"></i><span class="ml-1 hidden lg:inline">{{ rotulo }}</span>
             </button>
           </div>
-          <button type="button" class="ui-btn-secondary py-2" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</button>
           <button type="button" class="ui-btn-secondary py-2" @click="emit('imprimir')"><i class="fas fa-print"></i>Imprimir</button>
         </div>
       </div>
 
-      <p v-if="!listaVisivel.length" class="rounded-xl bg-white py-10 text-center text-sm text-slate-500 shadow-sm">Nenhum usuário encontrado.</p>
-
       <!-- Cartões -->
-      <div v-else-if="visao === 'cards'" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        <button
-          v-for="u in listaVisivel"
-          :key="u.nome"
-          type="button"
-          class="group flex flex-col rounded-xl bg-white p-5 text-left shadow-sm transition"
-          @click="emit('detalhes', u.nome)"
-        >
-          <div class="flex items-center gap-3">
-            <div class="min-w-0 flex-1">
-              <p class="truncate font-bold text-slate-900" :title="u.exibicao">{{ u.exibicao }}</p>
-              <p v-if="u.matricula" class="text-xs font-medium text-slate-600">Matrícula: {{ u.matricula }}</p>
-              <p class="truncate text-xs text-slate-500">
-                <template v-if="u.inicio !== null">{{ formatarHora(u.inicio) }}–{{ formatarHora(u.fim + 1) }} · </template>{{ u.setorPrincipal || 'sem setor' }}
-              </p>
+      <UiTabela v-if="visao === 'cards'" id="auditoria-usuarios" modo="grade" titulo="Desempenho individual" :itens="usuarios" :colunas="COLUNAS_BASE" :atalhos="ATALHOS" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="nome" :tamanho-pagina="25" classe-grade="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" placeholder="Nome, matrícula ou setor...">
+        <template #item="{ item: u }">
+          <button type="button" class="group flex flex-col rounded-xl bg-white p-5 text-left shadow-sm transition" @click="emit('detalhes', u.nome)">
+            <div class="flex items-center gap-3">
+              <div class="min-w-0 flex-1">
+                <p class="truncate font-bold text-slate-900" :title="u.exibicao">{{ u.exibicao }}</p>
+                <p v-if="u.matricula" class="text-xs font-medium text-slate-600">Matrícula: {{ u.matricula }}</p>
+                <p class="truncate text-xs text-slate-500"><template v-if="u.inicio !== null">{{ formatarHora(u.inicio) }}–{{ formatarHora(u.fim + 1) }} · </template>{{ u.setorPrincipal || 'sem setor' }}</p>
+              </div>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{{ u.posicao }}º</span>
             </div>
-            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">{{ u.posicao }}º</span>
-          </div>
-
-          <div class="mt-4 flex items-baseline justify-between">
-            <p class="text-2xl font-bold text-slate-900">{{ u.leituras.toLocaleString('pt-BR') }} <span class="text-xs font-semibold text-slate-500">leituras</span></p>
-            <p class="text-xs font-semibold text-slate-600">{{ u.participacao.toFixed(1) }}% do total</p>
-          </div>
-          <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-            <div class="h-full rounded-full bg-blue-600" :style="{ width: `${u.participacao}%` }"></div>
-          </div>
-
-          <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-xl bg-slate-50 py-2">
-              <p class="text-sm font-bold text-slate-900">{{ Math.round(u.ritmo) }}/h</p>
-              <p class="text-[10px] text-slate-500">ritmo</p>
+            <div class="mt-4 flex items-baseline justify-between">
+              <p class="text-2xl font-bold text-slate-900">{{ u.leituras.toLocaleString('pt-BR') }} <span class="text-xs font-semibold text-slate-500">leituras</span></p>
+              <p class="text-xs font-semibold text-slate-600">{{ u.participacao.toFixed(1) }}% do total</p>
             </div>
-            <div class="rounded-xl bg-slate-50 py-2">
-              <p class="text-sm font-bold text-slate-900">{{ u.pico === null ? '—' : formatarHora(u.pico) }}</p>
-              <p class="text-[10px] text-slate-500">pico</p>
+            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" :style="{ width: `${u.participacao}%` }"></div></div>
+            <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ Math.round(u.ritmo) }}/h</p><p class="text-[10px] text-slate-500">ritmo</p></div>
+              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ u.pico === null ? '—' : formatarHora(u.pico) }}</p><p class="text-[10px] text-slate-500">pico</p></div>
+              <div class="rounded-xl py-2" :class="classeProblema(u.percProblema)"><p class="text-sm font-bold">{{ u.percProblema.toFixed(1) }}%</p><p class="text-[10px] opacity-80">problemas</p></div>
             </div>
-            <div class="rounded-xl py-2" :class="classeProblema(u.percProblema)">
-              <p class="text-sm font-bold">{{ u.percProblema.toFixed(1) }}%</p>
-              <p class="text-[10px] opacity-80">problemas</p>
+            <div class="mt-4 flex gap-0.5" :aria-label="`Leituras por hora de ${u.exibicao}`">
+              <span v-for="(v, i) in u.horas" :key="i" class="h-3 flex-1 rounded-sm" :class="corCalor(v)" :title="`${formatarHora(HORAS[i])}: ${v}`"></span>
             </div>
-          </div>
-
-          <!-- Faixa de horas -->
-          <div class="mt-4 flex gap-0.5" :aria-label="`Leituras por hora de ${u.exibicao}`">
-            <span v-for="(v, i) in u.horas" :key="i" class="h-3 flex-1 rounded-sm" :class="corCalor(v)" :title="`${formatarHora(HORAS[i])}: ${v}`"></span>
-          </div>
-          <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>08h</span><span>14h</span><span>20h</span></div>
-
-          <p v-if="u.estoqueZero || u.naoPertence" class="mt-3 text-xs text-slate-500">
-            <i class="fas fa-triangle-exclamation mr-1 text-amber-500"></i>{{ u.estoqueZero }} sem estoque · {{ u.naoPertence }} fora do local
-          </p>
-        </button>
-      </div>
+            <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>08h</span><span>14h</span><span>20h</span></div>
+            <p v-if="u.estoqueZero || u.naoPertence" class="mt-3 text-xs text-slate-500"><i class="fas fa-triangle-exclamation mr-1 text-amber-500"></i>{{ u.estoqueZero }} sem estoque · {{ u.naoPertence }} fora do local</p>
+          </button>
+        </template>
+      </UiTabela>
 
       <!-- Tabela -->
-      <div v-else-if="visao === 'tabela'" class="overflow-x-auto rounded-xl bg-white shadow-sm">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-xs text-slate-500">
-            <tr>
-              <th class="px-4 py-3 text-left font-semibold">#</th>
-              <th class="px-4 py-3 text-left font-semibold">Matrícula</th>
-              <th class="px-4 py-3 text-left font-semibold">Nome</th>
-              <th class="px-4 py-3 text-right font-semibold">Leituras</th>
-              <th class="px-4 py-3 text-left font-semibold">Participação</th>
-              <th class="px-4 py-3 text-right font-semibold">Ritmo</th>
-              <th class="px-4 py-3 text-right font-semibold">Período</th>
-              <th class="px-4 py-3 text-right font-semibold">Problemas</th>
-              <th class="px-4 py-3 text-left font-semibold">Setor principal</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="u in listaVisivel" :key="u.nome" class="cursor-pointer hover:bg-blue-50/40" @click="emit('detalhes', u.nome)">
-              <td class="px-4 py-2.5 text-slate-500">{{ u.posicao }}</td>
-              <td class="px-4 py-2.5 font-mono text-slate-600">{{ u.matricula || '—' }}</td>
-              <td class="px-4 py-2.5 font-semibold text-slate-900">{{ u.exibicao }}</td>
-              <td class="px-4 py-2.5 text-right font-semibold">{{ u.leituras.toLocaleString('pt-BR') }}</td>
-              <td class="px-4 py-2.5">
-                <div class="flex items-center gap-2">
-                  <div class="h-1.5 w-28 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" :style="{ width: `${u.participacao}%` }"></div></div>
-                  <span class="text-xs text-slate-600">{{ u.participacao.toFixed(1) }}%</span>
-                </div>
-              </td>
-              <td class="px-4 py-2.5 text-right text-slate-700">{{ Math.round(u.ritmo) }}/h</td>
-              <td class="px-4 py-2.5 text-right text-slate-500">{{ u.inicio === null ? '—' : `${formatarHora(u.inicio)}–${formatarHora(u.fim + 1)}` }}</td>
-              <td class="px-4 py-2.5 text-right"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="classeProblema(u.percProblema)">{{ u.comProblema }} · {{ u.percProblema.toFixed(1) }}%</span></td>
-              <td class="max-w-48 truncate px-4 py-2.5 text-slate-600">{{ u.setorPrincipal || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <UiTabela v-else-if="visao === 'tabela'" id="auditoria-usuarios" titulo="Desempenho individual" :itens="usuarios" :colunas="COLUNAS_BASE" :atalhos="ATALHOS" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="nome" clicavel placeholder="Nome, matrícula ou setor..." @linha="emit('detalhes', $event.nome)">
+        <template #celula-participacao="{ item: u }">
+          <div class="flex items-center gap-2"><div class="h-1.5 w-28 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" :style="{ width: `${u.participacao}%` }"></div></div><span class="text-xs text-slate-600">{{ u.participacao.toFixed(1) }}%</span></div>
+        </template>
+        <template #celula-percProblema="{ item: u, texto }"><span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="classeProblema(u.percProblema)">{{ texto }}</span></template>
+      </UiTabela>
 
       <!-- Mapa de calor usuário × hora -->
-      <div v-else class="overflow-x-auto rounded-xl bg-white p-5 shadow-sm">
-        <table class="w-full border-separate" style="border-spacing: 3px">
-          <thead>
-            <tr>
-              <th class="w-52 text-left text-xs font-semibold text-slate-500">Usuário</th>
-              <th v-for="h in HORAS" :key="h" class="text-center text-[10px] font-semibold text-slate-400">{{ formatarHora(h) }}</th>
-              <th class="text-right text-xs font-semibold text-slate-500">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="u in listaVisivel" :key="u.nome" class="cursor-pointer" @click="emit('detalhes', u.nome)">
-              <td class="max-w-52 pr-2">
-                <p class="truncate text-sm font-medium text-slate-800" :title="u.exibicao">{{ u.exibicao }}</p>
-                <p v-if="u.matricula" class="text-[10px] text-slate-500">Matrícula: {{ u.matricula }}</p>
-              </td>
-              <td v-for="(v, i) in u.horas" :key="i" class="h-8 min-w-8 rounded-md text-center text-[10px] font-semibold" :class="[corCalor(v), v / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.exibicao} · ${formatarHora(HORAS[i])}: ${v} leituras`">{{ v || '' }}</td>
-              <td class="pl-2 text-right text-sm font-bold text-slate-900">{{ u.leituras.toLocaleString('pt-BR') }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="rounded-xl bg-white p-5 shadow-sm">
+        <UiTabela id="auditoria-usuarios" titulo="Leituras por hora" :itens="usuarios" :colunas="COLUNAS_CALOR" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="nome" clicavel :agrupavel="false" placeholder="Nome, matrícula ou setor..." @linha="emit('detalhes', $event.nome)">
+          <template #celula-exibicao="{ item: u }">
+            <p class="max-w-52 truncate text-sm font-medium text-slate-800" :title="u.exibicao">{{ u.exibicao }}</p>
+            <p v-if="u.matricula" class="text-[10px] font-normal text-slate-500">Matrícula: {{ u.matricula }}</p>
+          </template>
+          <template v-for="(h, i) in HORAS" :key="h" #[`celula-h${h}`]="{ item: u }">
+            <span class="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-1 text-[10px] font-semibold" :class="[corCalor(u.horas[i]), u.horas[i] / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.exibicao} · ${formatarHora(h)}: ${u.horas[i]} leituras`">{{ u.horas[i] || '' }}</span>
+          </template>
+        </UiTabela>
         <div class="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
           Menos <span v-for="t in tonsCalor" :key="t" class="size-3 rounded-sm" :class="t"></span> Mais
         </div>

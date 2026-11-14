@@ -1,4 +1,5 @@
 <script setup>
+import UiTabela from './ui/UiTabela.vue'
 import { computed, ref, watch } from 'vue'
 import { gerarAcoes } from '../utils/planoAcao'
 import { perfisColaboradores } from '../utils/perfilColaborador'
@@ -240,13 +241,28 @@ const visiveis = computed(() => acoes.value
   .filter(a => correspondeBusca(busca.value, [a.local, a.setor, a.responsavel, a.descricao, a.observacao]))
   .sort((a, b) => (a.status === 'feita') - (b.status === 'feita') || ORDEM_PRIORIDADE[a.prioridade] - ORDEM_PRIORIDADE[b.prioridade] || b.pendentes - a.pendentes))
 
-// Paginação da lista.
-const POR_PAGINA_LISTA = 15
-const paginaLista = ref(1)
-const totalPaginasLista = computed(() => Math.max(1, Math.ceil(visiveis.value.length / POR_PAGINA_LISTA)))
-const visiveisPagina = computed(() => visiveis.value.slice((paginaLista.value - 1) * POR_PAGINA_LISTA, paginaLista.value * POR_PAGINA_LISTA))
-watch([busca, filtroStatus, filtroPrioridade, rapido, filtroResponsavel], () => { paginaLista.value = 1 })
-watch(totalPaginasLista, t => { if (paginaLista.value > t) paginaLista.value = t })
+// Lista: tabela padrão (filtros por qualquer coluna, ordem, paginação, CSV), com os filtros rápidos de cima.
+const acoesLista = computed(() => acoes.value.filter(passaRapido))
+const COLUNAS_LISTA = [
+  { chave: 'prioridade', titulo: 'Prioridade', tipo: 'categoria', rapido: true, valor: a => ROTULO_PRIORIDADE[a.prioridade] },
+  { chave: 'ordemPrioridade', titulo: 'Prioridade (ordem)', tipo: 'numero', oculta: true, filtravel: false, valor: a => ORDEM_PRIORIDADE[a.prioridade] },
+  { chave: 'local', titulo: 'Local / ação', tipo: 'texto' },
+  { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true, oculta: true },
+  { chave: 'descricao', titulo: 'Ação', tipo: 'texto', oculta: true },
+  { chave: 'pendentes', titulo: 'Pendentes', tipo: 'numero' },
+  { chave: 'perc', titulo: '% pendente', tipo: 'numero', oculta: true },
+  { chave: 'responsavel', titulo: 'Responsável', tipo: 'categoria', rapido: true, valor: a => (a.responsavel ? rotuloUsuario(a.responsavel) : '') },
+  { chave: 'prazo', titulo: 'Prazo', tipo: 'data' },
+  { chave: 'status', titulo: 'Situação', tipo: 'categoria', rapido: true, valor: a => rotuloStatus(a.status) },
+  { chave: 'observacao', titulo: 'Observação', tipo: 'texto' },
+  { chave: 'atrasada', titulo: 'Atrasada', tipo: 'booleano', oculta: true, valor: a => atrasada(a) },
+  { chave: 'remover', titulo: '', tipo: 'texto', ordenavel: false, filtravel: false, busca: false, valor: () => '' }
+]
+const ATALHOS_LISTA = computed(() => [
+  { rotulo: 'Não resolvidas', icone: 'fas fa-list-check', condicoes: [{ chave: 'status', op: 'naoEm', valor: [rotuloStatus('feita')] }] },
+  { rotulo: 'Atrasadas', icone: 'fas fa-clock', condicoes: [{ chave: 'atrasada', op: 'sim' }] },
+  { rotulo: 'Sem responsável', icone: 'fas fa-user-slash', condicoes: [{ chave: 'responsavel', op: 'vazio' }] }
+])
 
 const resumo = computed(() => {
   const total = acoes.value.length
@@ -446,16 +462,11 @@ const imprimir = () => {
     </div>
 
     <div v-if="acoes.length" class="mt-2 flex flex-wrap items-center gap-2">
-      <div class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+      <div v-if="visao === 'quadro'" class="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
         <input v-model="busca" type="search" class="ui-input py-2 pl-8 text-xs" placeholder="Local, setor, responsável..." aria-label="Buscar ações">
       </div>
-      <select v-if="visao === 'lista'" v-model="filtroStatus" class="ui-input w-auto py-2 text-xs" aria-label="Situação">
-        <option value="pendentes">Não resolvidas</option>
-        <option value="todas">Todas</option>
-        <option v-for="s in STATUS_ACAO" :key="s.valor" :value="s.valor">{{ s.rotulo }}</option>
-      </select>
-      <select v-model="filtroPrioridade" class="ui-input w-auto py-2 text-xs" aria-label="Prioridade">
+      <select v-if="visao === 'quadro'" v-model="filtroPrioridade" class="ui-input w-auto py-2 text-xs" aria-label="Prioridade">
         <option value="todas">Todas as prioridades</option>
         <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
       </select>
@@ -523,66 +534,39 @@ const imprimir = () => {
     </div>
 
     <!-- Lista -->
-    <div v-else class="mt-3 overflow-x-auto rounded-xl ring-1 ring-slate-200">
-      <table class="w-full min-w-[1100px] text-sm">
-        <thead class="bg-slate-50 text-xs text-slate-500">
-          <tr>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Prioridade</th>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Local / ação</th>
-            <th scope="col" class="px-3 py-2 text-right font-semibold">Pendentes</th>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Responsável</th>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Prazo</th>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Situação</th>
-            <th scope="col" class="px-3 py-2 text-left font-semibold">Observação</th>
-            <th scope="col" class="px-3 py-2"><span class="sr-only">Remover</span></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100">
-          <tr v-for="a in visiveisPagina" :key="a.id" :class="a.status === 'feita' ? 'bg-emerald-50/40 opacity-70' : ''">
-            <td class="px-3 py-2">
-              <select :value="a.prioridade" class="rounded-full border-0 px-2 py-0.5 text-xs font-bold" :class="CLASSE_PRIORIDADE[a.prioridade]" :aria-label="`Prioridade de ${a.local}`" @change="atualizar(a, { prioridade: $event.target.value })">
-                <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
-              </select>
-            </td>
-            <td class="px-3 py-2">
-              <p class="font-bold text-slate-900">{{ a.local }} <span v-if="a.setor" class="text-xs font-medium text-slate-500">· {{ a.setor }}</span></p>
-              <p class="text-xs text-slate-600" :class="a.status === 'feita' ? 'line-through' : ''">{{ a.descricao }}</p>
-            </td>
-            <td class="px-3 py-2 text-right tabular-nums">
-              <span v-if="a.pendentes" class="font-bold text-amber-700">{{ a.pendentes }}</span><span v-else class="text-slate-400">—</span>
-              <p v-if="a.pendentes" class="text-[11px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</p>
-            </td>
-            <td class="px-3 py-2">
-              <input :value="a.responsavel" list="usuarios-plano" class="ui-input w-48 py-1.5 text-xs" placeholder="Responsável" :aria-label="`Responsável por ${a.local}`" @change="atualizar(a, { responsavel: $event.target.value.trim() })">
-            </td>
-            <td class="px-3 py-2">
-              <input :value="a.prazo" type="date" class="ui-input w-36 py-1.5 text-xs" :class="atrasada(a) ? 'border-red-300 text-red-700' : ''" :aria-label="`Prazo de ${a.local}`" @change="atualizar(a, { prazo: $event.target.value })">
-            </td>
-            <td class="px-3 py-2">
-              <select :value="a.status" class="ui-input w-36 py-1.5 text-xs" :aria-label="`Situação de ${a.local}`" @change="atualizar(a, { status: $event.target.value })">
-                <option v-for="s in STATUS_ACAO" :key="s.valor" :value="s.valor">{{ s.rotulo }}</option>
-              </select>
-            </td>
-            <td class="px-3 py-2">
-              <input :value="a.observacao" class="ui-input w-56 py-1.5 text-xs" placeholder="Anotação" :aria-label="`Observação de ${a.local}`" @change="atualizar(a, { observacao: $event.target.value })">
-            </td>
-            <td class="px-3 py-2 text-right">
-              <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" :aria-label="`Remover ação de ${a.local}`" @click="remover(a)"><i class="fas fa-trash-can"></i></button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-if="!visiveis.length" class="py-6 text-center text-sm text-slate-500">Nenhuma ação com esses filtros.</p>
-      <div v-if="visiveis.length" class="flex items-center justify-between border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-        <span>{{ (paginaLista - 1) * POR_PAGINA_LISTA + 1 }}–{{ Math.min(paginaLista * POR_PAGINA_LISTA, visiveis.length) }} de {{ visiveis.length }}</span>
-        <div v-if="totalPaginasLista > 1" class="flex items-center gap-1">
-          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === 1" aria-label="Primeira página" @click="paginaLista = 1"><i class="fas fa-angles-left"></i></button>
-          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === 1" aria-label="Página anterior" @click="paginaLista--"><i class="fas fa-angle-left"></i></button>
-          <span class="px-2 font-semibold text-slate-700">{{ paginaLista }} / {{ totalPaginasLista }}</span>
-          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === totalPaginasLista" aria-label="Próxima página" @click="paginaLista++"><i class="fas fa-angle-right"></i></button>
-          <button type="button" class="ui-btn-secondary px-2.5 py-1" :disabled="paginaLista === totalPaginasLista" aria-label="Última página" @click="paginaLista = totalPaginasLista"><i class="fas fa-angles-right"></i></button>
-        </div>
-      </div>
+    <div v-else class="mt-3">
+      <UiTabela :id="`plano-acao-${props.auditoria?.id}`" titulo="Plano de ação" :itens="acoesLista" :colunas="COLUNAS_LISTA" :atalhos="ATALHOS_LISTA" :filtros-iniciais="[]" :ordem-inicial="[{ chave: 'ordemPrioridade', direcao: 'asc' }, { chave: 'pendentes', direcao: 'desc' }]" chave-item="id" :tamanho-pagina="25" :destacar="a => a.status === 'feita'" vazio="Nenhuma ação." placeholder="Local, setor, responsável, ação ou observação...">
+        <template #celula-prioridade="{ item: a }">
+          <select :value="a.prioridade" class="rounded-full border-0 px-2 py-0.5 text-xs font-bold" :class="CLASSE_PRIORIDADE[a.prioridade]" :aria-label="`Prioridade de ${a.local}`" @change="atualizar(a, { prioridade: $event.target.value })">
+            <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
+          </select>
+        </template>
+        <template #celula-local="{ item: a }">
+          <p class="font-bold text-slate-900">{{ a.local }} <span v-if="a.setor" class="text-xs font-medium text-slate-500">· {{ a.setor }}</span></p>
+          <p class="max-w-80 whitespace-normal text-xs font-normal text-slate-600" :class="a.status === 'feita' ? 'line-through' : ''">{{ a.descricao }}</p>
+        </template>
+        <template #celula-pendentes="{ item: a }">
+          <span v-if="a.pendentes" class="font-bold text-amber-700">{{ a.pendentes }}</span><span v-else class="text-slate-400">—</span>
+          <p v-if="a.pendentes" class="text-[11px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</p>
+        </template>
+        <template #celula-responsavel="{ item: a }">
+          <input :value="a.responsavel" list="usuarios-plano" class="ui-input w-48 py-1.5 text-xs" placeholder="Responsável" :aria-label="`Responsável por ${a.local}`" @change="atualizar(a, { responsavel: $event.target.value.trim() })">
+        </template>
+        <template #celula-prazo="{ item: a }">
+          <input :value="a.prazo" type="date" class="ui-input w-36 py-1.5 text-xs" :class="atrasada(a) ? 'border-red-300 text-red-700' : ''" :aria-label="`Prazo de ${a.local}`" @change="atualizar(a, { prazo: $event.target.value })">
+        </template>
+        <template #celula-status="{ item: a }">
+          <select :value="a.status" class="ui-input w-36 py-1.5 text-xs" :aria-label="`Situação de ${a.local}`" @change="atualizar(a, { status: $event.target.value })">
+            <option v-for="st in STATUS_ACAO" :key="st.valor" :value="st.valor">{{ st.rotulo }}</option>
+          </select>
+        </template>
+        <template #celula-observacao="{ item: a }">
+          <input :value="a.observacao" class="ui-input w-56 py-1.5 text-xs" placeholder="Anotação" :aria-label="`Observação de ${a.local}`" @change="atualizar(a, { observacao: $event.target.value })">
+        </template>
+        <template #celula-remover="{ item: a }">
+          <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" :aria-label="`Remover ação de ${a.local}`" @click="remover(a)"><i class="fas fa-trash-can"></i></button>
+        </template>
+      </UiTabela>
     </div>
     <transition name="aviso">
       <div v-if="removida" class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-slate-900 px-4 py-2.5 text-sm text-white shadow-lg">

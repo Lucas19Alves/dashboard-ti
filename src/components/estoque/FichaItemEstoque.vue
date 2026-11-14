@@ -6,6 +6,7 @@ import { TIPOS_PROBLEMA } from '../../utils/estoque'
 import { formatarQuantidade } from '../../utils/estoqueTotal'
 import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
 import UiModal from '../ui/UiModal.vue'
+import UiTabela from '../ui/UiTabela.vue'
 
 // Tudo o que o sistema sabe de um código: estoque total, situação atual, histórico nas auditorias
 // de leitura, validades e não vinculado.
@@ -45,6 +46,14 @@ const SITUACAO = {
   lidoSemEstoque: { rotulo: 'Lido, estoque zerado', classe: 'text-amber-700' },
   semEstoque: { rotulo: 'Sem estoque', classe: 'text-slate-500' }
 }
+const COLUNAS_HISTORICO = [
+  { chave: 'data', titulo: 'Data', tipo: 'data' },
+  { chave: 'tipo', titulo: 'Tipo', tipo: 'categoria', oculta: true },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria' },
+  { chave: 'situacao', titulo: 'Situação', tipo: 'categoria', rapido: true, valor: h => SITUACAO[h.situacao]?.rotulo || h.situacao },
+  { chave: 'estoque', titulo: 'Estoque', tipo: 'numero' },
+  { chave: 'diasSemVenda', titulo: 'Sem venda', tipo: 'numero' }
+]
 const resumo = computed(() => {
   const r = registro.value
   if (!r) return []
@@ -103,20 +112,11 @@ const resumo = computed(() => {
 
       <section v-if="historico.length">
         <h3 class="mb-2 text-sm font-semibold text-slate-900">Presença e Ruptura</h3>
-        <div class="max-h-[40vh] overflow-y-auto rounded-lg border border-slate-200">
-          <table class="w-full text-sm">
-            <thead class="sticky top-0 bg-slate-50 text-left text-xs text-slate-500"><tr><th class="px-3 py-2">Data</th><th class="px-3">Local</th><th class="px-3">Situação</th><th class="px-3 text-right">Estoque</th><th class="px-3 text-right">Sem venda</th></tr></thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr v-for="h in historico" :key="h.auditoriaId">
-                <td class="whitespace-nowrap px-3 py-1.5 tabular-nums"><RouterLink :to="`/auditoria/${h.auditoriaId}`" class="hover:text-blue-700 hover:underline">{{ br(h.data) }}</RouterLink> <span class="text-xs text-slate-500">{{ h.tipo }}</span></td>
-                <td class="px-3">{{ h.local || '—' }}<span v-if="h.localLido" class="text-xs text-blue-700"> · achado em {{ h.localLido }}</span></td>
-                <td class="px-3 font-medium" :class="SITUACAO[h.situacao]?.classe">{{ SITUACAO[h.situacao]?.rotulo }}</td>
-                <td class="px-3 text-right tabular-nums">{{ h.estoque.toLocaleString('pt-BR') }}</td>
-                <td class="px-3 text-right tabular-nums">{{ h.diasSemVenda ?? '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <UiTabela :id="`ficha-historico`" :titulo="`Histórico de ${codigo}`" :itens="historico" :colunas="COLUNAS_HISTORICO" :ordem-inicial="{ chave: 'data', direcao: 'desc' }" :chave-item="h => h.auditoriaId" :tamanho-pagina="10" :agrupavel="false">
+          <template #celula-data="{ item: h }"><RouterLink :to="`/auditoria/${h.auditoriaId}`" class="tabular-nums hover:text-blue-700 hover:underline">{{ br(h.data) }}</RouterLink> <span class="text-xs font-normal text-slate-500">{{ h.tipo }}</span></template>
+          <template #celula-local="{ item: h }">{{ h.local || '—' }}<span v-if="h.localLido" class="text-xs text-blue-700"> · achado em {{ h.localLido }}</span></template>
+          <template #celula-situacao="{ item: h }"><span class="font-medium" :class="SITUACAO[h.situacao]?.classe">{{ SITUACAO[h.situacao]?.rotulo }}</span></template>
+        </UiTabela>
       </section>
     </div>
   </UiModal>

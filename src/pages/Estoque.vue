@@ -1,10 +1,11 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAnaliseEstoque } from '../composables/useAnaliseEstoque'
 import { useRelatorio } from '../composables/useRelatorio'
 import { TIPOS_PROBLEMA, agruparProblemas, buscarItens } from '../utils/estoque'
 import { formatarQuantidade } from '../utils/estoqueTotal'
+import UiTabela from '../components/ui/UiTabela.vue'
 import { blocoBarras, blocoTabela } from '../utils/print'
 import UiButton from '../components/ui/UiButton.vue'
 import UiEmptyState from '../components/ui/UiEmptyState.vue'
@@ -19,13 +20,13 @@ import ImportarEstoqueTotal from '../components/estoque/ImportarEstoqueTotal.vue
 const route = useRoute()
 const router = useRouter()
 const {
-  carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, foraAuditoria, zeradosResolvidos,
+  carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, semLocal, insumos, zeradosResolvidos,
   naoVinculados, suspeitos, prioridades, problemasPorCodigo, resumo, limiarReincidencia, limiarParado
 } = useAnaliseEstoque()
 const mostrarImportar = ref(false)
 
 // --- Abas (na URL, para o Início e a busca abrirem direto) ---
-const ABAS = ['visao', 'estoque-total', 'reincidencias', 'sem-estoque', 'parados', 'fora-auditoria', 'nao-vinculados', 'onde-agir', 'consultar']
+const ABAS = ['visao', 'estoque-total', 'reincidencias', 'sem-estoque', 'parados', 'sem-local', 'insumos', 'nao-vinculados', 'onde-agir', 'consultar']
 const aba = ref(ABAS.includes(route.query.aba) ? route.query.aba : 'visao')
 watch(() => route.query.aba, v => { if (ABAS.includes(v)) aba.value = v })
 watch(aba, v => { if (route.query.aba !== v) router.replace({ query: { ...route.query, aba: v } }) })
@@ -35,13 +36,19 @@ const abas = computed(() => [
   { value: 'reincidencias', label: `Reincidências (${resumo.value.reincidentes})`, icon: TIPOS_PROBLEMA.reincidencia.icone },
   { value: 'sem-estoque', label: `Estoque zerado (${resumo.value.semEstoque})`, icon: TIPOS_PROBLEMA.semEstoque.icone },
   { value: 'parados', label: `Parados (${resumo.value.parados})`, icon: TIPOS_PROBLEMA.parado.icone },
-  ...(total.value ? [{ value: 'fora-auditoria', label: `Fora das auditorias (${resumo.value.foraAuditoria})`, icon: TIPOS_PROBLEMA.foraAuditoria.icone }] : []),
+  ...(total.value ? [
+    { value: 'sem-local', label: `Sem local (${resumo.value.semLocal})`, icon: TIPOS_PROBLEMA.semLocal.icone },
+    { value: 'insumos', label: `Insumos (${resumo.value.insumos})`, icon: 'fas fa-box-archive' }
+  ] : []),
   { value: 'nao-vinculados', label: `Não vinculados (${resumo.value.naoVinculados})`, icon: 'fas fa-link-slash' },
   { value: 'onde-agir', label: 'Onde agir', icon: 'fas fa-map-location-dot' },
   { value: 'consultar', label: 'Consultar item', icon: 'fas fa-magnifying-glass' }
 ])
 
-const filtros = reactive({ busca: '', setor: '', local: '', fornecedor: '' })
+// Filtro vindo de "Onde agir" (local, setor ou fornecedor clicado): vale na próxima lista aberta.
+const preFiltro = ref([])
+let vindoDeOndeAgir = false
+watch(aba, () => { if (vindoDeOndeAgir) vindoDeOndeAgir = false; else preFiltro.value = [] })
 const temBase = computed(() => indice.value.auditorias > 0)
 
 // --- Ficha do item ---
@@ -55,16 +62,34 @@ const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', 
 const dataHora = iso => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '')
 const diasPlanilha = computed(() => (infoEstoqueTotal.value?.importadoEm ? Math.floor((Date.now() - Date.parse(infoEstoqueTotal.value.importadoEm)) / 86400000) : null))
 const cartoes = computed(() => [
-  { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em ruptura` : ''}`, tom: 'bg-red-600' },
+  { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.saiuDaAuditoria ? `, ${int(resumo.value.saiuDaAuditoria)} saíram da auditoria` : ''}${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em ruptura` : ''}`, tom: 'bg-red-600' },
   { aba: 'sem-estoque', rotulo: 'Estoque zerado na gôndola', valor: resumo.value.semEstoque, nota: 'lidos com estoque zerado no sistema', tom: 'bg-amber-500' },
   { aba: 'parados', rotulo: 'Estoque parado', valor: resumo.value.parados, nota: `${limiarParado.value}+ dias sem venda com estoque`, tom: 'bg-indigo-500' },
-  ...(total.value ? [{ aba: 'fora-auditoria', rotulo: 'Fora das auditorias', valor: resumo.value.foraAuditoria, nota: 'com estoque na planilha e fora da última Presença', tom: 'bg-cyan-600' }] : []),
+  ...(total.value ? [{ aba: 'sem-local', rotulo: 'Sem local', valor: resumo.value.semLocal, nota: 'com estoque e nunca auditados: não vinculados (sem insumos)', tom: 'bg-cyan-600' }] : []),
   { aba: 'nao-vinculados', rotulo: 'Não vinculados', valor: resumo.value.naoVinculados, nota: `${suspeitos.value.length} vínculos suspeitos`, tom: 'bg-blue-600' },
 ])
 
-// --- Fora das auditorias ---
-const motivoFora = ref('')
-const foraFiltrados = computed(() => foraAuditoria.value.filter(l => !motivoFora.value || (motivoFora.value === 'naoVinculado' ? l.naoVinculado : l.motivo === motivoFora.value)))
+// --- Insumos (setor Outros): só consulta, fora das listas de problemas ---
+const COLUNAS_INSUMOS = [
+  { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'classe', titulo: 'Classe', tipo: 'categoria', rapido: true },
+  { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria', rapido: true },
+  { chave: 'estoque', titulo: 'Estoque', tipo: 'numero', formato: (v, i) => formatarQuantidade(v, i.unidade) },
+  { chave: 'indisponivel', titulo: 'Indisponível', tipo: 'numero', formato: (v, i) => (v ? formatarQuantidade(v, i.unidade) : '—') },
+  { chave: 'diasSemVenda', titulo: 'Dias sem venda', tipo: 'numero' },
+  { chave: 'ultimaVenda', titulo: 'Última venda', tipo: 'data' },
+  { chave: 'ultimaCompra', titulo: 'Última compra', tipo: 'data' },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true },
+  { chave: 'gerenciado', titulo: 'Gerenciado', tipo: 'booleano' },
+  { chave: 'ranking', titulo: 'Ranking de vendas', tipo: 'numero', oculta: true }
+]
+const ATALHOS_INSUMOS = [
+  { rotulo: 'Sem venda há 30+ dias', icone: 'fas fa-hourglass-half', condicoes: [{ chave: 'diasSemVenda', op: 'maiorIgual', valor: '30' }] },
+  { rotulo: 'Comprados nos últimos 30 dias', icone: 'fas fa-truck', condicoes: [{ chave: 'ultimaCompra', op: 'ultimos', valor: '30' }] }
+]
+
+// --- Onde agir (tabela padrão; cada número abre a lista filtrada) ---
 const abrirCartao = (c) => {
   aba.value = c.aba
 }
@@ -72,7 +97,7 @@ const abrirCartao = (c) => {
 // --- Onde agir ---
 const campoGrupo = ref('local')
 const CAMPOS = [{ valor: 'local', rotulo: 'Local' }, { valor: 'setor', rotulo: 'Setor' }, { valor: 'fornecedor', rotulo: 'Fornecedor' }]
-const listasProblemas = () => ({ reincidentes: reincidentes.value, semEstoque: semEstoque.value, parados: parados.value, foraAuditoria: foraAuditoria.value, naoVinculados: naoVinculados.value, suspeitos: suspeitos.value })
+const listasProblemas = () => ({ reincidentes: reincidentes.value, semEstoque: semEstoque.value, parados: parados.value, semLocal: semLocal.value, naoVinculados: naoVinculados.value, suspeitos: suspeitos.value })
 const grupos = computed(() => agruparProblemas(listasProblemas(), campoGrupo.value))
 const locaisTopo = computed(() => agruparProblemas(listasProblemas(), 'local').slice(0, 8))
 const maiorGrupo = computed(() => Math.max(1, ...locaisTopo.value.map(g => g.total)))
@@ -80,15 +105,21 @@ const COLUNAS_GRUPO = [
   { chave: 'reincidentes', rotulo: 'Reincidências', aba: 'reincidencias', cor: 'bg-red-500' },
   { chave: 'semEstoque', rotulo: 'Zerados', aba: 'sem-estoque', cor: 'bg-amber-400' },
   { chave: 'parados', rotulo: 'Parados', aba: 'parados', cor: 'bg-indigo-400' },
-  { chave: 'foraAuditoria', rotulo: 'Fora aud.', aba: 'fora-auditoria', cor: 'bg-cyan-500' },
+  { chave: 'semLocal', rotulo: 'Sem local', aba: 'sem-local', cor: 'bg-cyan-500' },
   { chave: 'naoVinculados', rotulo: 'Não vinc.', aba: 'nao-vinculados', cor: 'bg-blue-400' },
   { chave: 'suspeitos', rotulo: 'Suspeitos', aba: 'nao-vinculados', cor: 'bg-slate-400' }
 ]
 const irPara = (campo, chave, destino) => {
-  Object.assign(filtros, { busca: '', setor: '', local: '', fornecedor: '' })
-  if (destino !== 'nao-vinculados') filtros[campo] = chave
+  preFiltro.value = destino !== 'nao-vinculados' && chave !== 'Sem local' && chave !== 'Não informado' ? [{ chave: campo, op: 'em', valor: [chave] }] : []
+  vindoDeOndeAgir = true
   aba.value = destino
 }
+const colunasGrupo = computed(() => [
+  { chave: 'chave', titulo: CAMPOS.find(c => c.valor === campoGrupo.value).rotulo, tipo: 'texto' },
+  ...COLUNAS_GRUPO.filter(c => !(c.chave === 'suspeitos' && campoGrupo.value === 'fornecedor')).map(c => ({ chave: c.chave, titulo: c.rotulo, tipo: 'numero' })),
+  { chave: 'custo', titulo: 'Ruptura acum.', tipo: 'numero', formato: v => (v ? real(v) : '—') },
+  { chave: 'total', titulo: 'Total', tipo: 'numero' }
+])
 
 // --- Consultar ---
 const termo = ref('')
@@ -115,10 +146,10 @@ const relatorioGeral = () => abrirRelatorio({
   assinaturaPadrao: true,
   secoes: [
     { id: 'locais', titulo: 'Locais com mais problemas', descricao: 'Soma de reincidências, zerados, parados, fora das auditorias e não vinculados por local.', padrao: true, gerar: () => blocoBarras({ titulo: 'Problemas por local (até 15)', barras: agruparProblemas({ ...listasProblemas(), suspeitos: [] }, 'local').slice(0, 15).map(g => ({ rotulo: g.chave, valor: g.total })) }) },
-    { id: 'reincidencias', titulo: `Reincidências (${reincidentes.value.length})`, descricao: 'Itens com estoque e sem leitura na Presença/Ruptura.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(reincidentes.value, l => `${l.dias} dias sem leitura`) }) || '<p class="nota">Nenhuma reincidência.</p>' },
+    { id: 'reincidencias', titulo: `Reincidências (${reincidentes.value.length})`, descricao: 'Itens com estoque e sem leitura na Presença/Ruptura, incluindo os que saíram da auditoria.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(reincidentes.value, l => `${l.dias} dias sem leitura${l.saiuDaAuditoria ? ', saiu da auditoria' : ''}`) }) || '<p class="nota">Nenhuma reincidência.</p>' },
     { id: 'zerados', titulo: `Estoque zerado na gôndola (${semEstoque.value.length})`, descricao: 'Lidos com estoque zerado no sistema.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(semEstoque.value, l => `zerado em ${l.vezes} auditoria(s)`) }) || '<p class="nota">Nenhum item.</p>' },
     { id: 'parados', titulo: `Estoque parado (${parados.value.length})`, descricao: 'Itens com estoque e muitos dias sem venda.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(parados.value, l => `${l.dias} dias sem venda`) }) || '<p class="nota">Nenhum item.</p>' },
-    ...(total.value ? [{ id: 'fora', titulo: `Fora das auditorias (${foraAuditoria.value.length})`, descricao: 'Itens com estoque na planilha que não entraram na última Presença.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(foraAuditoria.value, l => (l.motivo === 'saiu' ? `fora desde ${br(l.ultimaData)}` : l.naoVinculado ? 'sem local vinculado' : 'nunca auditado')) }) || '<p class="nota">Nenhum item.</p>' }] : [])
+    ...(total.value ? [{ id: 'sem-local', titulo: `Sem local (${semLocal.value.length})`, descricao: 'Itens com estoque na planilha que nunca apareceram nas auditorias (não vinculados), com o local sugerido. Insumos ficam de fora.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(semLocal.value, l => (l.sugerido ? `sugerido ${l.sugerido}` : 'sem sugestão')) }) || '<p class="nota">Nenhum item.</p>' }] : [])
   ]
 })
 </script>
@@ -164,7 +195,7 @@ const relatorioGeral = () => abrirRelatorio({
             <div class="flex items-end justify-between gap-2">
               <div>
                 <h2 class="text-lg font-semibold text-slate-900">Mais graves</h2>
-                <p class="text-xs text-slate-500">Os itens mais graves de todas as listas: reincidências, estoque zerado, parados{{ total ? ' e fora das auditorias' : '' }}.</p>
+                <p class="text-xs text-slate-500">Os itens mais graves de todas as listas: reincidências, estoque zerado, parados{{ total ? ' e sem local' : '' }}.</p>
               </div>
               <span class="text-xs text-slate-500">{{ int(prioridades.length) }} itens</span>
             </div>
@@ -209,19 +240,19 @@ const relatorioGeral = () => abrirRelatorio({
     <!-- Reincidências -->
     <section v-else-if="aba === 'reincidencias'" class="space-y-4">
       <div class="flex flex-wrap items-end justify-between gap-3">
-        <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque que não são lidos nas auditorias de Presença ou Ruptura há {{ limiarReincidencia }} dias ou mais. Ou o produto não está no local (depósito, outro local), ou o estoque do sistema não existe.</p>
+        <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque que não são lidos nas auditorias de Presença ou Ruptura há {{ limiarReincidencia }} dias ou mais. Ou o produto não está no local (depósito, outro local), ou o estoque do sistema não existe.<template v-if="total"> Entram também os que têm estoque na planilha e saíram da auditoria (não estão na última Presença), qualquer que seja o tempo sem leitura.</template></p>
         <label><span class="ui-label">Sem leitura há</span>
           <select v-model.number="limiarReincidencia" class="ui-input"><option :value="14">14+ dias</option><option :value="21">21+ dias</option><option :value="30">30+ dias</option><option :value="60">60+ dias</option></select>
         </label>
       </div>
-      <ListaProblemasEstoque id="estoque-reincidencias" titulo="Reincidências de estoque" :linhas="reincidentes" :filtros="filtros" :vazio="carregando ? 'Carregando os itens das auditorias...' : temBase ? 'Nenhum item com estoque sem leitura nesse período.' : 'Importe auditorias de Presença ou Ruptura.'" @abrir="fichaCodigo = $event" />
+      <ListaProblemasEstoque id="estoque-reincidencias" titulo="Reincidências de estoque" :linhas="reincidentes" :filtros-iniciais="preFiltro" :vazio="carregando ? 'Carregando os itens das auditorias...' : temBase ? 'Nenhum item com estoque sem leitura nesse período.' : 'Importe auditorias de Presença ou Ruptura.'" @abrir="fichaCodigo = $event" />
     </section>
 
     <!-- Estoque zerado -->
     <section v-else-if="aba === 'sem-estoque'" class="space-y-4">
       <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens lidos na gôndola na última auditoria, mas com estoque zerado no sistema. Normalmente é nota de entrada não lançada ou ajuste errado: o item some das próximas auditorias e da reposição automática.<template v-if="total"> Continuam fora da planilha de estoque total (zerados).</template></p>
       <p v-if="zeradosResolvidos" class="text-xs text-emerald-700"><i class="fas fa-check mr-1"></i>{{ int(zeradosResolvidos) }} {{ zeradosResolvidos === 1 ? 'item saiu' : 'itens saíram' }} da lista: a planilha de estoque total já mostra estoque (entrada lançada depois da auditoria).</p>
-      <ListaProblemasEstoque id="estoque-zerados" titulo="Estoque zerado na gôndola" :linhas="semEstoque" :filtros="filtros" vazio="Nenhum item lido com estoque zerado." @abrir="fichaCodigo = $event" />
+      <ListaProblemasEstoque id="estoque-zerados" titulo="Estoque zerado na gôndola" :linhas="semEstoque" :filtros-iniciais="preFiltro" vazio="Nenhum item lido com estoque zerado." @abrir="fichaCodigo = $event" />
     </section>
 
     <!-- Parados -->
@@ -232,18 +263,21 @@ const relatorioGeral = () => abrirRelatorio({
           <select v-model.number="limiarParado" class="ui-input"><option :value="30">30+ dias</option><option :value="60">60+ dias</option><option :value="90">90+ dias</option></select>
         </label>
       </div>
-      <ListaProblemasEstoque id="estoque-parados" titulo="Estoque parado" :linhas="parados" :filtros="filtros" vazio="Nenhum item parado nesse período." @abrir="fichaCodigo = $event" />
+      <ListaProblemasEstoque id="estoque-parados" titulo="Estoque parado" :linhas="parados" :filtros-iniciais="preFiltro" vazio="Nenhum item parado nesse período." @abrir="fichaCodigo = $event" />
     </section>
 
-    <!-- Fora das auditorias -->
-    <section v-else-if="aba === 'fora-auditoria'" class="space-y-4">
+    <!-- Sem local -->
+    <section v-else-if="aba === 'sem-local'" class="space-y-4">
       <div class="flex flex-wrap items-end justify-between gap-3">
-        <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque na planilha que não entraram na última Presença ({{ br(indice.inicioCiclo) }}). Quem já foi auditado antes provavelmente perdeu o vínculo do local; quem nunca apareceu está sem local (ou é de um setor que não entra na auditoria). O local sugerido vem do histórico do item ou da classe.</p>
-        <label><span class="ui-label">Motivo</span>
-          <select v-model="motivoFora" class="ui-input"><option value="">Todos</option><option value="saiu">Saiu da auditoria</option><option value="nunca">Nunca auditado</option><option value="naoVinculado">Na lista de não vinculados</option></select>
-        </label>
+        <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque na planilha que nunca apareceram nas auditorias de Presença e Ruptura: estão sem local vinculado no sistema (não vinculados) e por isso ninguém confere. Insumos (setor Outros) ficam de fora. O local sugerido vem do histórico do item ou dos itens da mesma classe.</p>
       </div>
-      <ListaProblemasEstoque id="estoque-fora-auditoria" titulo="Fora das auditorias" :linhas="foraFiltrados" :filtros="filtros" :vazio="indice.auditorias ? 'Todos os itens com estoque entraram na última Presença.' : 'Importe auditorias de Presença para cruzar com a planilha.'" @abrir="fichaCodigo = $event" />
+      <ListaProblemasEstoque id="estoque-sem-local" titulo="Itens sem local" :linhas="semLocal" :filtros-iniciais="preFiltro" :vazio="indice.auditorias ? 'Todos os itens com estoque já apareceram nas auditorias.' : 'Importe auditorias de Presença para cruzar com a planilha.'" @abrir="fichaCodigo = $event" />
+    </section>
+
+    <!-- Insumos -->
+    <section v-else-if="aba === 'insumos'" class="space-y-4">
+      <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens do setor Outros (sacolas, bobinas, pallets, tabloides, material de uso da loja). Não entram na auditoria e ficam fora das listas de reincidência, parados e sem local. Aqui dá para acompanhar o estoque e o consumo deles.</p>
+      <UiTabela id="estoque-insumos" titulo="Insumos" :itens="insumos" :colunas="COLUNAS_INSUMOS" :atalhos="ATALHOS_INSUMOS" :ordem-inicial="{ chave: 'estoque', direcao: 'desc' }" chave-item="codigo" clicavel vazio="Nenhum insumo na planilha de estoque total." @linha="fichaCodigo = $event.codigo" />
     </section>
 
     <!-- Não vinculados -->
@@ -257,30 +291,12 @@ const relatorioGeral = () => abrirRelatorio({
           <button v-for="c in CAMPOS" :key="c.valor" type="button" class="rounded-md px-3 py-1.5 text-sm font-medium transition" :class="campoGrupo === c.valor ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'" @click="campoGrupo = c.valor">{{ c.rotulo }}</button>
         </div>
       </div>
-      <p v-if="!grupos.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">Nenhum problema encontrado.</p>
-      <div v-else class="ui-card overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="text-left text-xs text-slate-500">
-            <tr>
-              <th class="px-4 py-2.5">{{ CAMPOS.find(c => c.valor === campoGrupo).rotulo }}</th>
-              <th v-for="c in COLUNAS_GRUPO" :key="c.chave" class="px-3 text-right" :class="(c.chave === 'suspeitos' && campoGrupo === 'fornecedor') ? 'hidden' : ''">{{ c.rotulo }}</th>
-              <th class="px-3 text-right">Ruptura acum.</th>
-              <th class="px-4 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-for="g in grupos" :key="g.chave" class="hover:bg-slate-50/60">
-              <td class="max-w-72 truncate px-4 py-2 font-semibold text-slate-900">{{ g.chave }}</td>
-              <td v-for="c in COLUNAS_GRUPO" :key="c.chave" class="px-3 text-right tabular-nums" :class="(c.chave === 'suspeitos' && campoGrupo === 'fornecedor') ? 'hidden' : ''">
-                <button v-if="g[c.chave]" type="button" class="rounded px-1.5 font-semibold text-blue-700 hover:bg-blue-50 hover:underline" @click="irPara(campoGrupo, g.chave, c.aba)">{{ g[c.chave] }}</button>
-                <span v-else class="text-slate-300">0</span>
-              </td>
-              <td class="px-3 text-right tabular-nums text-slate-600">{{ g.custo ? real(g.custo) : '—' }}</td>
-              <td class="px-4 text-right font-semibold tabular-nums">{{ g.total }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <UiTabela :id="`estoque-onde-agir-${campoGrupo}`" :key="campoGrupo" :titulo="`Problemas por ${CAMPOS.find(c => c.valor === campoGrupo).rotulo.toLowerCase()}`" :itens="grupos" :colunas="colunasGrupo" :ordem-inicial="{ chave: 'total', direcao: 'desc' }" chave-item="chave" :agrupavel="false" vazio="Nenhum problema encontrado.">
+        <template v-for="c in COLUNAS_GRUPO" :key="c.chave" #[`celula-${c.chave}`]="{ item: g }">
+          <button v-if="g[c.chave]" type="button" class="rounded px-1.5 font-semibold text-blue-700 hover:bg-blue-50 hover:underline" @click="irPara(campoGrupo, g.chave, c.aba)">{{ int(g[c.chave]) }}</button>
+          <span v-else class="text-slate-300">0</span>
+        </template>
+      </UiTabela>
     </section>
 
     <!-- Consultar -->

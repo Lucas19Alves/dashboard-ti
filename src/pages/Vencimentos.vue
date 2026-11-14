@@ -4,9 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { blocoBarras, blocoTabela, selo } from '../utils/print'
-import { abrirRelatorioTabela, useRelatorio } from '../composables/useRelatorio'
+import { useRelatorio } from '../composables/useRelatorio'
 import { cruzarValidadeRuptura } from '../utils/vencimentosCruzados'
-import { baixarCsv } from '../utils/csv'
 import { formatarDataBR } from '../utils/busca'
 import UiButton from '../components/ui/UiButton.vue'
 import StatCard from '../components/ui/StatCard.vue'
@@ -16,6 +15,7 @@ import UiModal from '../components/ui/UiModal.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
+import UiTabela from '../components/ui/UiTabela.vue'
 import VencimentosMapaRuptura from '../components/VencimentosMapaRuptura.vue'
 
 const router = useRouter()
@@ -42,48 +42,15 @@ const iconeAba = (tab) => ({
 })[tab]
 const abasVencimentos = abas.map(tab => ({ value: tab, label: abasDisplay[tab], icon: iconeAba(tab) }))
 
-// Filtros (aba Explorar)
-const filtroSetor = ref('')
-const filtroFornecedor = ref('')
-const filtroStatus = ref('')
-const busca = ref('')
-const setorFocus = ref('')
+// Filtros que outras telas aplicam na tabela da aba Explorar (setor, situação, busca da rota).
+const preFiltroVenc = ref([])
+const buscaVenc = ref('')
 const fornecedorSelecionado = ref('')
 
 // Modais
 const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
 const modalFornecedorAberto = ref(false)
-
-// --- Table state ---
-const paginaItensFiltrados = ref(1)
-const buscaItensFiltrados = ref('')
-const ordenacaoItensFiltrados = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
-const itensPorPaginaFiltrados = 15
-
-const paginaFornecedoresTab = ref(1)
-const buscaFornecedoresTab = ref('')
-const ordenacaoFornecedoresTab = ref({ coluna: 'vencidos', direcao: 'desc' })
-const itensPorPaginaFornecedores = 10
-
-const paginaSetorModal = ref(1)
-const buscaSetorModal = ref('')
-const ordenacaoSetorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
-const itensPorPaginaSetorModal = 12
-
-const paginaFornecedorModal = ref(1)
-const buscaFornecedorModal = ref('')
-const ordenacaoFornecedorModal = ref({ coluna: '_diasParaVencer', direcao: 'asc' })
-const itensPorPaginaFornecedorModal = 12
-
-// Status filter pills config
-const statusPills = [
-  { valor: '', label: 'Todos', icone: 'fas fa-layer-group', cor: 'bg-slate-100 text-slate-700 border-slate-200', corAtiva: 'bg-slate-700 text-white border-slate-700' },
-  { valor: 'vencidos', label: 'Vencidos', icone: 'fas fa-times-circle', cor: 'bg-red-50 text-red-700 border-red-200', corAtiva: 'bg-red-600 text-white border-red-600' },
-  { valor: 'hoje', label: 'Hoje', icone: 'fas fa-clock', cor: 'bg-orange-50 text-orange-700 border-orange-200', corAtiva: 'bg-orange-500 text-white border-orange-500' },
-  { valor: 'ate3', label: 'Até 3 dias', icone: 'fas fa-hourglass-half', cor: 'bg-yellow-50 text-yellow-700 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500' },
-  { valor: 'futuro', label: 'Futuro', icone: 'fas fa-check-circle', cor: 'bg-green-50 text-green-700 border-green-200', corAtiva: 'bg-green-600 text-white border-green-600' }
-]
 
 onMounted(() => {
   if (store.itens.length === 0) {
@@ -188,7 +155,7 @@ const itensCriticosPainel = computed(() => {
 })
 
 const verCriticos = () => {
-  filtroStatus.value = 'vencidos'
+  preFiltroVenc.value = [{ chave: '_prazo', op: 'em', valor: ['Vencido', 'Hoje', 'Até 3 dias'] }]
   abaAtiva.value = 'explorar'
 }
 
@@ -225,9 +192,6 @@ const setoresAnalise = computed(() => {
 
 const abrirModalSetor = (nome) => {
   setorModalNome.value = nome || 'Todos'
-  paginaSetorModal.value = 1
-  buscaSetorModal.value = ''
-  ordenacaoSetorModal.value = { coluna: '_diasParaVencer', direcao: 'asc' }
   modalSetorAberto.value = true
 }
 const fecharModalSetor = () => {
@@ -296,9 +260,6 @@ const fornecedoresRanking = computed(() => {
 
 const abrirItensFornecedor = (row) => {
   fornecedorSelecionado.value = row.fornecedor
-  paginaFornecedorModal.value = 1
-  buscaFornecedorModal.value = ''
-  ordenacaoFornecedorModal.value = { coluna: '_diasParaVencer', direcao: 'asc' }
   modalFornecedorAberto.value = true
 }
 const limparFornecedor = () => {
@@ -310,42 +271,11 @@ const itensFornecedor = computed(() => {
   return store.itens.filter(i => i._fornecedor === fornecedorSelecionado.value)
 })
 
-// --- Computed: Filtros (aba Explorar) ---
-const itensFiltrados = computed(() => {
-  const q = busca.value.toLowerCase().trim()
-  const setSel = (filtroSetor.value || setorFocus.value || '').toLowerCase().trim()
-  const fornSel = (filtroFornecedor.value || '').toLowerCase().trim()
-  const stSel = (filtroStatus.value || '').toLowerCase().trim()
-  return store.itens.filter(i => {
-    const matchBusca = !q || (String(i._produto).toLowerCase().includes(q) || String(i._codigo).toLowerCase().includes(q))
-    const matchSetor = !setSel || String(i._setor).toLowerCase().trim() === setSel
-    const matchForn = !fornSel || String(i._fornecedor).toLowerCase().trim() === fornSel
-    const matchStatus = !stSel || String(i._prazo) === stSel
-    return matchBusca && matchSetor && matchForn && matchStatus
-  })
-})
-
-const temFiltrosAtivos = computed(() => busca.value || filtroSetor.value || filtroFornecedor.value || filtroStatus.value)
-
-const filtrosAtivos = computed(() => {
-  const tags = []
-  if (busca.value) tags.push({ tipo: 'busca', label: `Busca: "${busca.value}"`, limpar: () => { busca.value = '' } })
-  if (filtroSetor.value) tags.push({ tipo: 'setor', label: `Setor: ${filtroSetor.value}`, limpar: () => { filtroSetor.value = '' } })
-  if (filtroFornecedor.value) tags.push({ tipo: 'fornecedor', label: `Fornecedor: ${filtroFornecedor.value}`, limpar: () => { filtroFornecedor.value = '' } })
-  if (filtroStatus.value) tags.push({ tipo: 'status', label: `Status: ${prazoBadgeLabel(filtroStatus.value)}`, limpar: () => { filtroStatus.value = '' } })
-  return tags
-})
-
-const limparTodosFiltros = () => {
-  busca.value = ''
-  filtroSetor.value = ''
-  filtroFornecedor.value = ''
-  filtroStatus.value = ''
-  setorFocus.value = ''
-}
+// --- Aba Explorar: itens que a tabela está mostrando (filtros da tabela padrão) ---
+const itensFiltrados = ref([])
 
 const navegarSetorExplorar = (nomeSetor) => {
-  filtroSetor.value = nomeSetor
+  preFiltroVenc.value = [{ chave: '_setor', op: 'em', valor: [nomeSetor] }]
   abaAtiva.value = 'explorar'
 }
 
@@ -366,39 +296,46 @@ const estoqueBaixoResumo = computed(() => {
 })
 const modalEstoqueBaixo = ref(false)
 
-// --- Colunas ---
-const colunasItens = [
-  { chave: '_codigo', titulo: 'Código', sortable: true },
-  { chave: '_produto', titulo: 'Produto', sortable: true },
-  { chave: '_setor', titulo: 'Setor', sortable: true },
-  { chave: '_fornecedor', titulo: 'Fornecedor', sortable: true },
-  { chave: '_local', titulo: 'Local', sortable: true },
-  { chave: '_validadeISO', titulo: 'Validade', sortable: true },
-  { chave: '_diasParaVencer', titulo: 'Dias', sortable: true, alinhamento: 'right' },
-  { chave: '_estoque', titulo: 'Estoque', sortable: true, alinhamento: 'right' },
-  { chave: '_prazo', titulo: 'Status', sortable: true }
+// --- Colunas da tabela padrão ---
+const ROTULO_PRAZO = { vencidos: 'Vencido', hoje: 'Hoje', ate3: 'Até 3 dias', futuro: 'Futuro', desconhecido: 'Sem data' }
+const COR_PRAZO = { Vencido: 'bg-red-100 text-red-700', Hoje: 'bg-orange-100 text-orange-700', 'Até 3 dias': 'bg-yellow-100 text-yellow-700', Futuro: 'bg-slate-100 text-slate-600', 'Sem data': 'bg-slate-100 text-slate-500' }
+const colunasExplorar = [
+  { chave: '_codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: '_produto', titulo: 'Produto', tipo: 'texto', largura: 'max-w-72' },
+  { chave: '_setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
+  { chave: '_fornecedor', titulo: 'Fornecedor', tipo: 'categoria', rapido: true },
+  { chave: '_local', titulo: 'Local', tipo: 'categoria', rapido: true },
+  { chave: '_validadeISO', titulo: 'Validade', tipo: 'data' },
+  { chave: '_diasParaVencer', titulo: 'Dias', tipo: 'numero' },
+  { chave: '_estoque', titulo: 'Estoque', tipo: 'numero' },
+  { chave: '_prazo', titulo: 'Status', tipo: 'categoria', valor: i => ROTULO_PRAZO[i._prazo] || i._prazo, badge: v => COR_PRAZO[v] || COR_PRAZO.Futuro },
+  { chave: '_usuario', titulo: 'Usuário', tipo: 'categoria', oculta: true },
+  { chave: '_situacao', titulo: 'Situação na planilha', tipo: 'categoria', oculta: true },
+  { chave: '_ultimaCompraDate', titulo: 'Última compra', tipo: 'data', oculta: true }
 ]
-
+const atalhosExplorar = [
+  { rotulo: 'Vencidos', icone: 'fas fa-times-circle', condicoes: [{ chave: '_prazo', op: 'em', valor: ['Vencido'] }] },
+  { rotulo: 'Hoje', icone: 'fas fa-clock', condicoes: [{ chave: '_prazo', op: 'em', valor: ['Hoje'] }] },
+  { rotulo: 'Até 3 dias', icone: 'fas fa-hourglass-half', condicoes: [{ chave: '_prazo', op: 'em', valor: ['Até 3 dias'] }] },
+  { rotulo: 'Próximos 7 dias', icone: 'fas fa-calendar-week', condicoes: [{ chave: '_diasParaVencer', op: 'entre', valor: '0', valor2: '7' }] },
+  { rotulo: 'Estoque < 10', icone: 'fas fa-box-open', condicoes: [{ chave: '_estoque', op: 'menor', valor: '10' }] }
+]
 const colunasFornecedores = [
-  { chave: 'fornecedor', titulo: 'Fornecedor', sortable: true },
-  { chave: 'total', titulo: 'Total', sortable: true, alinhamento: 'right' },
-  { chave: 'vencidos', titulo: 'Vencidos', sortable: true, alinhamento: 'right' },
-  { chave: 'hoje', titulo: 'Hoje', sortable: true, alinhamento: 'right' },
-  { chave: 'ate3', titulo: 'Até 3 dias', sortable: true, alinhamento: 'right' }
+  { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'texto' },
+  { chave: 'total', titulo: 'Total', tipo: 'numero' },
+  { chave: 'vencidos', titulo: 'Vencidos', tipo: 'numero', badge: v => (v ? 'bg-red-100 text-red-700' : 'text-slate-400') },
+  { chave: 'hoje', titulo: 'Hoje', tipo: 'numero', badge: v => (v ? 'bg-orange-100 text-orange-700' : 'text-slate-400') },
+  { chave: 'ate3', titulo: 'Até 3 dias', tipo: 'numero', badge: v => (v ? 'bg-yellow-100 text-yellow-700' : 'text-slate-400') },
+  { chave: 'criticos', titulo: 'Críticos', tipo: 'numero', valor: f => f.vencidos + f.hoje + f.ate3 }
 ]
-
-const rowClassPrazo = (item) => {
-  if (item._prazo === 'vencidos') return 'bg-red-50'
-  if (item._prazo === 'hoje') return 'bg-orange-50'
-  if (item._prazo === 'ate3') return 'bg-yellow-50'
-  return ''
-}
-
-const rowClassResumo = (item) => {
-  if ((item.vencidos || 0) > 0 || (item.hoje || 0) > 0) return 'bg-red-50'
-  if ((item.ate3 || 0) > 0) return 'bg-yellow-50'
-  return ''
-}
+const colunasSetores = [
+  { chave: 'nome', titulo: 'Setor', tipo: 'texto' },
+  { chave: 'total', titulo: 'Total', tipo: 'numero' },
+  { chave: 'vencidos', titulo: 'Vencidos', tipo: 'numero', badge: v => (v ? 'bg-red-100 text-red-700' : 'text-slate-400') },
+  { chave: 'hoje', titulo: 'Hoje', tipo: 'numero', badge: v => (v ? 'bg-orange-100 text-orange-700' : 'text-slate-400') },
+  { chave: 'ate3', titulo: 'Até 3d', tipo: 'numero', badge: v => (v ? 'bg-yellow-100 text-yellow-700' : 'text-slate-400') },
+  { chave: 'futuro', titulo: 'Futuros', tipo: 'numero' }
+]
 
 // --- Sort / Filter / Paginate helpers ---
 const sortVenc = (lista, ordenacao) => {
@@ -411,80 +348,6 @@ const sortVenc = (lista, ordenacao) => {
   })
 }
 
-const filtrarBuscaVenc = (lista, termo) => {
-  if (!termo) return lista
-  const t = termo.toLowerCase()
-  return lista.filter(item => Object.values(item).some(v => String(v ?? '').toLowerCase().includes(t)))
-}
-
-const atualizarOrdenacaoVenc = (obj, coluna) => {
-  if (obj.coluna === coluna) {
-    obj.direcao = obj.direcao === 'asc' ? 'desc' : 'asc'
-  } else {
-    obj.coluna = coluna
-    obj.direcao = 'asc'
-  }
-}
-
-// Itens Filtrados table
-const itensFiltradosComISO = computed(() => itensFiltrados.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
-const itensFiltradosBusca = computed(() => filtrarBuscaVenc(itensFiltradosComISO.value, buscaItensFiltrados.value))
-const itensFiltradosOrdenados = computed(() => sortVenc(itensFiltradosBusca.value, ordenacaoItensFiltrados.value))
-const totalPaginasItensFiltrados = computed(() => Math.max(1, Math.ceil(itensFiltradosOrdenados.value.length / itensPorPaginaFiltrados)))
-const itensFiltradosPaginados = computed(() => {
-  const p = Math.min(paginaItensFiltrados.value, totalPaginasItensFiltrados.value)
-  const i = (p - 1) * itensPorPaginaFiltrados
-  return itensFiltradosOrdenados.value.slice(i, i + itensPorPaginaFiltrados)
-})
-
-// Fornecedores tab table
-const fornecedoresTabBusca = computed(() => filtrarBuscaVenc(linhasFornecedores.value, buscaFornecedoresTab.value))
-const fornecedoresTabOrdenados = computed(() => sortVenc(fornecedoresTabBusca.value, ordenacaoFornecedoresTab.value))
-const totalPaginasFornecedoresTab = computed(() => Math.max(1, Math.ceil(fornecedoresTabOrdenados.value.length / itensPorPaginaFornecedores)))
-const fornecedoresTabPaginados = computed(() => {
-  const p = Math.min(paginaFornecedoresTab.value, totalPaginasFornecedoresTab.value)
-  const i = (p - 1) * itensPorPaginaFornecedores
-  return fornecedoresTabOrdenados.value.slice(i, i + itensPorPaginaFornecedores)
-})
-
-// Setor Modal table
-const itensSetorModalComISO = computed(() => itensSetorModal.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
-const itensSetorModalBusca = computed(() => filtrarBuscaVenc(itensSetorModalComISO.value, buscaSetorModal.value))
-const itensSetorModalOrdenados = computed(() => sortVenc(itensSetorModalBusca.value, ordenacaoSetorModal.value))
-const totalPaginasSetorModal = computed(() => Math.max(1, Math.ceil(itensSetorModalOrdenados.value.length / itensPorPaginaSetorModal)))
-const itensSetorModalPaginados = computed(() => {
-  const p = Math.min(paginaSetorModal.value, totalPaginasSetorModal.value)
-  const i = (p - 1) * itensPorPaginaSetorModal
-  return itensSetorModalOrdenados.value.slice(i, i + itensPorPaginaSetorModal)
-})
-
-// Fornecedor Modal table
-const itensFornecedorComISO = computed(() => itensFornecedor.value.map(i => ({ ...i, _validadeISO: formatarData(i._validadeDate) })))
-const itensFornecedorBusca = computed(() => filtrarBuscaVenc(itensFornecedorComISO.value, buscaFornecedorModal.value))
-const itensFornecedorOrdenados = computed(() => sortVenc(itensFornecedorBusca.value, ordenacaoFornecedorModal.value))
-const totalPaginasFornecedorModal = computed(() => Math.max(1, Math.ceil(itensFornecedorOrdenados.value.length / itensPorPaginaFornecedorModal)))
-const itensFornecedorPaginados = computed(() => {
-  const p = Math.min(paginaFornecedorModal.value, totalPaginasFornecedorModal.value)
-  const i = (p - 1) * itensPorPaginaFornecedorModal
-  return itensFornecedorOrdenados.value.slice(i, i + itensPorPaginaFornecedorModal)
-})
-
-const paginasVisiveisVenc = (total, atual) => {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages = [1]
-  if (atual > 3) pages.push('...')
-  for (let i = Math.max(2, atual - 1); i <= Math.min(total - 1, atual + 1); i++) pages.push(i)
-  if (atual < total - 2) pages.push('...')
-  pages.push(total)
-  return pages
-}
-
-// --- Watches: reset pagination ---
-watch(() => itensFiltradosBusca.value.length, () => { paginaItensFiltrados.value = 1 })
-watch(() => fornecedoresTabBusca.value.length, () => { paginaFornecedoresTab.value = 1 })
-watch(() => itensSetorModalBusca.value.length, () => { paginaSetorModal.value = 1 })
-watch(() => itensFornecedorBusca.value.length, () => { paginaFornecedorModal.value = 1 })
-
 // --- Impressao ---
 const { abrir: abrirSeletor } = useRelatorio()
 const colunasRelatorio = [
@@ -494,23 +357,6 @@ const colunasRelatorio = [
   { chave: '_diasParaVencer', titulo: 'Dias', alinhamento: 'right' }, { chave: '_estoque', titulo: 'Estoque', alinhamento: 'right' },
   { chave: '_prazo', titulo: 'Situação', valor: i => prazoBadgeLabel(i._prazo) }
 ]
-const imprimirFiltrados = () => {
-  const contexto = [
-    filtroSetor.value && { rotulo: 'Setor', valor: filtroSetor.value },
-    filtroFornecedor.value && { rotulo: 'Fornecedor', valor: filtroFornecedor.value },
-    filtroStatus.value && { rotulo: 'Situação', valor: prazoBadgeLabel(filtroStatus.value) },
-    buscaItensFiltrados.value && { rotulo: 'Busca', valor: buscaItensFiltrados.value }
-  ].filter(Boolean)
-  abrirRelatorioTabela({
-    id: 'vencimentos-explorar',
-    titulo: 'Vencimentos · itens filtrados',
-    subtitulo: `${itensFiltradosOrdenados.value.length} item(ns)`,
-    contexto: contexto.length ? contexto : [{ rotulo: 'Filtros', valor: 'nenhum' }],
-    colunas: colunasRelatorio,
-    itens: itensFiltradosOrdenados.value
-  })
-}
-
 // Relatório geral de validades para a liderança.
 const imprimirRelatorio = () => {
   const r = resumo.value
@@ -568,21 +414,15 @@ const imprimirRelatorio = () => {
   })
 }
 
-const exportarFiltradosCsv = () => {
-  const base = itensFiltradosOrdenados.value
-  if (!base.length) return
-  const linhas = base.map(item => ({ ...item, _prazo: prazoBadgeLabel(item._prazo) }))
-  baixarCsv(linhas, colunasItens, `vencimentos-${new Date().toISOString().slice(0, 10)}`)
-  toastStore.addToast(`${base.length} itens exportados em CSV.`, 'success')
-}
-
 // Links externos (ex.: busca global) podem abrir a aba Explorar já filtrada.
 const aplicarFiltrosDaRota = () => {
   const { busca: termo, prazo, setor } = route.query
   if (!termo && !prazo && !setor) return
-  if (typeof termo === 'string') busca.value = termo
-  if (typeof prazo === 'string') filtroStatus.value = prazo
-  if (typeof setor === 'string') filtroSetor.value = setor
+  if (typeof termo === 'string') buscaVenc.value = termo
+  const conds = []
+  if (typeof prazo === 'string') conds.push({ chave: '_prazo', op: 'em', valor: [ROTULO_PRAZO[prazo] || prazo] })
+  if (typeof setor === 'string') conds.push({ chave: '_setor', op: 'em', valor: [setor] })
+  if (conds.length) preFiltroVenc.value = conds
   abaAtiva.value = 'explorar'
 }
 watch(() => route.query, aplicarFiltrosDaRota, { immediate: true })
@@ -704,65 +544,11 @@ const exportarDetalhamentoSetor = async () => {
                 <span class="text-xs text-slate-400 font-medium">{{ setoresAnalise.length }} setores</span>
               </div>
             </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-              <thead>
-                <tr class="bg-slate-50 border-y border-slate-200">
-                  <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500">Setor
-                  </th>
-                  <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 w-20">
-                    Total</th>
-                  <th class="px-4 py-3 text-center text-xs font-semibold text-red-500 w-24">
-                    Vencidos</th>
-                  <th class="px-4 py-3 text-center text-xs font-semibold text-orange-500 w-20">
-                    Hoje</th>
-                  <th class="px-4 py-3 text-center text-xs font-semibold text-yellow-600 w-20">
-                    Até 3d</th>
-                  <th class="w-10"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100">
-                <tr v-for="setor in setoresAnalise" :key="setor.nome" @click="abrirModalSetor(setor.nome)"
-                  class="cursor-pointer hover:bg-orange-50/60 transition-colors group"
-                  :class="setor.vencidos > 0 ? 'bg-red-50/60' : setor.hoje > 0 ? 'bg-orange-50/50' : setor.ate3 > 0 ? 'bg-yellow-50/50' : ''">
-                  <td class="px-5 py-3.5">
-                    <p class="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">{{ setor.nome
-                      }}</p>
-                  </td>
-                  <td class="px-4 py-3.5 text-center">
-                    <span class="font-bold text-slate-700 tabular-nums">{{ setor.total }}</span>
-                  </td>
-                  <td class="px-4 py-3.5 text-center">
-                    <span v-if="setor.vencidos > 0"
-                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-red-100 text-red-700 font-bold text-xs tabular-nums">
-                      {{ setor.vencidos }}
-                    </span>
-                    <span v-else class="text-slate-300 text-xs">—</span>
-                  </td>
-                  <td class="px-4 py-3.5 text-center">
-                    <span v-if="setor.hoje > 0"
-                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 font-bold text-xs tabular-nums">
-                      {{ setor.hoje }}
-                    </span>
-                    <span v-else class="text-slate-300 text-xs">—</span>
-                  </td>
-                  <td class="px-4 py-3.5 text-center">
-                    <span v-if="setor.ate3 > 0"
-                      class="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-yellow-100 text-yellow-700 font-bold text-xs tabular-nums">
-                      {{ setor.ate3 }}
-                    </span>
-                    <span v-else class="text-slate-300 text-xs">—</span>
-                  </td>
-                  <td class="px-2 py-3.5 text-center">
-                    <i
-                      class="fas fa-chevron-right text-slate-300 group-hover:text-orange-400 transition-colors text-xs"></i>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="px-5 pb-5 md:px-6">
+              <UiTabela id="vencimentos-setores" titulo="Vencimentos por setor" :itens="setoresAnalise" :colunas="colunasSetores" :ordem-inicial="[{ chave: 'vencidos', direcao: 'desc' }, { chave: 'hoje', direcao: 'desc' }, { chave: 'ate3', direcao: 'desc' }]" chave-item="nome" clicavel :agrupavel="false" @linha="abrirModalSetor($event.nome)" />
+            </div>
           </div>
         </div>
-      </div>
 
         <!-- Critical Items (Timeline Style) -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 md:p-6">
@@ -819,255 +605,16 @@ const exportarDetalhamentoSetor = async () => {
           <button type="button" class="ui-btn-secondary shrink-0 py-2 text-xs" @click="modalEstoqueBaixo = true"><i class="fas fa-list-check"></i>Ver itens para excluir</button>
         </section>
 
-        <!-- Filtros -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-4">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-semibold text-slate-500 mr-2">Status:</span>
-            <button v-for="pill in statusPills" :key="pill.valor" @click="filtroStatus = pill.valor"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all"
-              :class="filtroStatus === pill.valor ? pill.corAtiva : pill.cor">
-              <i :class="pill.icone" class="text-[10px]"></i>
-              {{ pill.label }}
-            </button>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div class="relative">
-              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input v-model="busca" placeholder="Buscar por codigo ou produto..."
-                class="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition bg-white" />
-            </div>
-            <select v-model="filtroSetor"
-              class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition">
-              <option value="">Todos os setores</option>
-              <option v-for="s in setores" :key="s" :value="s">{{ s }}</option>
-            </select>
-            <select v-model="filtroFornecedor"
-              class="px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition">
-              <option value="">Todos os fornecedores</option>
-              <option v-for="f in fornecedores" :key="f" :value="f">{{ f }}</option>
-            </select>
-          </div>
-
-          <div v-if="filtrosAtivos.length > 0" class="flex flex-wrap items-center gap-2">
-            <span class="text-xs text-slate-400">Filtros ativos:</span>
-            <span v-for="tag in filtrosAtivos" :key="tag.tipo"
-              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 text-xs font-medium border border-orange-200">
-              {{ tag.label }}
-              <button @click="tag.limpar" class="ml-0.5 hover:text-red-600 transition">
-                <i class="fas fa-times text-[10px]"></i>
-              </button>
-            </span>
-            <button @click="limparTodosFiltros" class="text-xs text-red-500 hover:text-red-700 font-medium ml-2">
-              <i class="fas fa-times-circle mr-0.5"></i>Limpar todos
-            </button>
-          </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <UiTabela id="vencimentos-explorar" titulo="Vencimentos" :itens="store.itens" :colunas="colunasExplorar" :atalhos="atalhosExplorar" :filtros-iniciais="preFiltroVenc" :busca-inicial="buscaVenc" :ordem-inicial="{ chave: '_diasParaVencer', direcao: 'asc' }" :chave-item="i => i._codigo + '|' + i._validadeISO + '|' + i.id" placeholder="Buscar código, produto, setor, fornecedor ou local..." @filtrados="itensFiltrados = $event" />
         </div>
 
-        <!-- Data Table -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-            <p class="text-sm text-slate-600">
-              <span class="font-bold text-gray-900">{{ itensFiltrados.length }}</span> itens encontrados
-            </p>
-            <div class="flex items-center gap-2">
-              <button @click="exportarFiltradosCsv" :disabled="!itensFiltrados.length"
-                class="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium border border-emerald-200 transition disabled:opacity-50">
-                <i class="fas fa-file-csv mr-1.5"></i>CSV
-              </button>
-              <button @click="imprimirFiltrados" :disabled="!itensFiltrados.length"
-                class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium border border-slate-200 transition">
-                <i class="fas fa-print mr-1.5"></i>Imprimir
-              </button>
-            </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <div class="mb-3">
+            <h2 class="text-base font-bold text-gray-900">Resumo por fornecedor</h2>
+            <p class="text-xs text-slate-500">Clique em um fornecedor para ver os itens dele.</p>
           </div>
-
-          <!-- Search -->
-          <div class="px-4 pt-3">
-            <div class="relative">
-              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input v-model="buscaItensFiltrados" placeholder="Buscar na tabela..."
-                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition bg-white" />
-            </div>
-          </div>
-
-          <!-- Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs">
-              <thead>
-                <tr class="border-b-2 border-slate-100">
-                  <th v-for="col in colunasItens" :key="col.chave"
-                    class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
-                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-blue-600 transition-colors' : '']"
-                    @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoItensFiltrados, col.chave)">
-                    {{ col.titulo }}
-                    <template v-if="col.sortable">
-                      <i v-if="ordenacaoItensFiltrados.coluna !== col.chave"
-                        class="fas fa-sort text-slate-300 ml-1"></i>
-                      <i v-else-if="ordenacaoItensFiltrados.direcao === 'asc'"
-                        class="fas fa-sort-up text-blue-600 ml-1"></i>
-                      <i v-else class="fas fa-sort-down text-blue-600 ml-1"></i>
-                    </template>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="itensFiltradosPaginados.length === 0">
-                  <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
-                    <i class="fas fa-inbox text-3xl mb-2 block"></i>
-                    <p class="text-sm">Nenhum item encontrado</p>
-                  </td>
-                </tr>
-                <tr v-for="(item, idx) in itensFiltradosPaginados" :key="item._codigo + item._validadeISO + idx"
-                  :class="item._prazo === 'vencidos' ? 'bg-red-50/60 hover:bg-slate-50' : item._prazo === 'hoje' ? 'bg-orange-50/60 hover:bg-slate-50' : item._prazo === 'ate3' ? 'bg-yellow-50/60 hover:bg-slate-50' : idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-slate-50'">
-                  <td class="px-3 py-2">{{ item._codigo }}</td>
-                  <td class="px-3 py-2">{{ item._produto }}</td>
-                  <td class="px-3 py-2">{{ item._setor }}</td>
-                  <td class="px-3 py-2">{{ item._fornecedor }}</td>
-                  <td class="px-3 py-2">{{ item._local }}</td>
-                  <td class="px-3 py-2">{{ item._validadeISO }}</td>
-                  <td class="px-3 py-2 text-right tabular-nums">{{ item._diasParaVencer }}</td>
-                  <td class="px-3 py-2 text-right tabular-nums">{{ item._estoque }}</td>
-                  <td class="px-3 py-2">
-                    <span class="px-2 py-0.5 text-xs rounded-full border font-medium"
-                      :class="prazoBadgeClasses(item._prazo)">
-                      {{ prazoBadgeLabel(item._prazo) }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination -->
-          <div v-if="totalPaginasItensFiltrados > 1"
-            class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) }} de
-              {{
-              totalPaginasItensFiltrados }}</p>
-            <div class="flex items-center gap-1">
-              <button @click="paginaItensFiltrados = Math.max(1, paginaItensFiltrados - 1)"
-                :disabled="paginaItensFiltrados <= 1"
-                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                <i class="fas fa-chevron-left"></i>
-              </button>
-              <template
-                v-for="p in paginasVisiveisVenc(totalPaginasItensFiltrados, Math.min(paginaItensFiltrados, totalPaginasItensFiltrados))"
-                :key="'pif' + p">
-                <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
-                <button v-else @click="paginaItensFiltrados = p"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                  :class="p === Math.min(paginaItensFiltrados, totalPaginasItensFiltrados) ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
-                  {{ p }}
-                </button>
-              </template>
-              <button @click="paginaItensFiltrados = Math.min(totalPaginasItensFiltrados, paginaItensFiltrados + 1)"
-                :disabled="paginaItensFiltrados >= totalPaginasItensFiltrados"
-                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                <i class="fas fa-chevron-right"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Supplier Summary with Drill-Down -->
-        <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div class="p-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h2 class="text-base font-bold text-gray-900">Resumo por Fornecedor</h2>
-              <p class="text-xs text-slate-500">Clique em um fornecedor para ver seus itens</p>
-            </div>
-          </div>
-          <!-- Search -->
-          <div class="px-4 pt-3">
-            <div class="relative">
-              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-              <input v-model="buscaFornecedoresTab" placeholder="Buscar fornecedor..."
-                class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition bg-white" />
-            </div>
-          </div>
-
-          <!-- Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs">
-              <thead>
-                <tr class="border-b-2 border-slate-100">
-                  <th v-for="col in colunasFornecedores" :key="col.chave"
-                    class="px-3 py-2.5 font-semibold text-slate-500 text-xs whitespace-nowrap"
-                    :class="[col.alinhamento === 'right' ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-blue-600 transition-colors' : '']"
-                    @click="col.sortable && atualizarOrdenacaoVenc(ordenacaoFornecedoresTab, col.chave)">
-                    {{ col.titulo }}
-                    <template v-if="col.sortable">
-                      <i v-if="ordenacaoFornecedoresTab.coluna !== col.chave"
-                        class="fas fa-sort text-slate-300 ml-1"></i>
-                      <i v-else-if="ordenacaoFornecedoresTab.direcao === 'asc'"
-                        class="fas fa-sort-up text-blue-600 ml-1"></i>
-                      <i v-else class="fas fa-sort-down text-blue-600 ml-1"></i>
-                    </template>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="fornecedoresTabPaginados.length === 0">
-                  <td :colspan="colunasFornecedores.length" class="text-center py-10 text-slate-400">
-                    <i class="fas fa-inbox text-3xl mb-2 block"></i>
-                    <p class="text-sm">Nenhum fornecedor encontrado</p>
-                  </td>
-                </tr>
-                <tr v-for="(item, idx) in fornecedoresTabPaginados" :key="item.fornecedor"
-                  @click="abrirItensFornecedor(item)" class="cursor-pointer transition-colors"
-                  :class="(item.vencidos > 0 || item.hoje > 0) ? 'bg-red-50/60 hover:bg-slate-50' : item.ate3 > 0 ? 'bg-yellow-50/60 hover:bg-slate-50' : idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/60 hover:bg-slate-50'">
-                  <td class="px-3 py-2 font-medium">{{ item.fornecedor }}</td>
-                  <td class="px-3 py-2 text-right tabular-nums">{{ item.total }}</td>
-                  <td class="px-3 py-2 text-right">
-                    <span
-                      class="px-2 py-0.5 text-xs rounded-full border text-red-700 bg-red-50 border-red-200 font-medium">{{
-                      item.vencidos }}</span>
-                  </td>
-                  <td class="px-3 py-2 text-right">
-                    <span
-                      class="px-2 py-0.5 text-xs rounded-full border text-orange-700 bg-orange-50 border-orange-200 font-medium">{{
-                      item.hoje }}</span>
-                  </td>
-                  <td class="px-3 py-2 text-right">
-                    <span
-                      class="px-2 py-0.5 text-xs rounded-full border text-yellow-700 bg-yellow-50 border-yellow-200 font-medium">{{
-                      item.ate3 }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination -->
-          <div v-if="totalPaginasFornecedoresTab > 1"
-            class="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p class="text-xs text-slate-500">Pagina {{ Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) }}
-              de {{
-              totalPaginasFornecedoresTab }}</p>
-            <div class="flex items-center gap-1">
-              <button @click="paginaFornecedoresTab = Math.max(1, paginaFornecedoresTab - 1)"
-                :disabled="paginaFornecedoresTab <= 1"
-                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                <i class="fas fa-chevron-left"></i>
-              </button>
-              <template
-                v-for="p in paginasVisiveisVenc(totalPaginasFornecedoresTab, Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab))"
-                :key="'pft' + p">
-                <span v-if="p === '...'" class="px-2 text-xs text-slate-400">...</span>
-                <button v-else @click="paginaFornecedoresTab = p"
-                  class="px-2.5 py-1 rounded text-xs font-medium border transition"
-                  :class="p === Math.min(paginaFornecedoresTab, totalPaginasFornecedoresTab) ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-slate-100 border-slate-200 text-slate-600'">
-                  {{ p }}
-                </button>
-              </template>
-              <button @click="paginaFornecedoresTab = Math.min(totalPaginasFornecedoresTab, paginaFornecedoresTab + 1)"
-                :disabled="paginaFornecedoresTab >= totalPaginasFornecedoresTab"
-                class="px-2.5 py-1 rounded text-xs font-medium border transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 border-slate-200 text-slate-600">
-                <i class="fas fa-chevron-right"></i>
-              </button>
-            </div>
-          </div>
+          <UiTabela id="vencimentos-fornecedores" titulo="Vencimentos por fornecedor" :itens="linhasFornecedores" :colunas="colunasFornecedores" :ordem-inicial="[{ chave: 'vencidos', direcao: 'desc' }, { chave: 'hoje', direcao: 'desc' }, { chave: 'ate3', direcao: 'desc' }]" chave-item="fornecedor" :tamanho-pagina="10" clicavel :agrupavel="false" @linha="abrirItensFornecedor" />
         </div>
       </template>
 

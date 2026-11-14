@@ -17,6 +17,7 @@ import AbaVisaoGeralAuditoria from '../components/AbaVisaoGeralAuditoria.vue'
 import AbaEstatisticasAuditoria from '../components/AbaEstatisticasAuditoria.vue'
 import NavAbasAuditoria from '../components/NavAbasAuditoria.vue'
 import UiModal from '../components/ui/UiModal.vue'
+import UiTabela from '../components/ui/UiTabela.vue'
 import UiListaItens from '../components/ui/UiListaItens.vue'
 import { isItemLido } from '../utils/itemLido'
 import { blocoBarras, blocoColunas, blocoTabela } from '../utils/print'
@@ -189,6 +190,19 @@ const sinaisAuditoria = computed(() => analisarSinaisAuditoria(auditoria.value?.
   historico: store.auditorias.filter(item => item.id !== auditoria.value?.id)
 }))
 
+// Colunas da tabela de registros de cada alerta (as extras dependem do tipo do alerta).
+const colunasSinal = sinal => [
+  { chave: 'linhaPlanilha', titulo: 'Linha', tipo: 'numero' },
+  { chave: 'dataHora', titulo: 'Data e hora', tipo: 'texto' },
+  { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'classe', titulo: 'Classe', tipo: 'categoria', rapido: true },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true },
+  ...(sinal.tipo === 'retomada' || sinal.tipo === 'historico' ? [{ chave: 'ultimoLocal', titulo: 'Local anterior', tipo: 'categoria' }] : []),
+  { chave: 'usuario', titulo: 'Usuário', tipo: 'categoria', rapido: true },
+  ...(sinal.tipo === 'excecoes' ? [{ chave: 'situacao', titulo: 'Situação', tipo: 'categoria' }] : []),
+  ...(sinal.tipo === 'estoque' ? [{ chave: 'estoque', titulo: 'Estoque', tipo: 'numero' }, { chave: 'diasSemVenda', titulo: 'Dias sem venda', tipo: 'numero' }] : [])
+]
 const exportarRegistrosSinal = sinal => {
   const colunas = [
     ['linhaPlanilha', 'Linha da planilha'], ['dataHora', 'Data e hora'], ['codigo', 'Código'], ['produto', 'Produto'], ['classe', 'Classe de produto'],
@@ -1202,27 +1216,11 @@ const fecharRelatorio = () => {
               </div>
               <details class="mt-4">
                 <summary class="cursor-pointer text-sm font-semibold text-blue-700">Conferir registros ({{ sinal.registros.length }})</summary>
-                <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-xs text-slate-500">{{ sinal.registros.length > 100 ? 'Mostrando os primeiros 100 registros. O CSV contém todos.' : 'Dados preservados da planilha importada.' }} A linha de origem aparece quando foi preservada na importação.</p>
-                  <button type="button" class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50" @click="exportarRegistrosSinal(sinal)">Baixar registros CSV</button>
-                </div>
-                <div class="mt-3 max-h-96 overflow-auto rounded-lg border border-slate-200">
-                  <table class="min-w-full text-left text-xs">
-                    <thead class="sticky top-0 bg-slate-50 text-slate-600"><tr>
-                      <th class="px-3 py-2">Linha</th><th class="px-3 py-2">Data e hora</th><th class="px-3 py-2">Código</th><th class="px-3 py-2">Produto</th><th class="px-3 py-2">Classe</th><th class="px-3 py-2">Local</th>
-                      <th v-if="sinal.tipo === 'retomada' || sinal.tipo === 'historico'" class="px-3 py-2">Local anterior</th><th class="px-3 py-2">Usuário</th>
-                      <th v-if="sinal.tipo === 'excecoes'" class="px-3 py-2">Situação</th>
-                      <th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Estoque</th><th v-if="sinal.tipo === 'estoque'" class="px-3 py-2">Dias sem venda</th>
-                    </tr></thead>
-                    <tbody class="divide-y divide-slate-100 text-slate-700">
-                      <tr v-for="(item, itemIndice) in sinal.registros.slice(0, 100)" :key="`${item.codigo}-${itemIndice}`">
-                        <td class="px-3 py-2">{{ item.linhaPlanilha ?? '—' }}</td><td class="whitespace-nowrap px-3 py-2">{{ item.dataHora }}</td><td class="px-3 py-2">{{ item.codigo }}</td><td class="px-3 py-2">{{ item.produto }}</td><td class="px-3 py-2">{{ item.classe }}</td><td class="px-3 py-2">{{ item.local }}</td>
-                        <td v-if="sinal.tipo === 'retomada' || sinal.tipo === 'historico'" class="px-3 py-2">{{ item.ultimoLocal || '—' }}</td><td class="px-3 py-2">{{ item.usuario }}</td>
-                        <td v-if="sinal.tipo === 'excecoes'" class="px-3 py-2">{{ item.situacao }}</td>
-                        <td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.estoque }}</td><td v-if="sinal.tipo === 'estoque'" class="px-3 py-2">{{ item.diasSemVenda }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <p class="mt-3 text-xs text-slate-500">Dados preservados da planilha importada. A linha de origem aparece quando foi preservada na importação. O CSV da tabela traz as colunas visíveis; o completo tem também a data e o nº da auditoria anterior.</p>
+                <div class="mt-2">
+                  <UiTabela :id="`sinal-${sinal.tipo}`" :titulo="`Registros · ${sinal.titulo || sinal.tipo}`" :itens="sinal.registros" :colunas="colunasSinal(sinal)" :ordem-inicial="{ chave: 'dataHora', direcao: 'asc' }" :tamanho-pagina="25" altura="max-h-96">
+                    <template #acoes><button type="button" class="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50" @click="exportarRegistrosSinal(sinal)">CSV completo</button></template>
+                  </UiTabela>
                 </div>
               </details>
             </div>

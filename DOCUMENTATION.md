@@ -107,7 +107,7 @@ Utiliza o **IndexedDB** via Dexie para armazenar grandes volumes de dados.
 - **Layout**: largura máxima única (`.ui-container` / `.ui-page`, até 1760px) para aproveitar telas grandes; navbar em cor sólida.
 - **Auditorias**: cards de auditorias em andamento sem bordas, com anel de conclusão e "faltam X itens para a meta"; histórico por tipo agrupado por mês, com resumo do tipo, filtro por situação e "mostrar mais".
 - **Aba Usuários** (`components/AbaUsuariosAuditoria.vue`): pódio, leituras do time por hora, cartões/tabela/mapa de horas por usuário (ritmo, pico, período ativo, problemas) e "quem leu cada setor" com alerta de dependência de uma só pessoa. Exporta CSV.
-- **Modais de lista** (`components/ui/UiListaItens.vue`): busca, filtros com contagem, agrupamento, ordenação, carregamento incremental, CSV, impressão e cópia do código. Usado em métricas, itens do local, usuário e vencimentos.
+- **Modais de lista** (`components/ui/UiListaItens.vue`): usa a tabela padrão (seção 4.12); as facetas viram filtros rápidos. Usado em métricas, itens do local, usuário e vencimentos.
 - **Relatório da auditoria** (`components/RelatorioAuditoria.vue`): % pendente em destaque, cards (SKU, lidos, pendentes, com problema e desatualizados na Etiqueta), tabela de % pendente por setor, top 10 locais e locais sem leitura; imprime/salva PDF e salva uma imagem quadrada em alta resolução para compartilhar.
 - **PDFs visuais** (`utils/print.js`): cabeçalho, indicadores, barras, colunas e tabelas com mini barras em todos os relatórios impressos.
 - **Tutorial** (`components/ModalTutorial.vue`): botão Tutorial no menu (ou na busca rápida) abre um passo a passo de cada página: Início, Auditorias, detalhe, mapa, Análise, ficha do colaborador, Vencimentos, Estoque, Não vinculados, relatórios, busca, configurações e backup. Cada passo tem "Abrir esta página".
@@ -136,10 +136,11 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **E
 ### 4.10 Estoque (`pages/Estoque.vue`, `utils/estoque.js`, `utils/estoqueTotal.js`, `composables/useAnaliseEstoque.js`)
 A aba **Estoque** reúne os problemas de estoque calculados a partir das auditorias de **Presença e Ruptura** (as que leem a gôndola), das validades e dos não vinculados. Cada código é avaliado pela situação na última vez em que apareceu; só entram itens vistos desde a última Presença (ciclo atual). *Lido não pertence* não conta como leitura: o local vinculado continuou vazio.
 - **Estoque total** (`stores/estoqueTotalStore.js`): o relatório de produtos com estoque do sistema (Código, Nome, Estoque, Estoque Indisponível, Dias sem venda, Última venda/compra, Classe de Produto, Classe de Produto Raiz, Ranking de Vendas, Fornecedor, Gerenciado, Peso Variável). Estoque em kg ("26,694 KG") vira número com unidade. Setor, classe e fornecedor perdem o código ("35 - MERCEARIA DOCE" → "MERCEARIA DOCE") para bater com as auditorias. Cada importação substitui a anterior; fica no IndexedDB (`estoqueTotal`, data e arquivo em `config`) e vai no backup. Quando existe, é a base das listas:
-  - **Reincidências** só com itens que estão nela com estoque, usando o estoque e os dias sem venda dela;
+  - **Reincidências** só com itens que estão nela com estoque, usando o estoque e os dias sem venda dela; entram também os que já foram auditados e saíram da auditoria (não estão na última Presença), qualquer que seja o tempo sem leitura;
   - **Estoque zerado** perde quem já tem estoque nela (entrada lançada depois da auditoria);
   - **Parados** passam a considerar todos os itens dela, também os que não aparecem nas auditorias;
-  - **Fora das auditorias** (nova lista): itens com estoque nela que não entraram na última Presença. *Saiu* = já foi auditado (provável vínculo perdido); *nunca* = sem local ou setor não auditado. Local sugerido pelo histórico do item ou pela classe (mesma regra dos não vinculados);
+  - **Sem local** (nova lista): itens com estoque nela que nunca apareceram nas auditorias, ou seja, não vinculados. Local sugerido pelo histórico do item ou pela classe (mesma regra dos não vinculados);
+  - **Insumos** (setor OUTROS: sacolas, pallets, tabloides) não entram na auditoria e ficam fora de todas as listas de problema (reincidência, zerados, parados, sem local); têm uma aba própria, **Insumos**, só para consulta;
   - **Estoque da loja**: todos os itens dela com local, situação na última auditoria, última leitura, validade e problemas, com filtros e CSV.
 - **Reincidências**: itens com estoque não lidos há 14+ dias (14/21/30/60, lembrado no navegador). Mostra dias e auditorias seguidas sem leitura, última leitura, ruptura acumulada (`Custo Ruptura`) e um diagnóstico: achado em outro local, vende mas não é achado (depósito), nunca lido e sem venda (estoque provavelmente inexistente).
 - **Estoque zerado**: itens lidos na gôndola com estoque zerado no sistema, com quantas auditorias seguidas.
@@ -152,6 +153,18 @@ A aba **Estoque** reúne os problemas de estoque calculados a partir das auditor
 ### 4.11 Início
 - **O que fazer agora**: lista única do que está pendente, do mais urgente para o menos: vencidos a retirar, auditorias abertas fora da meta (quantos itens faltam), auditoria do dia não criada, reincidências, estoque zerado, não vinculados e backup.
 - Indicadores clicáveis (validades críticas, problemas de estoque, auditorias abertas, taxa na meta) e o bloco **Estoque: mais graves**, com a ficha de cada item.
+
+### 4.12 Tabelas e filtros (`components/ui/UiTabela.vue`, `utils/filtroTabela.js`)
+Todas as tabelas e listas de dados usam o mesmo componente, com a mesma barra:
+- **Busca geral** em todas as colunas, sem acento e sem diferenciar maiúsculas. Todos os termos precisam aparecer; `"frase exata"` entre aspas e `-palavra` para excluir.
+- **Filtros rápidos**: listas das colunas mais usadas (setor, local, fornecedor, situação...), com busca dentro e contagem que já considera os outros filtros. Dá para marcar vários valores.
+- **Atalhos**: visões prontas de cada tela (ex.: "Vencidos", "Prioridade alta", "Saíram da auditoria"). Clique de novo para tirar.
+- **Filtros (avançado)**: condições por qualquer coluna, todas valendo juntas. O tipo da coluna define as opções: texto (contém, não contém, igual, começa/termina com, vazio), número (=, ≠, >, ≥, <, ≤, entre, vazio), data (em, antes, depois, entre, últimos/próximos N dias, já passou), lista (é / não é um dos valores) e sim/não. Colunas ocultas também filtram (ex.: dias sem venda, validade).
+- **Ordenar**: clique no título da coluna (de novo inverte, na terceira volta à ordem padrão); Shift + clique soma um critério. O botão Ordenar monta vários critérios com subir/descer. Vazios ficam sempre no fim.
+- **Colunas** visíveis, **Agrupar** por uma coluna de lista, **CSV** e **Imprimir** (relatório A4) da lista filtrada e ordenada.
+- **Paginação** com 10, 25, 50, 100 ou 250 por página.
+- Filtros, ordem e página ficam guardados na sessão do navegador por tabela; colunas visíveis e itens por página ficam lembrados no navegador.
+- Filtros vindos de outra tela (ex.: clicar num local em "Onde agir") entram como condições e podem ser removidos como as outras.
 
 ---
 
