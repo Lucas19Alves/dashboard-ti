@@ -54,10 +54,16 @@ describe('reincidência', () => {
     expect(mapaReincidencia([a1, a2]).analise.porLocal).toEqual({ G01A: { lidos: 0, pendentes: 2, comProblema: 0 }, G02A: { lidos: 2, pendentes: 0, comProblema: 0 } })
   })
 
-  it('soma ruptura em valor dos itens pendentes', () => {
+  it('ruptura em valor é uma foto por auditoria: média, última e por mês, sem somar semanas', () => {
     const r = rupturaEmValor([a1, a2])
-    expect(r.total).toBe(10.5)
-    expect(r.porSetor[0]).toMatchObject({ chave: 'MERCEARIA', valor: 10.5 })
+    expect(r.auditorias.map(f => f.valor)).toEqual([0, 10.5])
+    expect(r.ultima).toMatchObject({ valor: 10.5, itens: 1 })
+    expect(r.media).toBe(5.25)
+    expect(r.porSetor[0]).toMatchObject({ chave: 'MERCEARIA', valor: 5.25, ultima: 10.5 })
+    const semanas = ['2026-10-06', '2026-10-13', '2026-10-20'].map((data, i) => ({ id: 10 + i, data, dados: [pendente('9', 'G01A', { 'Custo Ruptura': '100' })] }))
+    const mes = rupturaEmValor(semanas).meses[0]
+    expect(mes).toMatchObject({ chave: '2026-10', valor: 100, ultima: 100, auditorias: 3 }) // não vira 300
+    expect(rupturaEmValor(semanas).porProduto[0]).toMatchObject({ vezes: 3, valorMedio: 100, naUltima: true })
   })
 })
 

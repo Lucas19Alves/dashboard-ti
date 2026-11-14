@@ -1,43 +1,70 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import UiListaItens from './ui/UiListaItens.vue'
+import UiTabela from './ui/UiTabela.vue'
 import { rupturaEmValor } from '../utils/historicoAuditorias'
 import { rotuloMes } from '../utils/analiseHistorica'
-import { baixarCsv } from '../utils/csv'
 
-// Ruptura em valor: soma do "Custo Ruptura" dos itens sem presença, por fornecedor, setor e mês.
+// Ruptura em valor: "Custo Ruptura" dos itens sem presença. Cada auditoria é uma foto do quanto estava
+// faltando naquele dia; o histórico mostra as fotos, a média de cada mês e a última, sem somar semanas.
 const props = defineProps({
   auditorias: { type: Array, required: true }
 })
 
 const tiposDisponiveis = computed(() => ['Ruptura', 'Presença'].filter(t => props.auditorias.some(a => a.tipo === t)))
 // Ruptura é o resultado final (após recuperação); Presença mostra a ruptura inicial.
+// Um tipo por vez: a Ruptura repete os pendentes da Presença da mesma semana.
 const base = ref('Ruptura')
 watch(tiposDisponiveis, (tipos) => { if (!tipos.includes(base.value)) base.value = tipos[0] || 'Ruptura' }, { immediate: true })
 const lista = computed(() => props.auditorias.filter(a => a.tipo === base.value))
 const r = computed(() => rupturaEmValor(lista.value))
 
 const moeda = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const maiorMes = computed(() => Math.max(1, ...r.value.meses.map(m => m.valor)))
-const media = computed(() => (lista.value.length ? r.value.total / lista.value.length : 0))
+const mil = v => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.', ',')} mil` : String(Math.round(v)))
+const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—')
 const rotuloTendencia = { subindo: ['Subindo', 'text-red-700', 'fa-arrow-trend-up'], caindo: ['Caindo', 'text-emerald-700', 'fa-arrow-trend-down'], estavel: ['Estável', 'text-slate-700', 'fa-minus'], indefinida: ['Poucos meses', 'text-slate-500', 'fa-minus'] }
 
-const colunasRanking = [
-  { chave: 'chave', titulo: 'Nome', largura: 'max-w-80' },
-  { chave: 'valor', titulo: 'Valor (R$)', alinhamento: 'right', valor: x => Math.round(x.valor * 100) / 100, formato: v => moeda(v) },
-  { chave: 'itens', titulo: 'Itens', alinhamento: 'right' },
-  { chave: 'participacao', titulo: '% do total', alinhamento: 'right', valor: x => Math.round(x.participacao * 10) / 10, formato: v => `${v.toLocaleString('pt-BR')}%` }
+// Gráfico do mês: média das fotos do mês ou a última foto do mês.
+const metricaMes = ref('valor')
+const maiorMes = computed(() => Math.max(1, ...r.value.meses.map(m => m[metricaMes.value])))
+
+const COLUNAS_MESES = [
+  { chave: 'chave', titulo: 'Mês', tipo: 'texto', formato: v => rotuloMes(v) },
+  { chave: 'valor', titulo: 'Média do mês', tipo: 'numero', formato: moeda },
+  { chave: 'ultima', titulo: 'Última auditoria do mês', tipo: 'numero', formato: (v, m) => `${moeda(v)} (${br(m.ultimaData)})` },
+  { chave: 'pico', titulo: 'Pior auditoria do mês', tipo: 'numero', formato: moeda },
+  { chave: 'itens', titulo: 'Itens em ruptura (média)', tipo: 'numero', formato: v => Math.round(v).toLocaleString('pt-BR') },
+  { chave: 'auditorias', titulo: 'Auditorias', tipo: 'numero' }
 ]
-const colunasProdutos = [
-  { chave: 'chave', titulo: 'Código' },
-  { chave: 'produto', titulo: 'Produto', largura: 'max-w-72' },
-  { chave: 'fornecedor', titulo: 'Fornecedor', largura: 'max-w-56' },
-  { chave: 'itens', titulo: 'Vezes', alinhamento: 'right' },
-  { chave: 'valor', titulo: 'Valor (R$)', alinhamento: 'right', valor: x => Math.round(x.valor * 100) / 100, formato: v => moeda(v) }
+const COLUNAS_FOTOS = [
+  { chave: 'data', titulo: 'Data', tipo: 'data' },
+  { chave: 'id', titulo: 'Nº', tipo: 'numero', formato: v => `#${v}` },
+  { chave: 'mes', titulo: 'Mês', tipo: 'categoria', rapido: true, valor: f => rotuloMes(f.mes) },
+  { chave: 'valor', titulo: 'Valor em ruptura', tipo: 'numero', formato: moeda },
+  { chave: 'itens', titulo: 'Itens em ruptura', tipo: 'numero' }
+]
+const COLUNAS_RANKING = [
+  { chave: 'chave', titulo: 'Nome', tipo: 'texto' },
+  { chave: 'valor', titulo: 'Média por auditoria', tipo: 'numero', formato: moeda },
+  { chave: 'ultima', titulo: 'Na última auditoria', tipo: 'numero', formato: moeda },
+  { chave: 'itens', titulo: 'Itens (média)', tipo: 'numero', formato: v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) },
+  { chave: 'participacao', titulo: '% do valor', tipo: 'numero', formato: v => `${v.toFixed(1)}%` }
+]
+const COLUNAS_PRODUTOS = [
+  { chave: 'chave', titulo: 'Código', tipo: 'texto' },
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
+  { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria', rapido: true },
+  { chave: 'vezes', titulo: 'Auditorias em ruptura', tipo: 'numero' },
+  { chave: 'valorMedio', titulo: 'Valor médio', tipo: 'numero', formato: moeda },
+  { chave: 'ultimoValor', titulo: 'Último valor', tipo: 'numero', formato: moeda },
+  { chave: 'ultimaData', titulo: 'Última vez', tipo: 'data' },
+  { chave: 'naUltima', titulo: 'Na última auditoria', tipo: 'booleano' }
+]
+const ATALHOS_PRODUTOS = [
+  { rotulo: 'Na última auditoria', icone: 'fas fa-clock', condicoes: [{ chave: 'naUltima', op: 'sim' }] },
+  { rotulo: 'Em ruptura 3+ vezes', icone: 'fas fa-repeat', condicoes: [{ chave: 'vezes', op: 'maiorIgual', valor: '3' }] }
 ]
 const visao = ref('fornecedor')
-const exportarMeses = () => baixarCsv(r.value.meses.map(m => ({ mes: rotuloMes(m.chave), valor: m.valor.toFixed(2).replace('.', ','), auditorias: m.auditorias, media: m.mediaPorAuditoria.toFixed(2).replace('.', ',') })),
-  [{ chave: 'mes', titulo: 'Mês' }, { chave: 'valor', titulo: 'Valor (R$)' }, { chave: 'auditorias', titulo: 'Auditorias' }, { chave: 'media', titulo: 'Média por auditoria (R$)' }], `ruptura-valor-${base.value.toLowerCase()}`)
 </script>
 
 <template>
@@ -56,52 +83,70 @@ const exportarMeses = () => baixarCsv(r.value.meses.map(m => ({ mes: rotuloMes(m
             {{ t === 'Ruptura' ? 'Ruptura final' : 'Presença (inicial)' }}
           </button>
         </div>
-        <span class="text-xs text-slate-500">{{ lista.length }} auditoria(s)</span>
+        <span class="text-xs text-slate-500">{{ lista.length }} auditoria(s). Cada auditoria é uma foto: o valor do estoque (quantidade × custo, coluna Custo Ruptura) dos itens não achados naquele dia. As fotos não são somadas.</span>
       </div>
 
       <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div class="ui-card p-4">
-          <p class="text-xs font-semibold text-slate-500">Valor em ruptura</p>
-          <p class="mt-1 text-2xl font-black text-red-700">{{ moeda(r.total) }}</p>
-          <p class="text-xs text-slate-500">soma no período</p>
+          <p class="text-xs font-semibold text-slate-500">Na última auditoria</p>
+          <p class="mt-1 text-2xl font-black text-red-700">{{ moeda(r.ultima?.valor) }}</p>
+          <p class="text-xs text-slate-500">{{ r.ultima ? `${br(r.ultima.data)} · ${r.ultima.itens.toLocaleString('pt-BR')} itens` : '' }}</p>
         </div>
         <div class="ui-card p-4">
           <p class="text-xs font-semibold text-slate-500">Média por auditoria</p>
-          <p class="mt-1 text-2xl font-black text-slate-900">{{ moeda(media) }}</p>
-          <p class="text-xs text-slate-500">{{ r.itens.toLocaleString('pt-BR') }} itens com custo</p>
+          <p class="mt-1 text-2xl font-black text-slate-900">{{ moeda(r.media) }}</p>
+          <p class="text-xs text-slate-500">no período · {{ Math.round(r.itensMedia).toLocaleString('pt-BR') }} itens em média</p>
         </div>
         <div class="ui-card p-4">
-          <p class="text-xs font-semibold text-slate-500">Maior fornecedor</p>
-          <p class="mt-1 truncate text-lg font-black text-slate-900" :title="r.porFornecedor[0]?.chave">{{ r.porFornecedor[0]?.chave || '—' }}</p>
-          <p class="text-xs text-slate-500">{{ r.porFornecedor[0] ? `${moeda(r.porFornecedor[0].valor)} · ${r.porFornecedor[0].participacao.toFixed(1)}%` : '' }}</p>
+          <p class="text-xs font-semibold text-slate-500">Pior auditoria</p>
+          <p class="mt-1 text-2xl font-black text-slate-900">{{ moeda(r.pico?.valor) }}</p>
+          <p class="text-xs text-slate-500">{{ r.pico ? br(r.pico.data) : '' }}</p>
         </div>
         <div class="ui-card p-4">
           <p class="text-xs font-semibold text-slate-500">Tendência mensal</p>
           <p class="mt-1 text-2xl font-black" :class="rotuloTendencia[r.tendencia][1]"><i :class="['fas', rotuloTendencia[r.tendencia][2], 'mr-1 text-lg']"></i>{{ rotuloTendencia[r.tendencia][0] }}</p>
-          <p class="text-xs text-slate-500">média por auditoria, mês a mês</p>
+          <p class="text-xs text-slate-500">média de cada mês</p>
         </div>
       </div>
 
       <!-- Por mês -->
-      <section class="ui-card p-5">
+      <section class="ui-card space-y-4 p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-base font-bold text-slate-900">Valor em ruptura por mês</h2>
-          <button type="button" class="ui-btn-secondary py-1.5 text-xs" @click="exportarMeses"><i class="fas fa-file-csv"></i>CSV</button>
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Quanto estava a ruptura em cada mês</h2>
+            <p class="text-xs text-slate-500">Média das auditorias do mês (o valor típico faltando) ou a última auditoria do mês (como o mês terminou).</p>
+          </div>
+          <div class="flex rounded-xl bg-slate-100 p-1 text-xs" role="group" aria-label="Valor do mês">
+            <button v-for="[v, rot] in [['valor', 'Média do mês'], ['ultima', 'Última do mês']]" :key="v" type="button" class="rounded-lg px-3 py-1.5 font-semibold" :class="metricaMes === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600'" :aria-pressed="metricaMes === v" @click="metricaMes = v">{{ rot }}</button>
+          </div>
         </div>
         <p v-if="!r.meses.length" class="py-8 text-center text-sm text-slate-500">Sem valores no período.</p>
-        <div v-else class="mt-4 flex h-56 items-end gap-2">
+        <div v-else class="flex h-56 items-end gap-2">
           <div v-for="m in r.meses" :key="m.chave" class="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-            <span class="text-[11px] font-bold text-slate-700">{{ m.valor >= 1000 ? `${(m.valor / 1000).toFixed(1).replace('.', ',')} mil` : Math.round(m.valor) }}</span>
-            <span class="w-full max-w-16 rounded-t-lg bg-red-400 transition group-hover:bg-red-500" :style="{ height: `${(m.valor / maiorMes) * 80}%`, minHeight: m.valor ? '3px' : '0' }" :title="`${rotuloMes(m.chave)}: ${moeda(m.valor)} em ${m.auditorias} auditoria(s) · média ${moeda(m.mediaPorAuditoria)}`"></span>
+            <span class="text-[11px] font-bold text-slate-700">{{ mil(m[metricaMes]) }}</span>
+            <span class="w-full max-w-16 rounded-t-lg bg-red-400 transition group-hover:bg-red-500" :style="{ height: `${(m[metricaMes] / maiorMes) * 80}%`, minHeight: m[metricaMes] ? '3px' : '0' }" :title="`${rotuloMes(m.chave)}: média ${moeda(m.valor)} em ${m.auditorias} auditoria(s) · última ${moeda(m.ultima)} (${br(m.ultimaData)}) · pior ${moeda(m.pico)}`"></span>
             <span class="truncate text-[11px] font-semibold text-slate-500">{{ rotuloMes(m.chave) }}</span>
           </div>
         </div>
+        <UiTabela id="ruptura-meses" titulo="Ruptura por mês" :itens="r.meses" :colunas="COLUNAS_MESES" :ordem-inicial="{ chave: 'chave', direcao: 'desc' }" chave-item="chave" :tamanho-pagina="10" :agrupavel="false" />
+      </section>
+
+      <!-- Cada auditoria -->
+      <section class="ui-card space-y-3 p-5">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Cada auditoria</h2>
+          <p class="text-xs text-slate-500">O valor em ruptura no dia de cada auditoria do período.</p>
+        </div>
+        <UiTabela id="ruptura-fotos" titulo="Ruptura por auditoria" :itens="r.auditorias" :colunas="COLUNAS_FOTOS" :ordem-inicial="{ chave: 'data', direcao: 'desc' }" chave-item="id" :tamanho-pagina="10" :agrupavel="false" />
       </section>
 
       <!-- Rankings -->
       <section class="ui-card p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-base font-bold text-slate-900">Onde está o valor</h2>
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Onde está o valor</h2>
+            <p class="text-xs text-slate-500">Média por auditoria no período e o valor na última auditoria.</p>
+          </div>
           <div class="flex rounded-xl bg-slate-100 p-1 text-xs" role="tablist" aria-label="Agrupar por">
             <button v-for="[v, rot] in [['fornecedor', 'Fornecedor'], ['setor', 'Setor'], ['produto', 'Produto']]" :key="v" type="button" role="tab" :aria-selected="visao === v"
               class="rounded-lg px-3 py-1.5 font-semibold" :class="visao === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600'" @click="visao = v">{{ rot }}</button>
@@ -115,9 +160,9 @@ const exportarMeses = () => baixarCsv(r.value.meses.map(m => ({ mes: rotuloMes(m
           </div>
         </div>
         <div class="mt-5">
-          <UiListaItens v-if="visao === 'fornecedor'" :itens="r.porFornecedor" :colunas="colunasRanking" titulo="Ruptura por fornecedor" :ordem-inicial="{ chave: 'valor', direcao: 'desc' }" />
-          <UiListaItens v-else-if="visao === 'setor'" :itens="r.porSetor" :colunas="colunasRanking" titulo="Ruptura por setor" :ordem-inicial="{ chave: 'valor', direcao: 'desc' }" />
-          <UiListaItens v-else :itens="r.porProduto" :colunas="colunasProdutos" titulo="Produtos com maior valor em ruptura" :ordem-inicial="{ chave: 'valor', direcao: 'desc' }" />
+          <UiTabela v-if="visao === 'fornecedor'" id="ruptura-fornecedor" titulo="Ruptura por fornecedor" :itens="r.porFornecedor" :colunas="COLUNAS_RANKING" :ordem-inicial="{ chave: 'valor', direcao: 'desc' }" chave-item="chave" :agrupavel="false" />
+          <UiTabela v-else-if="visao === 'setor'" id="ruptura-setor" titulo="Ruptura por setor" :itens="r.porSetor" :colunas="COLUNAS_RANKING" :ordem-inicial="{ chave: 'valor', direcao: 'desc' }" chave-item="chave" :agrupavel="false" />
+          <UiTabela v-else id="ruptura-produto" titulo="Produtos em ruptura" :itens="r.porProduto" :colunas="COLUNAS_PRODUTOS" :atalhos="ATALHOS_PRODUTOS" :ordem-inicial="[{ chave: 'naUltima', direcao: 'desc' }, { chave: 'ultimoValor', direcao: 'desc' }]" chave-item="chave" />
         </div>
       </section>
     </template>

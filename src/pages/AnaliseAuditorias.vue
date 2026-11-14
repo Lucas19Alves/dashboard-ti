@@ -341,7 +341,9 @@ const gerarRelatorioPDF = () => {
   const auditoriasOrd = ordenar(linhasAuditorias.value, { coluna: 'data', direcao: 'desc' })
   const maxPendAud = Math.max(META * 2, ...auditoriasOrd.map(l => l.pendente))
   const locaisCronicos = reincidenciaLocais(auditoriasFiltradas.value).filter(l => l.auditorias >= 2 && l.foraMeta >= 2).slice(0, 30)
-  const ruptura = rupturaEmValor(auditoriasFiltradas.value.filter(a => a.tipo === 'Ruptura' || a.tipo === 'Presença'))
+  // Ruptura em valor: um tipo só (a Ruptura repete os pendentes da Presença); fotos, sem somar semanas.
+  const tipoRuptura = auditoriasFiltradas.value.some(a => a.tipo === 'Ruptura') ? 'Ruptura' : 'Presença'
+  const ruptura = rupturaEmValor(auditoriasFiltradas.value.filter(a => a.tipo === tipoRuptura))
   const moeda = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   const comparacaoAnterior = ant ? blocoTabela({
@@ -430,8 +432,8 @@ const gerarRelatorioPDF = () => {
         ],
         linhas: locaisCronicos
       }) }] : []),
-      ...(ruptura.total > 0 ? [{ id: 'ruptura', titulo: 'Ruptura em valor', descricao: 'Custo dos itens pendentes por setor e fornecedor.', padrao: false, gerar: () => [
-        `<p class="nota">Total estimado: <b>${moeda(ruptura.total)}</b> em ${int(ruptura.itens)} item(ns) pendente(s).</p>`,
+      ...(ruptura.media > 0 ? [{ id: 'ruptura', titulo: 'Ruptura em valor', descricao: 'Valor faltando na gôndola por setor e fornecedor (média por auditoria).', padrao: false, gerar: () => [
+        `<p class="nota">Auditorias de ${tipoRuptura}. Na última (${formatarDataBR(ruptura.ultima?.data)}): <b>${moeda(ruptura.ultima?.valor)}</b> em ${int(ruptura.ultima?.itens)} item(ns). Média por auditoria no período: <b>${moeda(ruptura.media)}</b>.</p>`,
         blocoBarras({ titulo: 'Por setor (top 12)', barras: ruptura.porSetor.slice(0, 12).map(x => ({ rotulo: x.chave, valor: x.valor, texto: `${moeda(x.valor)} · ${pct(x.participacao, 0)}`, tom: 'ruim' })) }),
         blocoBarras({ titulo: 'Por fornecedor (top 12)', barras: ruptura.porFornecedor.slice(0, 12).map(x => ({ rotulo: x.chave, valor: x.valor, texto: `${moeda(x.valor)} · ${pct(x.participacao, 0)}`, tom: 'alerta' })) })
       ].join('') }] : []),

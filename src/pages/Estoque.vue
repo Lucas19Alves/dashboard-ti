@@ -62,7 +62,7 @@ const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', 
 const dataHora = iso => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '')
 const diasPlanilha = computed(() => (infoEstoqueTotal.value?.importadoEm ? Math.floor((Date.now() - Date.parse(infoEstoqueTotal.value.importadoEm)) / 86400000) : null))
 const cartoes = computed(() => [
-  { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.saiuDaAuditoria ? `, ${int(resumo.value.saiuDaAuditoria)} saíram da auditoria` : ''}${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em ruptura` : ''}`, tom: 'bg-red-600' },
+  { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.saiuDaAuditoria ? `, ${int(resumo.value.saiuDaAuditoria)} saíram da auditoria` : ''}${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em estoque não achado` : ''}`, tom: 'bg-red-600' },
   { aba: 'sem-estoque', rotulo: 'Estoque zerado na gôndola', valor: resumo.value.semEstoque, nota: 'lidos com estoque zerado no sistema', tom: 'bg-amber-500' },
   { aba: 'parados', rotulo: 'Estoque parado', valor: resumo.value.parados, nota: `${limiarParado.value}+ dias sem venda com estoque`, tom: 'bg-indigo-500' },
   ...(total.value ? [{ aba: 'nunca-lidos', rotulo: 'Nunca lidos', valor: resumo.value.nuncaLidos, nota: 'com estoque, comprados antes da última Presença e nunca lidos', tom: 'bg-cyan-600' }] : []),
@@ -117,7 +117,7 @@ const irPara = (campo, chave, destino) => {
 const colunasGrupo = computed(() => [
   { chave: 'chave', titulo: CAMPOS.find(c => c.valor === campoGrupo.value).rotulo, tipo: 'texto' },
   ...COLUNAS_GRUPO.filter(c => !(c.chave === 'suspeitos' && campoGrupo.value === 'fornecedor')).map(c => ({ chave: c.chave, titulo: c.rotulo, tipo: 'numero' })),
-  { chave: 'custo', titulo: 'Ruptura acum.', tipo: 'numero', formato: v => (v ? real(v) : '—') },
+  { chave: 'custo', titulo: 'Valor em falta', tipo: 'numero', formato: v => (v ? real(v) : '—') },
   { chave: 'total', titulo: 'Total', tipo: 'numero' }
 ])
 

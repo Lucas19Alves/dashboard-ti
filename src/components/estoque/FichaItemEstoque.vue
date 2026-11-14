@@ -64,7 +64,7 @@ const resumo = computed(() => {
     { rotulo: t ? 'Sem venda (na auditoria)' : 'Dias sem venda', valor: r.diasSemVenda ?? '—' },
     { rotulo: 'Última leitura', valor: r.ultimaLeitura ? br(r.ultimaLeitura) : 'Nunca' },
     { rotulo: 'Lido', valor: `${r.leituras} de ${r.aparicoes}` },
-    { rotulo: 'Ruptura acumulada', valor: r.custoAcumulado ? r.custoAcumulado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—' }
+    { rotulo: 'Valor em falta', valor: r.valorEmFalta ? r.valorEmFalta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—' }
   ]
 })
 </script>

@@ -143,50 +143,100 @@ export const evolucaoUsuarios = (auditorias) => {
 }
 
 // ---------- Ruptura em valor ----------
-// Soma o "Custo Ruptura" dos itens que ficaram sem presença (pendentes) em cada auditoria.
+// Ruptura é uma foto: quanto estava faltando na gôndola (em "Custo Ruptura") no dia de cada auditoria.
+// Fotos não se somam (a falta de uma semana costuma ser a mesma da semana seguinte): o histórico
+// mostra cada foto, a média das fotos de um período (ex.: um mês) e a última foto.
+// Use um tipo de auditoria por vez: a Ruptura repete os pendentes da Presença da mesma semana.
 export const rupturaEmValor = (auditorias) => {
+  const fotos = []
   const porFornecedor = new Map()
   const porSetor = new Map()
-  const porMes = new Map()
   const porProduto = new Map()
-  let total = 0
-  let itens = 0
-  const somar = (mapa, chave, valor, extra = {}) => {
-    const r = mapa.get(chave) || { chave, valor: 0, itens: 0, ...extra }
-    r.valor += valor
-    r.itens++
+  const acumular = (mapa, chave, valor, extra = {}) => {
+    const r = mapa.get(chave) || { chave, soma: 0, ocorrencias: 0, ...extra }
+    r.soma += valor
+    r.ocorrencias++
     mapa.set(chave, r)
+    return r
   }
-  for (const auditoria of emOrdem(auditorias)) {
-    const mes = dataDe(auditoria).slice(0, 7)
-    let totalAuditoria = 0
+  const lista = emOrdem(auditorias)
+  for (const auditoria of lista) {
+    const data = dataDe(auditoria)
+    const foto = { id: auditoria.id, data, mes: data.slice(0, 7), tipo: auditoria.tipo, valor: 0, itens: 0, fornecedores: new Map(), setores: new Map() }
     for (const item of Array.isArray(auditoria?.dados) ? auditoria.dados : []) {
       if (!itemPendente(item)) continue
       const custo = custoRupturaDoItem(item)
       if (custo <= 0) continue
-      total += custo
-      itens++
-      totalAuditoria += custo
-      somar(porFornecedor, fornecedorDoItem(item), custo)
-      somar(porSetor, setorDoItem(item), custo)
-      somar(porProduto, codigoDoItem(item) || produtoDoItem(item), custo, { produto: produtoDoItem(item), fornecedor: fornecedorDoItem(item) })
+      foto.valor += custo
+      foto.itens++
+      const fornecedor = fornecedorDoItem(item)
+      const setor = setorDoItem(item)
+      foto.fornecedores.set(fornecedor, (foto.fornecedores.get(fornecedor) || 0) + custo)
+      foto.setores.set(setor, (foto.setores.get(setor) || 0) + custo)
+      acumular(porFornecedor, fornecedor, custo)
+      acumular(porSetor, setor, custo)
+      const p = acumular(porProduto, codigoDoItem(item) || produtoDoItem(item), custo, { produto: produtoDoItem(item), fornecedor: fornecedorDoItem(item), setor, ultimoValor: 0, ultimaData: '' })
+      p.ultimoValor = custo
+      p.ultimaData = data
     }
-    if (mes) {
-      const m = porMes.get(mes) || { chave: mes, valor: 0, auditorias: 0 }
-      m.valor += totalAuditoria
-      m.auditorias++
-      porMes.set(mes, m)
-    }
+    fotos.push(foto)
   }
-  const ordenar = mapa => [...mapa.values()].sort((a, b) => b.valor - a.valor).map(r => ({ ...r, participacao: percentual(r.valor, total) }))
-  const meses = [...porMes.values()].sort((a, b) => a.chave.localeCompare(b.chave)).map(m => ({ ...m, mediaPorAuditoria: m.auditorias ? m.valor / m.auditorias : 0 }))
+  const n = fotos.length
+  const ultima = fotos.at(-1) || null
+  const media = n ? fotos.reduce((s, f) => s + f.valor, 0) / n : 0
+  const pico = fotos.reduce((m, f) => (!m || f.valor > m.valor ? f : m), null)
+
+  // Por fornecedor/setor: valor médio por auditoria no período e o valor na última auditoria.
+  const ranking = (mapa, chaveFoto) => {
+    const somaMedias = [...mapa.values()].reduce((s, r) => s + r.soma / n, 0)
+    return [...mapa.values()].map(r => ({
+      chave: r.chave,
+      valor: r.soma / n,
+      ultima: ultima?.[chaveFoto].get(r.chave) || 0,
+      itens: r.ocorrencias / n,
+      participacao: percentual(r.soma / n, somaMedias)
+    })).sort((a, b) => b.valor - a.valor)
+  }
+  const produtos = [...porProduto.values()].map(p => ({
+    chave: p.chave,
+    produto: p.produto,
+    fornecedor: p.fornecedor,
+    setor: p.setor,
+    vezes: p.ocorrencias,
+    valorMedio: p.soma / p.ocorrencias,
+    ultimoValor: p.ultimoValor,
+    ultimaData: p.ultimaData,
+    naUltima: Boolean(ultima) && p.ultimaData === ultima.data
+  })).sort((a, b) => Number(b.naUltima) - Number(a.naUltima) || b.ultimoValor - a.ultimoValor)
+
+  // Por mês: média das fotos do mês (o "quanto estava" típico), a última foto e a pior.
+  const porMes = new Map()
+  for (const f of fotos) {
+    if (!f.mes) continue
+    const m = porMes.get(f.mes) || { chave: f.mes, fotos: [] }
+    m.fotos.push(f)
+    porMes.set(f.mes, m)
+  }
+  const meses = [...porMes.values()].sort((a, b) => a.chave.localeCompare(b.chave)).map(m => ({
+    chave: m.chave,
+    auditorias: m.fotos.length,
+    valor: m.fotos.reduce((s, f) => s + f.valor, 0) / m.fotos.length,
+    itens: m.fotos.reduce((s, f) => s + f.itens, 0) / m.fotos.length,
+    ultima: m.fotos.at(-1).valor,
+    ultimaData: m.fotos.at(-1).data,
+    pico: Math.max(...m.fotos.map(f => f.valor))
+  }))
+
   return {
-    total,
-    itens,
-    porFornecedor: ordenar(porFornecedor),
-    porSetor: ordenar(porSetor),
-    porProduto: ordenar(porProduto).slice(0, 50),
+    auditorias: fotos.map(({ fornecedores, setores, ...f }) => f),
+    ultima: ultima ? { data: ultima.data, valor: ultima.valor, itens: ultima.itens, id: ultima.id } : null,
+    media,
+    itensMedia: n ? fotos.reduce((s, f) => s + f.itens, 0) / n : 0,
+    pico: pico ? { data: pico.data, valor: pico.valor, id: pico.id } : null,
+    porFornecedor: ranking(porFornecedor, 'fornecedores'),
+    porSetor: ranking(porSetor, 'setores'),
+    porProduto: produtos,
     meses,
-    tendencia: sentido(meses.map(m => m.mediaPorAuditoria))
+    tendencia: sentido(meses.map(m => m.valor))
   }
 }

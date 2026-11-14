@@ -24,7 +24,20 @@ describe('estoque: reincidências', () => {
     expect(linhas.map(l => l.codigo).sort()).toEqual(['A', 'B', 'D'])
     const a = linhas.find(l => l.codigo === 'A')
     expect(a).toMatchObject({ dias: 14, desde: '2026-10-06', auditoriasSemLeitura: 3, nuncaLido: false })
-    expect(a.custoAcumulado).toBe(6)
+    // Valor do estoque não achado na última auditoria (não soma as semanas).
+    expect(a.valorEmFalta).toBe(2)
+  })
+
+  it('valor em falta é o da última auditoria e zera quando o item é lido', () => {
+    const indice2 = indexarEstoque([
+      aud(1, '2026-10-06', 'Presença', [item('X')]),
+      aud(2, '2026-10-13', 'Presença', [item('X', { lido: true }), item('Y', { lido: true })]),
+      aud(3, '2026-10-14', 'Ruptura', [item('Y')]),
+      aud(4, '2026-10-20', 'Presença', [item('X'), item('Y')]),
+      aud(5, '2026-10-27', 'Presença', [item('X', { custo: '7,50' }), item('Y', { lido: true })])
+    ])
+    expect(indice2.itens.get('X').valorEmFalta).toBe(7.5)
+    expect(indice2.itens.get('Y').valorEmFalta).toBe(0)
   })
 
   it('nunca lido e sem venda vira provável estoque inexistente; lido em outro local aponta o local', () => {
@@ -63,7 +76,7 @@ describe('estoque: sem estoque no sistema e parado', () => {
 describe('estoque: agrupamento', () => {
   it('agrupa problemas por local', () => {
     const grupos = agruparProblemas({
-      reincidentes: [{ local: 'G01A', custoAcumulado: 5 }, { local: 'G01A', custoAcumulado: 1 }],
+      reincidentes: [{ local: 'G01A', valorEmFalta: 5 }, { local: 'G01A', valorEmFalta: 1 }],
       semEstoque: [{ local: 'G02B' }],
       naoVinculados: [{ sugestao: { local: 'G02B' } }],
       suspeitos: [{ vinculadoEm: 'G01A' }]

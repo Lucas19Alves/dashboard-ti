@@ -73,7 +73,7 @@ const criarAnalise = () => {
     saiuDaAuditoria: reincidentes.value.filter(l => l.saiuDaAuditoria).length,
     naoVinculados: naoVinculados.value.length,
     suspeitos: suspeitos.value.length,
-    custoReincidentes: reincidentes.value.reduce((s, l) => s + (l.custoAcumulado || 0), 0)
+    custoReincidentes: reincidentes.value.reduce((s, l) => s + (l.valorEmFalta || 0), 0)
   }))
 
   // Enquanto os itens chegam em segundo plano, as listas ainda não estão completas.
