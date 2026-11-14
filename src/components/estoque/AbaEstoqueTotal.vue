@@ -1,13 +1,13 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
 import { useEstoqueTotalStore } from '../../stores/estoqueTotalStore'
 import { useAuditoriasStore } from '../../stores/auditoriasStore'
 import { SITUACAO_ITEM, formatarQuantidade } from '../../utils/estoqueTotal'
 import { TIPOS_PROBLEMA } from '../../utils/estoque'
-import { baixarCsv } from '../../utils/csv'
 import UiButton from '../ui/UiButton.vue'
 import UiEmptyState from '../ui/UiEmptyState.vue'
+import UiTabela from '../ui/UiTabela.vue'
 
 // Todos os itens da planilha de estoque total, cada um com o que o sistema sabe dele:
 // local e leitura (auditorias), validade (validades) e os problemas das outras abas.
@@ -23,83 +23,81 @@ const diasDesde = iso => (iso ? Math.floor((Date.now() - Date.parse(iso)) / 8640
 const antiga = computed(() => (diasDesde(infoEstoqueTotal.value?.importadoEm) ?? 0) >= 2)
 
 // --- Resumo (cada cartão filtra a lista) ---
-const FORA = new Set(['foraCiclo', 'nunca'])
-// Mesma regra da lista "Fora das auditorias": só quem tem estoque na planilha.
-const estaFora = i => FORA.has(i.situacao) && i.estoque > 0
+// "Saiu" e "sem local" contam só com estoque, como nas listas de reincidência e sem local.
+const casaSituacao = (i, s) => i.situacao === s && (!['saiu', 'semLocal'].includes(s) || i.estoque > 0)
 const contagem = computed(() => {
-  const c = { total: 0, lido: 0, pendente: 0, fora: 0, validade: 0, problema: 0 }
+  const c = { total: 0, lido: 0, pendente: 0, saiu: 0, semLocal: 0, insumo: 0, problema: 0 }
   for (const i of itensEstoque.value) {
     c.total++
-    if (i.situacao === 'lido') c.lido++
-    else if (i.situacao === 'pendente') c.pendente++
-    else if (estaFora(i)) c.fora++
-    if (i.validade) c.validade++
+    if (i.situacao in c && casaSituacao(i, i.situacao)) c[i.situacao]++
     if (problemasPorCodigo.value.has(i.codigo)) c.problema++
   }
   return c
 })
 const pct = v => (contagem.value.total ? `${Math.round((v / contagem.value.total) * 100)}%` : '')
 const cartoes = computed(() => [
-  { chave: '', rotulo: 'Itens na planilha', valor: contagem.value.total, nota: 'estoque total da loja' },
+  { chave: '', rotulo: 'Itens na planilha', valor: contagem.value.total, nota: `estoque total da loja, ${int(contagem.value.insumo)} insumos` },
   { chave: 'lido', rotulo: 'Lidos na auditoria', valor: contagem.value.lido, nota: `${pct(contagem.value.lido)} achados na gôndola` },
   { chave: 'pendente', rotulo: 'Não lidos', valor: contagem.value.pendente, nota: 'com estoque e sem leitura na última' },
-  { chave: 'fora', rotulo: 'Fora das auditorias', valor: contagem.value.fora, nota: 'não entraram na última Presença' },
-  { chave: 'validade', rotulo: 'Com validade', valor: contagem.value.validade, nota: 'monitorados nas validades' },
+  { chave: 'saiu', rotulo: 'Saíram da auditoria', valor: contagem.value.saiu, nota: 'já auditados, fora da última Presença' },
+  { chave: 'semLocal', rotulo: 'Sem local', valor: contagem.value.semLocal, nota: 'nunca auditados: não vinculados' },
   { chave: 'problema', rotulo: 'Com problema', valor: contagem.value.problema, nota: 'aparecem em alguma lista' }
 ])
 
-// --- Filtros ---
-const filtros = ref({ busca: '', setor: '', local: '', grupo: '', ordem: 'estoque' })
-const opcoes = campo => [...new Set(itensEstoque.value.map(l => l[campo]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
-const setores = computed(() => opcoes('setor'))
-const locais = computed(() => opcoes('local'))
-const noGrupo = (i, g) => {
-  if (!g) return true
-  if (g === 'fora') return estaFora(i)
-  if (g === 'validade') return Boolean(i.validade)
-  if (g === 'problema') return problemasPorCodigo.value.has(i.codigo)
-  if (g.startsWith('tipo:')) return (problemasPorCodigo.value.get(i.codigo) || []).some(p => p.tipo === g.slice(5))
-  return i.situacao === g
+// --- Linhas: cada item com a situação e os problemas em texto (para filtrar e ordenar) ---
+const problemas = i => problemasPorCodigo.value.get(i.codigo) || []
+const linhas = computed(() => itensEstoque.value.map((i) => {
+  const p = problemas(i)
+  return {
+    ...i,
+    situacaoTxt: SITUACAO_ITEM[i.situacao],
+    problemaTxt: p.map(x => TIPOS_PROBLEMA[x.tipo].rotulo).join(', ') || 'Nenhum',
+    comProblema: p.length > 0,
+    oQueFazer: p.map(x => x.diagnostico).join(' | ')
+  }
+}))
+const COLUNAS = [
+  { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
+  { chave: 'local', titulo: 'Local', tipo: 'categoria', rapido: true },
+  { chave: 'situacaoTxt', titulo: 'Situação na auditoria', tipo: 'categoria', rapido: true },
+  { chave: 'problemaTxt', titulo: 'Problemas', tipo: 'categoria' },
+  { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria' },
+  { chave: 'classe', titulo: 'Classe', tipo: 'categoria', oculta: true },
+  { chave: 'estoque', titulo: 'Estoque', tipo: 'numero', formato: (v, i) => formatarQuantidade(v, i.unidade) },
+  { chave: 'indisponivel', titulo: 'Indisponível', tipo: 'numero', oculta: true },
+  { chave: 'diasSemVenda', titulo: 'Dias sem venda', tipo: 'numero' },
+  { chave: 'ultimaVenda', titulo: 'Última venda', tipo: 'data' },
+  { chave: 'ultimaCompra', titulo: 'Última compra', tipo: 'data' },
+  { chave: 'ranking', titulo: 'Ranking de vendas', tipo: 'numero' },
+  { chave: 'ultimaLeitura', titulo: 'Última leitura', tipo: 'data' },
+  { chave: 'validade', titulo: 'Validade', tipo: 'data' },
+  { chave: 'venceEm', titulo: 'Dias p/ vencer', tipo: 'numero' },
+  { chave: 'gerenciado', titulo: 'Gerenciado', tipo: 'booleano' },
+  { chave: 'pesoVariavel', titulo: 'Peso variável', tipo: 'booleano', oculta: true },
+  { chave: 'comProblema', titulo: 'Com problema', tipo: 'booleano', oculta: true },
+  { chave: 'oQueFazer', titulo: 'O que fazer', tipo: 'texto', ordenavel: false }
+]
+const ATALHOS = [
+  { rotulo: 'Com problema', icone: 'fas fa-triangle-exclamation', condicoes: [{ chave: 'comProblema', op: 'sim' }] },
+  { rotulo: 'Vende (≤ 7 dias)', icone: 'fas fa-cart-shopping', condicoes: [{ chave: 'diasSemVenda', op: 'menorIgual', valor: '7' }] },
+  { rotulo: 'Sem venda 30+ dias', icone: 'fas fa-hourglass-half', condicoes: [{ chave: 'diasSemVenda', op: 'maiorIgual', valor: '30' }] },
+  { rotulo: 'Vence em 30 dias', icone: 'fas fa-calendar-xmark', condicoes: [{ chave: 'venceEm', op: 'menorIgual', valor: '30' }] },
+  { rotulo: 'Comprado nos últimos 7 dias', icone: 'fas fa-truck', condicoes: [{ chave: 'ultimaCompra', op: 'ultimos', valor: '7' }] }
+]
+// Cartões do resumo filtram a tabela pela situação (ou pelos itens com problema).
+const tabela = ref(null)
+const filtrarCartao = (c) => {
+  if (!c.chave) return tabela.value?.limparTudo()
+  tabela.value?.aplicarCondicoes(c.chave === 'problema' ? [{ chave: 'comProblema', op: 'sim' }] : [{ chave: 'situacaoTxt', op: 'em', valor: [SITUACAO_ITEM[c.chave]] }])
 }
-const ORDENS = {
-  estoque: (a, b) => b.estoque - a.estoque,
-  semVenda: (a, b) => (b.diasSemVenda ?? -1) - (a.diasSemVenda ?? -1),
-  ranking: (a, b) => (a.ranking ?? Infinity) - (b.ranking ?? Infinity),
-  validade: (a, b) => (a.venceEm ?? Infinity) - (b.venceEm ?? Infinity),
-  produto: (a, b) => a.produto.localeCompare(b.produto, 'pt-BR')
-}
-const filtradas = computed(() => {
-  const f = filtros.value
-  const termo = f.busca.trim().toLowerCase()
-  return itensEstoque.value
-    .filter(i => (!f.setor || i.setor === f.setor) && (!f.local || i.local === f.local) && noGrupo(i, f.grupo) &&
-      (!termo || `${i.codigo} ${i.produto} ${i.local} ${i.fornecedor}`.toLowerCase().includes(termo)))
-    .sort(ORDENS[f.ordem] || ORDENS.estoque)
-})
-const temFiltro = computed(() => Boolean(filtros.value.busca || filtros.value.setor || filtros.value.local || filtros.value.grupo))
-const limpar = () => Object.assign(filtros.value, { busca: '', setor: '', local: '', grupo: '' })
-const mostrar = ref(60)
-watch(filtradas, () => { mostrar.value = 60 })
 
 // --- Texto de cada linha ---
-const COR_SITUACAO = { lido: 'text-emerald-700', pendente: 'text-red-700', lidoSemEstoque: 'text-amber-700', semEstoque: 'text-slate-500', foraCiclo: 'text-blue-700', nunca: 'text-blue-700' }
+const COR_SITUACAO = { lido: 'text-emerald-700', pendente: 'text-red-700', lidoSemEstoque: 'text-amber-700', semEstoque: 'text-slate-500', saiu: 'text-red-700', semLocal: 'text-blue-700', insumo: 'text-slate-500' }
 const textoValidade = i => (!i.validade ? '' : i.venceEm !== null && i.venceEm < 0 ? `vencido em ${br(i.validade)}` : `vence em ${br(i.validade)}${i.venceEm !== null ? ` (${i.venceEm} d)` : ''}`)
-const problemas = i => problemasPorCodigo.value.get(i.codigo) || []
 
 // --- Ações ---
-const exportarCsv = () => baixarCsv(filtradas.value.map(i => ({
-  ...i,
-  estoqueTxt: formatarQuantidade(i.estoque, i.unidade),
-  situacaoTxt: SITUACAO_ITEM[i.situacao],
-  gerenciadoTxt: i.gerenciado ? 'Sim' : 'Não',
-  problemasTxt: problemas(i).map(p => TIPOS_PROBLEMA[p.tipo].rotulo).join(', '),
-  oQueFazer: problemas(i).map(p => p.diagnostico).join(' | ')
-})), [
-  ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['fornecedor', 'Fornecedor'], ['estoqueTxt', 'Estoque'],
-  ['diasSemVenda', 'Dias sem venda'], ['ultimaVenda', 'Última venda'], ['ultimaCompra', 'Última compra'], ['ranking', 'Ranking'], ['gerenciadoTxt', 'Gerenciado'],
-  ['local', 'Local'], ['situacaoTxt', 'Situação na auditoria'], ['ultimaLeitura', 'Última leitura'], ['validade', 'Validade'], ['venceEm', 'Dias p/ vencer'],
-  ['problemasTxt', 'Problemas'], ['oQueFazer', 'O que fazer']
-], `estoque-total-${new Date().toLocaleDateString('sv-SE')}`)
 const apagar = async () => {
   if (!confirm('Apagar a planilha de estoque total? As análises voltam a usar só as auditorias.')) return
   await store.limpar()
@@ -120,7 +118,6 @@ const apagar = async () => {
           <span v-if="!indice.auditorias" class="ml-1 text-amber-700">· sem auditorias para cruzar</span>
         </p>
         <UiButton variant="secondary" size="sm" @click="emit('importar')"><i class="fas fa-rotate"></i>Atualizar planilha</UiButton>
-        <UiButton variant="secondary" size="sm" :disabled="!filtradas.length" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</UiButton>
         <UiButton variant="dangerSoft" size="sm" @click="apagar"><i class="fas fa-trash-alt"></i>Apagar</UiButton>
       </div>
       <p v-if="antiga" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -128,55 +125,35 @@ const apagar = async () => {
       </p>
 
       <section class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Cobertura">
-        <button v-for="c in cartoes" :key="c.rotulo" type="button" class="ui-card ui-card-hover p-4 text-left" :class="filtros.grupo === c.chave && c.chave ? 'border-blue-300 bg-blue-50/60' : ''" @click="filtros.grupo = filtros.grupo === c.chave ? '' : c.chave">
+        <button v-for="c in cartoes" :key="c.rotulo" type="button" class="ui-card ui-card-hover p-4 text-left" :title="c.chave ? 'Filtrar a lista' : 'Mostrar todos'" @click="filtrarCartao(c)">
           <span class="block text-[13px] font-semibold text-slate-600">{{ c.rotulo }}</span>
           <span class="mt-2 block text-[1.75rem] font-semibold leading-none tabular-nums text-slate-900">{{ int(c.valor) }}</span>
           <span class="mt-2 block text-xs leading-relaxed text-slate-500">{{ c.nota }}</span>
         </button>
       </section>
 
-      <div class="flex flex-wrap items-end gap-3">
-        <label class="min-w-48 flex-1"><span class="ui-label">Buscar</span><input v-model="filtros.busca" class="ui-input" placeholder="Código, produto, local ou fornecedor" /></label>
-        <label><span class="ui-label">Mostrar</span>
-          <select v-model="filtros.grupo" class="ui-input max-w-56">
-            <option value="">Todos</option>
-            <optgroup label="Situação na auditoria"><option v-for="(r, v) in SITUACAO_ITEM" :key="v" :value="v">{{ r }}</option><option value="fora">Fora das auditorias (todos)</option></optgroup>
-            <optgroup label="Problemas"><option value="problema">Com algum problema</option><option v-for="(t, v) in TIPOS_PROBLEMA" :key="v" :value="`tipo:${v}`">{{ t.rotulo }}</option></optgroup>
-            <option value="validade">Com validade monitorada</option>
-          </select>
-        </label>
-        <label><span class="ui-label">Setor</span><select v-model="filtros.setor" class="ui-input max-w-52"><option value="">Todos</option><option v-for="o in setores" :key="o">{{ o }}</option></select></label>
-        <label><span class="ui-label">Local</span><select v-model="filtros.local" class="ui-input"><option value="">Todos</option><option v-for="o in locais" :key="o">{{ o }}</option></select></label>
-        <label><span class="ui-label">Ordenar por</span>
-          <select v-model="filtros.ordem" class="ui-input"><option value="estoque">Maior estoque</option><option value="semVenda">Mais dias sem venda</option><option value="ranking">Mais vendidos</option><option value="validade">Validade mais próxima</option><option value="produto">Produto (A-Z)</option></select>
-        </label>
-      </div>
-      <p class="text-sm text-slate-600"><b class="tabular-nums text-slate-900">{{ int(filtradas.length) }}</b> {{ filtradas.length === 1 ? 'item' : 'itens' }}<button v-if="temFiltro" type="button" class="ml-2 text-xs font-semibold text-blue-700 hover:underline" @click="limpar">Limpar filtros</button></p>
-
-      <p v-if="!filtradas.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">Nenhum item com esses filtros.</p>
-      <ul v-else class="ui-card divide-y divide-slate-100">
-        <li v-for="i in filtradas.slice(0, mostrar)" :key="i.codigo" class="grid gap-x-4 gap-y-1.5 px-4 py-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
-          <div class="min-w-0">
-            <button type="button" class="block max-w-full truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver tudo sobre ${i.produto}`" @click="emit('abrir', i.codigo)">{{ i.produto }}</button>
-            <p class="truncate text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}<template v-if="i.fornecedor">, {{ i.fornecedor }}</template></p>
+      <UiTabela ref="tabela" id="estoque-total" modo="lista" titulo="Estoque da loja" :itens="linhas" :colunas="COLUNAS" :atalhos="ATALHOS" :ordem-inicial="{ chave: 'estoque', direcao: 'desc' }" chave-item="codigo" placeholder="Buscar código, produto, local, fornecedor ou classe...">
+        <template #item="{ item: i }">
+          <div class="grid gap-x-4 gap-y-1.5 px-4 py-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center">
+            <div class="min-w-0">
+              <button type="button" class="block max-w-full truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver tudo sobre ${i.produto}`" @click="emit('abrir', i.codigo)">{{ i.produto }}</button>
+              <p class="truncate text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}<template v-if="i.fornecedor">, {{ i.fornecedor }}</template></p>
+            </div>
+            <div class="text-sm">
+              <p><b class="tabular-nums text-slate-900">{{ formatarQuantidade(i.estoque, i.unidade) }}</b> <span class="text-xs text-slate-500">em estoque</span></p>
+              <p class="text-xs text-slate-500">{{ i.diasSemVenda === null ? 'sem venda registrada' : i.diasSemVenda <= 1 ? 'vendeu ontem ou hoje' : `sem venda há ${i.diasSemVenda} d` }}</p>
+            </div>
+            <div class="min-w-0 text-sm">
+              <p class="truncate"><b class="text-slate-900">{{ i.local || 'Sem local' }}</b> <span class="text-xs font-medium" :class="COR_SITUACAO[i.situacao]">{{ i.situacaoTxt }}</span></p>
+              <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : i.situacao === 'insumo' ? 'insumo, não entra na auditoria' : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="p in problemas(i)" :key="p.tipo" type="button" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800 hover:bg-amber-100" :title="p.diagnostico" @click="emit('abrir', i.codigo)"><i :class="[TIPOS_PROBLEMA[p.tipo].icone, 'mr-1']"></i>{{ TIPOS_PROBLEMA[p.tipo].curto }}</button>
+              <span v-if="!problemas(i).length" class="text-xs text-slate-400">Sem problemas</span>
+            </div>
           </div>
-          <div class="text-sm">
-            <p><b class="tabular-nums text-slate-900">{{ formatarQuantidade(i.estoque, i.unidade) }}</b> <span class="text-xs text-slate-500">em estoque</span></p>
-            <p class="text-xs text-slate-500">{{ i.diasSemVenda === null ? 'sem venda registrada' : i.diasSemVenda <= 1 ? 'vendeu ontem ou hoje' : `sem venda há ${i.diasSemVenda} d` }}</p>
-          </div>
-          <div class="min-w-0 text-sm">
-            <p class="truncate"><b class="text-slate-900">{{ i.local || 'Sem local' }}</b> <span class="text-xs font-medium" :class="COR_SITUACAO[i.situacao]">{{ SITUACAO_ITEM[i.situacao] }}</span></p>
-            <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <button v-for="p in problemas(i)" :key="p.tipo" type="button" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800 hover:bg-amber-100" :title="p.diagnostico" @click="emit('abrir', i.codigo)"><i :class="[TIPOS_PROBLEMA[p.tipo].icone, 'mr-1']"></i>{{ TIPOS_PROBLEMA[p.tipo].curto }}</button>
-            <span v-if="!problemas(i).length" class="text-xs text-slate-400">Sem problemas</span>
-          </div>
-        </li>
-      </ul>
-      <div v-if="filtradas.length > mostrar" class="text-center">
-        <UiButton variant="secondary" @click="mostrar += 120">Mostrar mais ({{ int(filtradas.length - mostrar) }} restantes)</UiButton>
-      </div>
+        </template>
+      </UiTabela>
     </template>
   </section>
 </template>

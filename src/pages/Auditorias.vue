@@ -12,6 +12,7 @@ import UiButton from '../components/ui/UiButton.vue'
 import SparklineMeta from '../components/ui/SparklineMeta.vue'
 import UiPageHeader from '../components/ui/UiPageHeader.vue'
 import UiTabs from '../components/ui/UiTabs.vue'
+import UiTabela from '../components/ui/UiTabela.vue'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -606,38 +607,41 @@ const CIRCUNFERENCIA = 2 * Math.PI * 26
 const tracoAnel = percentual => `${(Math.min(100, Math.max(0, percentual)) / 100) * CIRCUNFERENCIA} ${CIRCUNFERENCIA}`
 const faltamParaMeta = a => itensParaMeta(a)
 
-const filtroSituacao = ref('todas')
-const situacoes = [
-  { valor: 'todas', rotulo: 'Todas' },
-  { valor: 'abertas', rotulo: 'Em andamento' },
-  { valor: 'fechadas', rotulo: 'Fechadas' },
-  { valor: 'dentro', rotulo: 'Na meta' },
-  { valor: 'fora', rotulo: 'Fora da meta' }
-]
-const limiteHistorico = ref(30)
-watch([abaAtiva, filtroSituacao, filtroTexto, ordenacao, filtroDataTipo], () => { limiteHistorico.value = 30 })
-
-const historicoFiltrado = computed(() => auditoriasFiltradas.value.filter(a => {
-  if (filtroSituacao.value === 'abertas') return a.status !== 'fechada'
-  if (filtroSituacao.value === 'fechadas') return a.status === 'fechada'
-  if (filtroSituacao.value === 'dentro') return dentroDaMeta(a)
-  if (filtroSituacao.value === 'fora') return !dentroDaMeta(a)
-  return true
-}))
-
-// Agrupa por mês só quando a ordenação é por data; senão, um único grupo.
-const gruposHistorico = computed(() => {
-  const visiveis = historicoFiltrado.value.slice(0, limiteHistorico.value)
-  if (!ordenacao.value.startsWith('data')) return [{ chave: 'todos', rotulo: 'Resultados', itens: visiveis, resumo: resumirAuditorias(visiveis) }]
-  const grupos = []
-  for (const a of visiveis) {
-    const chave = String(a.data).slice(0, 7)
-    let grupo = grupos.at(-1)
-    if (!grupo || grupo.chave !== chave) grupos.push((grupo = { chave, rotulo: rotuloMes(chave), itens: [] }))
-    grupo.itens.push(a)
+// Histórico de um tipo na tabela padrão: busca, filtros (situação, meta, data, % pendente...), ordem,
+// agrupamento por mês e paginação.
+const linhasHistorico = computed(() => (abaAtiva.value === 'calendario' ? [] : store.auditorias.filter(a => a?.tipo === abaAtiva.value).map((a) => {
+  const m = getMetricasCard(a)
+  const data = String(a.data).slice(0, 10)
+  return {
+    auditoria: a,
+    id: a.id,
+    data,
+    mes: rotuloMes(data.slice(0, 7)),
+    status: a.status === 'fechada' ? 'Fechada' : 'Em andamento',
+    meta: dentroDaMeta(a) ? 'Na meta' : 'Fora da meta',
+    pendente: m.percentualPendente,
+    conclusao: m.percentualConclusao,
+    pendentes: m.pendentes,
+    total: m.total,
+    sku: Number(a.sku || 0)
   }
-  return grupos.map(g => ({ ...g, resumo: resumirAuditorias(g.itens) }))
-})
+})))
+const COLUNAS_HISTORICO = [
+  { chave: 'data', titulo: 'Data', tipo: 'data' },
+  { chave: 'id', titulo: 'Nº', tipo: 'numero', formato: v => `#${v}` },
+  { chave: 'mes', titulo: 'Mês', tipo: 'categoria', ordenavel: false },
+  { chave: 'status', titulo: 'Situação', tipo: 'categoria', rapido: true },
+  { chave: 'meta', titulo: 'Meta', tipo: 'categoria', rapido: true },
+  { chave: 'pendente', titulo: '% pendente', tipo: 'numero', formato: v => `${v.toFixed(2)}%` },
+  { chave: 'conclusao', titulo: '% conclusão', tipo: 'numero', formato: v => `${v.toFixed(2)}%` },
+  { chave: 'pendentes', titulo: 'Pendentes', tipo: 'numero' },
+  { chave: 'total', titulo: 'SKU', tipo: 'numero' }
+]
+const ATALHOS_HISTORICO = [
+  { rotulo: 'Em andamento', icone: 'fas fa-spinner', condicoes: [{ chave: 'status', op: 'em', valor: ['Em andamento'] }] },
+  { rotulo: 'Fora da meta', icone: 'fas fa-times', condicoes: [{ chave: 'meta', op: 'em', valor: ['Fora da meta'] }] },
+  { rotulo: 'Últimos 30 dias', icone: 'fas fa-calendar-days', condicoes: [{ chave: 'data', op: 'ultimos', valor: '30' }] }
+]
 
 const resumoTipo = computed(() => {
   if (abaAtiva.value === 'calendario') return null
@@ -980,10 +984,10 @@ const classesCardDia = (d) => {
           </h2>
           <p class="text-xs text-slate-500">
             <template v-if="abaAtiva === 'calendario'">{{ auditoriasFiltradas.length }} aberta(s). Feche quando a contagem terminar.</template>
-            <template v-else>{{ historicoFiltrado.length }} de {{ resumoTipo?.total || 0 }} auditorias</template>
+            <template v-else>{{ resumoTipo?.total || 0 }} auditorias</template>
           </p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div v-if="abaAtiva === 'calendario'" class="flex flex-wrap items-center gap-2">
           <div class="relative min-w-0 flex-1 sm:w-60 sm:flex-none">
             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
             <input v-model="filtroTexto" type="search" placeholder="ID, data ou SKU..." class="ui-input py-2 pl-8 text-sm">
@@ -1129,81 +1133,47 @@ const classesCardDia = (d) => {
           </div>
         </div>
 
-        <!-- Filtro de situação -->
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="s in situacoes"
-            :key="s.valor"
-            type="button"
-            class="rounded-full px-3 py-1.5 text-xs font-semibold transition"
-            :class="filtroSituacao === s.valor ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 shadow-sm hover:text-slate-900'"
-            @click="filtroSituacao = s.valor"
-          >{{ s.rotulo }}</button>
-        </div>
-
-        <div v-if="historicoFiltrado.length === 0" class="rounded-xl bg-white px-6 py-12 text-center shadow-sm">
-          <i class="fas fa-search text-2xl text-slate-300"></i>
-          <p class="mt-3 font-semibold text-slate-800">Nenhuma auditoria encontrada</p>
-          <p class="mt-1 text-sm text-slate-500">Ajuste a busca ou os filtros.</p>
-        </div>
-
-        <div v-else class="space-y-5">
-          <section v-for="grupo in gruposHistorico" :key="grupo.chave" class="overflow-hidden rounded-xl bg-white shadow-sm">
-            <header class="flex flex-wrap items-center justify-between gap-2 bg-slate-50/80 px-5 py-3">
-              <h3 class="text-sm font-bold text-slate-800">{{ grupo.rotulo }}</h3>
-              <p class="text-xs text-slate-500">
-                {{ grupo.itens.length }} auditoria(s)
-                <template v-if="grupo.resumo.mediaPendente !== null"> · média <b :class="grupo.resumo.mediaPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ grupo.resumo.mediaPendente.toFixed(2) }}%</b></template>
-                <template v-if="grupo.resumo.taxaMeta !== null"> · {{ grupo.resumo.dentroMeta }}/{{ grupo.resumo.fechadas }} na meta</template>
-              </p>
-            </header>
-            <ul class="divide-y divide-slate-100">
-              <li v-for="auditoria in grupo.itens" :key="auditoria.id" class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition hover:bg-blue-50/40 sm:flex-nowrap">
-                <router-link :to="`/auditoria/${auditoria.id}`" class="flex min-w-0 flex-1 items-center gap-4">
-                  <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" :class="auditoria.status === 'fechada' ? 'bg-slate-100 text-slate-500' : 'bg-blue-50 text-blue-600'">
-                    <i :class="auditoria.status === 'fechada' ? 'fas fa-lock' : 'fas fa-spinner'" class="text-xs"></i>
-                  </span>
-                  <div class="w-28 shrink-0">
-                    <p class="text-sm font-bold text-slate-900">{{ formatarDataISO(String(auditoria.data).slice(0, 10)) }}</p>
-                    <p class="text-[11px] text-slate-500">#{{ auditoria.id }} · {{ auditoria.status === 'fechada' ? 'Fechada' : 'Em andamento' }}</p>
-                  </div>
-                  <!-- % pendente com barra relativa à meta (escala até 3x a meta) -->
-                  <div class="hidden min-w-0 flex-1 md:block">
-                    <div class="relative h-2 max-w-2xl rounded-full bg-slate-100">
-                      <span class="absolute inset-y-0 left-0 rounded-full" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'bg-emerald-500' : 'bg-red-500'" :style="{ width: `${Math.min(100, (getMetricasCard(auditoria).percentualPendente / (META * 3)) * 100)}%` }"></span>
-                      <span class="absolute -top-1 bottom-[-4px] w-px bg-slate-400" style="left: 33.33%" title="Meta"></span>
-                    </div>
-                  </div>
-                  <div class="w-20 shrink-0 text-right">
-                    <p class="text-sm font-bold" :class="getMetricasCard(auditoria).percentualPendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ getMetricasCard(auditoria).percentualPendente.toFixed(2) }}%</p>
-                    <p class="text-[11px] text-slate-500">pendente</p>
-                  </div>
-                  <div class="hidden w-28 shrink-0 text-right lg:block">
-                    <p class="text-sm font-semibold text-slate-700">{{ getMetricasCard(auditoria).pendentes.toLocaleString('pt-BR') }} / {{ getMetricasCard(auditoria).total.toLocaleString('pt-BR') }}</p>
-                    <p class="text-[11px] text-slate-500">pendentes / SKU</p>
-                  </div>
-                </router-link>
-                <div class="flex w-32 shrink-0 items-center justify-end gap-1">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="dentroDaMeta(auditoria) ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
-                    <i :class="dentroDaMeta(auditoria) ? 'fas fa-check' : 'fas fa-times'" class="text-[9px]"></i>{{ dentroDaMeta(auditoria) ? 'Meta' : 'Fora' }}
-                  </span>
-                  <button type="button" class="rounded-lg p-2 text-amber-600 hover:bg-amber-50" :class="auditoria.status === 'fechada' ? 'invisible' : ''" title="Fechar auditoria" aria-label="Fechar auditoria" @click="fecharAuditoria(auditoria.id)">
-                    <i class="fas fa-lock text-xs"></i>
-                  </button>
-                  <button type="button" class="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(auditoria.id)">
-                    <i class="fas fa-trash text-xs"></i>
-                  </button>
+        <UiTabela :id="`auditorias-historico-${abaAtiva}`" :key="abaAtiva" modo="lista" :titulo="`Auditorias de ${abaAtiva}`" :itens="linhasHistorico" :colunas="COLUNAS_HISTORICO" :atalhos="ATALHOS_HISTORICO" :ordem-inicial="{ chave: 'data', direcao: 'desc' }" agrupar-inicial="mes" chave-item="id" :tamanho-pagina="25" vazio="Nenhuma auditoria deste tipo." placeholder="Nº, data, situação...">
+          <template #item="{ item: l }">
+            <div class="group flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 transition hover:bg-blue-50/40 sm:flex-nowrap">
+              <router-link :to="`/auditoria/${l.id}`" class="flex min-w-0 flex-1 items-center gap-4">
+                <span class="inline-flex size-10 shrink-0 items-center justify-center rounded-xl" :class="l.auditoria.status === 'fechada' ? 'bg-slate-100 text-slate-500' : 'bg-blue-50 text-blue-600'">
+                  <i :class="l.auditoria.status === 'fechada' ? 'fas fa-lock' : 'fas fa-spinner'" class="text-xs"></i>
+                </span>
+                <div class="w-28 shrink-0">
+                  <p class="text-sm font-bold text-slate-900">{{ formatarDataISO(l.data) }}</p>
+                  <p class="text-[11px] text-slate-500">#{{ l.id }} · {{ l.status }}</p>
                 </div>
-              </li>
-            </ul>
-          </section>
-
-          <div v-if="historicoFiltrado.length > limiteHistorico" class="text-center">
-            <UiButton variant="secondary" @click="limiteHistorico += 30">
-              Mostrar mais ({{ historicoFiltrado.length - limiteHistorico }} restantes)
-            </UiButton>
-          </div>
-        </div>
+                <!-- % pendente com barra relativa à meta (escala até 3x a meta) -->
+                <div class="hidden min-w-0 flex-1 md:block">
+                  <div class="relative h-2 max-w-2xl rounded-full bg-slate-100">
+                    <span class="absolute inset-y-0 left-0 rounded-full" :class="l.pendente <= META ? 'bg-emerald-500' : 'bg-red-500'" :style="{ width: `${Math.min(100, (l.pendente / (META * 3)) * 100)}%` }"></span>
+                    <span class="absolute -top-1 bottom-[-4px] w-px bg-slate-400" style="left: 33.33%" title="Meta"></span>
+                  </div>
+                </div>
+                <div class="w-20 shrink-0 text-right">
+                  <p class="text-sm font-bold" :class="l.pendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ l.pendente.toFixed(2) }}%</p>
+                  <p class="text-[11px] text-slate-500">pendente</p>
+                </div>
+                <div class="hidden w-28 shrink-0 text-right lg:block">
+                  <p class="text-sm font-semibold text-slate-700">{{ l.pendentes.toLocaleString('pt-BR') }} / {{ l.total.toLocaleString('pt-BR') }}</p>
+                  <p class="text-[11px] text-slate-500">pendentes / SKU</p>
+                </div>
+              </router-link>
+              <div class="flex w-32 shrink-0 items-center justify-end gap-1">
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.meta === 'Na meta' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                  <i :class="l.meta === 'Na meta' ? 'fas fa-check' : 'fas fa-times'" class="text-[9px]"></i>{{ l.meta === 'Na meta' ? 'Meta' : 'Fora' }}
+                </span>
+                <button type="button" class="rounded-lg p-2 text-amber-600 hover:bg-amber-50" :class="l.auditoria.status === 'fechada' ? 'invisible' : ''" title="Fechar auditoria" aria-label="Fechar auditoria" @click="fecharAuditoria(l.id)">
+                  <i class="fas fa-lock text-xs"></i>
+                </button>
+                <button type="button" class="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-600" title="Excluir auditoria" aria-label="Excluir auditoria" @click="excluirAuditoria(l.id)">
+                  <i class="fas fa-trash text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+        </UiTabela>
       </template>
     </section>
   </div>

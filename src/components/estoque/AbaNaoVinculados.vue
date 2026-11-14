@@ -4,13 +4,13 @@ import { useAuditoriasStore } from '../../stores/auditoriasStore'
 import { useNaoVinculadosStore } from '../../stores/naoVinculadosStore'
 import { historicoDoCodigo } from '../../utils/naoVinculados'
 import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
-import { baixarCsv } from '../../utils/csv'
 import { blocoBarras, blocoTabela } from '../../utils/print'
-import { abrirRelatorioTabela, useRelatorio } from '../../composables/useRelatorio'
+import { useRelatorio } from '../../composables/useRelatorio'
 import UiButton from '../ui/UiButton.vue'
 import UiEmptyState from '../ui/UiEmptyState.vue'
 import UiModal from '../ui/UiModal.vue'
 import UiTabs from '../ui/UiTabs.vue'
+import UiTabela from '../ui/UiTabela.vue'
 import ImagemNaoVinculados from '../ImagemNaoVinculados.vue'
 
 const store = useNaoVinculadosStore()
@@ -65,18 +65,38 @@ const abas = computed(() => [
   { value: 'tratar', label: `Itens (${ativos.value.length})`, icon: 'fas fa-link' },
   { value: 'locais', label: 'Por local sugerido', icon: 'fas fa-map-pin' },
   { value: 'suspeitos', label: `Vínculos suspeitos (${suspeitos.value.length})`, icon: 'fas fa-triangle-exclamation' }])
-const busca = ref('')
-const filtroConfianca = ref('')
-const filtroSetor = ref('')
-const setores = computed(() => [...new Set(ativos.value.map(i => i.setor))].sort())
-const casa = (i, termo) => !termo || `${i.codigo} ${i.produto} ${i.fornecedor} ${i.sugestao?.local || ''}`.toLowerCase().includes(termo)
-const ORDEM = { alta: 0, media: 1, baixa: 2 }
-const filtrados = computed(() => {
-  const termo = busca.value.trim().toLowerCase()
-  return ativos.value
-    .filter(i => (!filtroSetor.value || i.setor === filtroSetor.value) && (!filtroConfianca.value || i.sugestao?.confianca === filtroConfianca.value) && casa(i, termo))
-    .sort((a, b) => ORDEM[a.prioridade] - ORDEM[b.prioridade] || b.estoque - a.estoque)
-})
+// Colunas da tabela padrão (filtros, ordenação, CSV e impressão).
+const COLUNAS_TABELA = [
+  { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
+  { chave: 'fornecedor', titulo: 'Fornecedor', tipo: 'categoria' },
+  { chave: 'estoque', titulo: 'Estoque', tipo: 'numero' },
+  { chave: 'diasSemVenda', titulo: 'Dias sem venda', tipo: 'numero' },
+  { chave: 'prioridade', titulo: 'Prioridade', tipo: 'categoria', valor: i => PRIORIDADE[i.prioridade] },
+  { chave: 'sugerido', titulo: 'Local sugerido', tipo: 'categoria', rapido: true, valor: i => i.sugestao?.local || '' },
+  { chave: 'confianca', titulo: 'Origem da sugestão', tipo: 'categoria', rapido: true, valor: i => CONFIANCA[i.sugestao?.confianca || 'nenhuma'] },
+  { chave: 'motivo', titulo: 'Motivo', tipo: 'texto', valor: i => i.sugestao?.motivo || '', ordenavel: false },
+  { chave: 'diasLista', titulo: 'Dias na lista', tipo: 'numero', valor: i => diasNaLista(i) },
+  { chave: 'primeiroVisto', titulo: 'Na lista desde', tipo: 'data', oculta: true },
+  { chave: 'classe', titulo: 'Classe', tipo: 'categoria', oculta: true },
+  { chave: 'ordemPrioridade', titulo: 'Prioridade (1 = vende toda semana)', tipo: 'numero', oculta: true, filtravel: false, valor: i => ({ alta: 1, media: 2, baixa: 3 })[i.prioridade] || 4 }
+]
+const ATALHOS_ITENS = [
+  { rotulo: 'Recebidos hoje', icone: 'fas fa-inbox', condicoes: [{ chave: 'primeiroVisto', op: 'igual', valor: hojeISO }] },
+  { rotulo: 'Vende toda semana', icone: 'fas fa-cart-shopping', condicoes: [{ chave: 'diasSemVenda', op: 'menorIgual', valor: '7' }] },
+  { rotulo: 'Na lista há 3+ dias', icone: 'fas fa-clock', condicoes: [{ chave: 'diasLista', op: 'maiorIgual', valor: '3' }] }
+]
+const COLUNAS_SUSPEITOS_TABELA = [
+  { chave: 'produto', titulo: 'Produto', tipo: 'texto' },
+  { chave: 'codigo', titulo: 'Código', tipo: 'texto' },
+  { chave: 'setor', titulo: 'Setor', tipo: 'categoria', rapido: true },
+  { chave: 'vinculadoEm', titulo: 'Vinculado em', tipo: 'categoria', rapido: true },
+  { chave: 'local', titulo: 'Está em', tipo: 'categoria', rapido: true },
+  { chave: 'vezes', titulo: 'Vezes', tipo: 'numero' },
+  { chave: 'ultima', titulo: 'Última auditoria', tipo: 'data' },
+  { chave: 'motivo', titulo: 'Motivo', tipo: 'texto', ordenavel: false }
+]
 const porLocal = computed(() => {
   const m = new Map()
   for (const i of pendentes.value) {
@@ -107,14 +127,6 @@ const imagem = ref(null)
 const salvarImagem = async () => {
   try { await imagem.value.salvar() } catch (e) { toast(e?.message || 'Não foi possível gerar a imagem.', 'error') }
 }
-const exportarCsv = () => baixarCsv(filtrados.value.map(i => ({ ...i, sugerido: i.sugestao?.local, motivo: i.sugestao?.motivo, confianca: i.sugestao?.confianca, dias: diasNaLista(i) })), [
-  ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['estoque', 'Estoque'], ['diasSemVenda', 'Dias sem venda'],
-  ['prioridade', 'Prioridade'], ['sugerido', 'Local sugerido'], ['confianca', 'Confiança'], ['motivo', 'Motivo'], ['dias', 'Dias na lista']
-], `nao-vinculados-${hojeISO}`)
-const exportarSuspeitos = () => baixarCsv(suspeitos.value, [
-  ['codigo', 'Código'], ['produto', 'Produto'], ['setor', 'Setor'], ['vinculadoEm', 'Vinculado em'], ['local', 'Lido/está em'], ['vezes', 'Vezes'], ['ultima', 'Última auditoria'], ['motivo', 'Motivo']
-], `vinculos-suspeitos-${hojeISO}`)
-
 // --- Relatórios (mesmo modal de escolha de seções/colunas dos outros relatórios) ---
 const int = v => (Number(v) || 0).toLocaleString('pt-BR')
 const COLUNAS_ITENS = [
@@ -183,28 +195,6 @@ const relatorioGeral = () => {
   })
 }
 
-const relatorioItens = () => abrirRelatorioTabela({
-  id: 'nao-vinculados-itens',
-  titulo: 'Não vinculados · itens filtrados',
-  subtitulo: `${filtrados.value.length} item(ns)`,
-  contexto: [
-    filtroSetor.value && { rotulo: 'Setor', valor: filtroSetor.value },
-    filtroConfianca.value && { rotulo: 'Sugestão', valor: CONFIANCA[filtroConfianca.value] },
-    busca.value.trim() && { rotulo: 'Busca', valor: busca.value.trim() }
-  ].filter(Boolean),
-  colunas: COLUNAS_ITENS,
-  itens: filtrados.value,
-  assinaturaPadrao: true
-})
-const relatorioSuspeitos = () => abrirRelatorioTabela({
-  id: 'nao-vinculados-suspeitos',
-  titulo: 'Vínculos suspeitos',
-  subtitulo: 'Vinculados num local, lidos em outro em 2+ auditorias',
-  colunas: COLUNAS_SUSPEITOS,
-  itens: suspeitos.value,
-  assinaturaPadrao: true
-})
-
 // --- Formatação ---
 const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
 const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem local sugerido' }
@@ -268,38 +258,27 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
 
         <!-- Tratar -->
         <section v-if="aba === 'tratar'" class="space-y-4">
-          <div class="flex flex-wrap items-end gap-3">
-            <label class="min-w-56 flex-1"><span class="ui-label">Buscar</span><input v-model="busca" class="ui-input" placeholder="Código, produto, fornecedor ou local" /></label>
-            <label><span class="ui-label">Sugestão</span>
-              <select v-model="filtroConfianca" class="ui-input"><option value="">Todas</option><option v-for="(r, v) in CONFIANCA" :key="v" :value="v">{{ r }}</option></select>
-            </label>
-            <label><span class="ui-label">Setor</span>
-              <select v-model="filtroSetor" class="ui-input"><option value="">Todos</option><option v-for="s in setores" :key="s">{{ s }}</option></select>
-            </label>
-            <UiButton variant="secondary" :disabled="!filtrados.length" @click="relatorioItens"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
-            <UiButton variant="secondary" @click="exportarCsv"><i class="fas fa-file-csv"></i>CSV</UiButton>
-          </div>
-
-          <p v-if="!filtrados.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">Nenhum item com esses filtros.</p>
-          <ul v-else class="ui-card divide-y divide-slate-100">
-            <li v-for="i in filtrados" :key="i.codigo" class="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center">
-              <div class="min-w-0">
-                <button type="button" class="truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver ${i.produto} nas auditorias`" @click="itemHistorico = i">{{ i.produto }}</button>
-                <p class="truncate text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}<template v-if="i.fornecedor">, {{ i.fornecedor }}</template></p>
-              </div>
-              <div class="text-sm text-slate-700">
-                <p><span class="font-semibold tabular-nums">{{ i.estoque.toLocaleString('pt-BR') }}</span> em estoque<template v-if="i.diasSemVenda !== null">, sem venda há {{ i.diasSemVenda }} d</template></p>
-                <p class="text-xs text-slate-500">{{ PRIORIDADE[i.prioridade] }}<template v-if="diasNaLista(i)">, na lista há {{ diasNaLista(i) }} d</template></p>
-              </div>
-              <div v-if="i.sugestao?.local" class="flex min-w-0 items-start gap-2.5">
-                <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corConfianca(i.sugestao.confianca)" :title="CONFIANCA[i.sugestao.confianca]"></span>
+          <UiTabela id="nao-vinculados-itens" modo="lista" titulo="Não vinculados" :itens="ativos" :colunas="COLUNAS_TABELA" :atalhos="ATALHOS_ITENS" :ordem-inicial="[{ chave: 'ordemPrioridade', direcao: 'asc' }, { chave: 'estoque', direcao: 'desc' }]" chave-item="codigo" vazio="Nenhum item sem local." placeholder="Buscar código, produto, fornecedor ou local...">
+            <template #item="{ item: i }">
+              <div class="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center">
                 <div class="min-w-0">
-                  <p class="text-sm"><span class="text-xs text-slate-500">Local sugerido</span> <span class="font-semibold">{{ i.sugestao.local }}</span> <span class="text-xs text-slate-500">{{ CONFIANCA[i.sugestao.confianca] }}</span></p>
-                  <p class="text-xs text-slate-500">{{ i.sugestao.motivo }}</p>
+                  <button type="button" class="truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver ${i.produto} nas auditorias`" @click="itemHistorico = i">{{ i.produto }}</button>
+                  <p class="truncate text-xs text-slate-500">{{ i.codigo }}, {{ i.setor }}<template v-if="i.fornecedor">, {{ i.fornecedor }}</template></p>
+                </div>
+                <div class="text-sm text-slate-700">
+                  <p><span class="font-semibold tabular-nums">{{ i.estoque.toLocaleString('pt-BR') }}</span> em estoque<template v-if="i.diasSemVenda !== null">, sem venda há {{ i.diasSemVenda }} d</template></p>
+                  <p class="text-xs text-slate-500">{{ PRIORIDADE[i.prioridade] }}<template v-if="diasNaLista(i)">, na lista há {{ diasNaLista(i) }} d</template></p>
+                </div>
+                <div v-if="i.sugestao?.local" class="flex min-w-0 items-start gap-2.5">
+                  <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corConfianca(i.sugestao.confianca)" :title="CONFIANCA[i.sugestao.confianca]"></span>
+                  <div class="min-w-0">
+                    <p class="text-sm"><span class="text-xs text-slate-500">Local sugerido</span> <span class="font-semibold">{{ i.sugestao.local }}</span> <span class="text-xs text-slate-500">{{ CONFIANCA[i.sugestao.confianca] }}</span></p>
+                    <p class="text-xs text-slate-500">{{ i.sugestao.motivo }}</p>
+                  </div>
                 </div>
               </div>
-            </li>
-          </ul>
+            </template>
+          </UiTabela>
           <p class="text-xs text-slate-500">O vínculo é feito no sistema da loja. O item sai desta lista quando a próxima planilha não o trouxer mais.</p>
         </section>
 
@@ -322,25 +301,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
         <!-- Suspeitos -->
         <section v-else-if="aba === 'suspeitos'" class="space-y-4">
           <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens vinculados num local, mas lidos em outro ("lido não pertence") em duas ou mais auditorias e não lidos no local vinculado depois disso. Itens lidos no próprio local vinculado ou sem local vinculado conhecido ficam de fora.</p>
-          <div class="flex flex-wrap items-end gap-3">
-            <UiButton variant="secondary" :disabled="!suspeitos.length" @click="relatorioSuspeitos"><i class="fas fa-file-pdf"></i>Relatório</UiButton>
-            <UiButton variant="secondary" :disabled="!suspeitos.length" @click="exportarSuspeitos"><i class="fas fa-file-csv"></i>CSV</UiButton>
-          </div>
-          <p v-if="!suspeitos.length" class="ui-card px-4 py-10 text-center text-sm text-slate-500">{{ temAuditorias ? 'Nenhum vínculo suspeito nas auditorias.' : 'Importe auditorias para cruzar os vínculos.' }}</p>
-          <div v-else class="ui-card overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-xs text-slate-500"><tr><th class="px-4 py-2.5">Produto</th><th class="px-4">Vinculado em</th><th class="px-4">Está em</th><th class="px-4">Motivo</th><th class="px-4">Última</th></tr></thead>
-              <tbody class="divide-y divide-slate-100">
-                <tr v-for="s in suspeitos" :key="s.codigo + s.local">
-                  <td class="px-4 py-2.5"><p class="font-semibold">{{ s.produto }}</p><p class="text-xs text-slate-500">{{ s.codigo }}, {{ s.setor }}</p></td>
-                  <td class="px-4">{{ s.vinculadoEm || '—' }}</td>
-                  <td class="px-4 font-semibold text-blue-800">{{ s.local }}</td>
-                  <td class="px-4 text-slate-600">{{ s.motivo }}</td>
-                  <td class="px-4 tabular-nums">{{ br(s.ultima) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <UiTabela id="nao-vinculados-suspeitos" titulo="Vínculos suspeitos" :itens="suspeitos" :colunas="COLUNAS_SUSPEITOS_TABELA" :ordem-inicial="{ chave: 'ultima', direcao: 'desc' }" :chave-item="s => s.codigo + s.local" :vazio="temAuditorias ? 'Nenhum vínculo suspeito nas auditorias.' : 'Importe auditorias para cruzar os vínculos.'" />
         </section>
       </template>
 

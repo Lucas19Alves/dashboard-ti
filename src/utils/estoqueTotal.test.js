@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cruzarEstoqueTotal, faltandoColunas, foraDasAuditorias, formatarQuantidade, lerQuantidade, mapaEstoqueTotal, semCodigo, tratarEstoqueTotal } from './estoqueTotal'
+import { cruzarEstoqueTotal, faltandoColunas, formatarQuantidade, lerQuantidade, mapaEstoqueTotal, semCodigo, semLocalNaPlanilha, tratarEstoqueTotal } from './estoqueTotal'
 import { estoqueParado, indexarEstoque, reincidencias, semEstoqueNoSistema, validadePorCodigo } from './estoque'
 import { indexarHistorico } from './naoVinculados'
 
@@ -35,19 +35,28 @@ describe('leitura da planilha de estoque total', () => {
 })
 
 describe('cruzamento com as auditorias', () => {
-  // A: lido; B: não lido há 3 semanas; Z: lido com estoque zerado; S: só na Presença antiga; N: nunca auditado.
+  // A: lido; B: não lido há 3 semanas; Z: lido com estoque zerado; S: só na Presença antiga (saiu);
+  // N: nunca auditado (sem local); P: insumo (setor OUTROS), nunca auditado.
   const auditorias = [
     aud(1, '2026-10-20', 'Presença', [item('A', 'G01', { lido: true }), item('B', 'G02', { lido: true }), item('S', 'G03', { lido: true }), item('Z', 'G04', { lido: true, estoque: 0 })]),
     aud(2, '2026-11-10', 'Presença', [item('A', 'G01', { lido: true }), item('B', 'G02'), item('Z', 'G04', { lido: true, estoque: 0 }), item('Y', 'G05', { lido: true, estoque: 0 })])
   ]
   const indice = indexarEstoque(auditorias)
   const total = mapaEstoqueTotal(tratarEstoqueTotal([
-    linha('A', { 'Dias sem venda': 45 }), linha('B', { Estoque: 7, 'Dias sem venda': 3 }), linha('S'), linha('N', { 'Dias sem venda': 60 }), linha('Y', { Estoque: 5 })
+    linha('A', { 'Dias sem venda': 45 }), linha('B', { Estoque: 7, 'Dias sem venda': 3 }), linha('S'), linha('N', { 'Dias sem venda': 60 }), linha('Y', { Estoque: 5 }),
+    linha('P', { 'Classe de Produto Raiz': '19 - OUTROS', 'Dias sem venda': 90 })
   ]))
 
-  it('reincidência usa o estoque e os dias sem venda da planilha e some quando o item zerou', () => {
-    const [b] = reincidencias(indice, { total })
-    expect(b).toMatchObject({ codigo: 'B', estoque: 7, diasSemVenda: 3, local: 'G02' })
+  it('reincidência usa o estoque da planilha, some quando o item zerou e inclui quem saiu da auditoria', () => {
+    const linhas = reincidencias(indice, { total })
+    expect(linhas.map(l => l.codigo).sort()).toEqual(['B', 'S'])
+    expect(linhas.find(l => l.codigo === 'B')).toMatchObject({ estoque: 7, diasSemVenda: 3, local: 'G02' })
+    expect(linhas.find(l => l.codigo === 'B').saiuDaAuditoria).toBeUndefined()
+    const s = linhas.find(l => l.codigo === 'S')
+    expect(s).toMatchObject({ saiuDaAuditoria: true, local: 'G03', dias: 21, ultimaLeitura: '2026-10-20' })
+    expect(s.diagnostico).toContain('saiu da auditoria')
+    // Quem saiu entra mesmo abaixo do limiar: fora da auditoria ninguém mais confere.
+    expect(reincidencias(indice, { total, limiar: 60 }).map(l => l.codigo)).toEqual(['S'])
     expect(reincidencias(indice, { total: mapaEstoqueTotal(tratarEstoqueTotal([linha('A')])) })).toEqual([])
   })
 
@@ -56,22 +65,19 @@ describe('cruzamento com as auditorias', () => {
     expect(semEstoqueNoSistema(indice, { total }).map(l => l.codigo)).toEqual(['Z'])
   })
 
-  it('parados entram pela planilha, também os que nunca foram auditados', () => {
+  it('parados entram pela planilha, também os sem local; insumos ficam de fora', () => {
     const parados = estoqueParado(indice, [], { total })
     expect(parados.map(l => l.codigo).sort()).toEqual(['A', 'N'])
-    expect(parados.find(l => l.codigo === 'N')).toMatchObject({ foraAuditoria: true, local: '', setor: 'MERCEARIA DOCE' })
-    expect(parados.find(l => l.codigo === 'A')).toMatchObject({ foraAuditoria: false, local: 'G01', dias: 45 })
+    expect(parados.find(l => l.codigo === 'N')).toMatchObject({ semLocal: true, local: '', setor: 'MERCEARIA DOCE' })
+    expect(parados.find(l => l.codigo === 'A')).toMatchObject({ semLocal: false, saiu: false, local: 'G01', dias: 45 })
   })
 
-  it('fora das auditorias: saiu (tinha local) e nunca auditado (com sugestão pela classe)', () => {
-    const fora = foraDasAuditorias({ total, indice, historico: indexarHistorico(auditorias), naoVinculados: [{ codigo: 'N', status: 'pendente', sugestao: { local: '' } }] })
-    const s = fora.find(l => l.codigo === 'S')
-    const n = fora.find(l => l.codigo === 'N')
-    expect(fora.map(l => l.codigo).sort()).toEqual(['N', 'S'])
-    expect(s).toMatchObject({ motivo: 'saiu', local: 'G03', ultimaData: '2026-10-20' })
-    expect(s.diagnostico).toContain('perdeu o vínculo')
-    expect(n).toMatchObject({ motivo: 'nunca', naoVinculado: true, local: '' })
-    expect(n.sugerido).toMatch(/^G0/)
+  it('sem local: só quem nunca foi auditado, com sugestão pela classe e sem insumos', () => {
+    const lista = semLocalNaPlanilha({ total, indice, historico: indexarHistorico(auditorias), naoVinculados: [{ codigo: 'N', status: 'pendente', sugestao: { local: '' } }] })
+    expect(lista.map(l => l.codigo)).toEqual(['N'])
+    expect(lista[0]).toMatchObject({ tipo: 'semLocal', naLista: true, local: '' })
+    expect(lista[0].sugerido).toMatch(/^G0/)
+    expect(lista[0].diagnostico).toContain('Não vinculado')
   })
 
   it('lista completa traz situação, local e validade de cada item', () => {
@@ -79,7 +85,8 @@ describe('cruzamento com as auditorias', () => {
     const linhas = new Map(cruzarEstoqueTotal({ total, indice, validades }).map(l => [l.codigo, l]))
     expect(linhas.get('A')).toMatchObject({ situacao: 'lido', local: 'G01', validade: '2026-11-20', venceEm: 6 })
     expect(linhas.get('B').situacao).toBe('pendente')
-    expect(linhas.get('S').situacao).toBe('foraCiclo')
-    expect(linhas.get('N').situacao).toBe('nunca')
+    expect(linhas.get('S').situacao).toBe('saiu')
+    expect(linhas.get('N').situacao).toBe('semLocal')
+    expect(linhas.get('P').situacao).toBe('insumo')
   })
 })
