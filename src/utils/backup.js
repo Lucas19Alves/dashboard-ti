@@ -5,6 +5,7 @@ import { configuracoes as configuracoesSistema } from '../composables/useConfigu
 import { useAparencia } from '../composables/useAparencia'
 
 import { lerArquivoBackup, montarArquivoBackup } from './backupFormato'
+import { CHAVE_INFO_ESTOQUE } from '../stores/estoqueTotalStore'
 
 const STATUS_STORAGE_KEY = 'dashboard_ti_auditorias_status'
 // 3: dados em formato colunar compacto (ver backupCompacto.js). 1 e 2 continuam sendo lidos.
@@ -240,8 +241,9 @@ const restaurarConfiguracoes = (cfg = {}) => {
 
 // Monta o arquivo de backup: formato colunar compacto + gzip, gerado no Web Worker.
 export const gerarBackupArquivo = async () => {
-  const [auditorias, vencimentos, planosAcao, naoVinculados] = await Promise.all([
-    db.auditorias.toArray(), db.vencimentos.toArray(), db.planosAcao.toArray(), db.naoVinculados.toArray()
+  const [auditorias, vencimentos, planosAcao, naoVinculados, estoqueTotal, estoqueTotalInfo] = await Promise.all([
+    db.auditorias.toArray(), db.vencimentos.toArray(), db.planosAcao.toArray(), db.naoVinculados.toArray(),
+    db.estoqueTotal.toArray(), db.config.get(CHAVE_INFO_ESTOQUE)
   ])
   // Os itens ficam em outra tabela no banco; no arquivo, continuam dentro de cada auditoria.
   const itens = new Map((await db.itensAuditoria.toArray()).map(r => [r.auditoriaId, r.dados]))
@@ -249,7 +251,9 @@ export const gerarBackupArquivo = async () => {
     auditorias: auditorias.map(a => ({ ...a, dados: itens.get(a.id) || a.dados || [], status: a.status || 'em_andamento' })),
     vencimentos,
     planosAcao,
-    naoVinculados
+    naoVinculados,
+    estoqueTotal,
+    estoqueTotalInfo: estoqueTotalInfo || null
   }
   const extras = {
     versao: BACKUP_VERSION,
@@ -295,7 +299,10 @@ export const importarBackupJson = async (file) => {
   // Planos de ação só são substituídos quando o backup os traz (backups antigos não têm).
   const planosAcao = Array.isArray(dados.planosAcao) ? dados.planosAcao.filter(p => p && typeof p === 'object') : null
   const naoVinculados = Array.isArray(dados.naoVinculados) ? dados.naoVinculados.filter(n => n && typeof n === 'object' && n.codigo) : null
-  await db.transaction('rw', [db.auditorias, db.itensAuditoria, db.vencimentos, db.planosAcao, db.naoVinculados], async () => {
+  // Estoque total: só nos backups que o trazem (os anteriores mantêm a planilha atual).
+  const estoqueTotal = Array.isArray(dados.estoqueTotal) ? dados.estoqueTotal.filter(n => n && typeof n === 'object' && n.codigo) : null
+  const estoqueTotalInfo = dados.estoqueTotalInfo && typeof dados.estoqueTotalInfo === 'object' ? dados.estoqueTotalInfo : null
+  await db.transaction('rw', [db.auditorias, db.itensAuditoria, db.vencimentos, db.planosAcao, db.naoVinculados, db.estoqueTotal, db.config], async () => {
     await db.auditorias.clear()
     await db.itensAuditoria.clear()
     await db.vencimentos.clear()
@@ -312,6 +319,12 @@ export const importarBackupJson = async (file) => {
     if (naoVinculados) {
       await db.naoVinculados.clear()
       if (naoVinculados.length) await db.naoVinculados.bulkPut(naoVinculados)
+    }
+    if (estoqueTotal) {
+      await db.estoqueTotal.clear()
+      await db.config.delete(CHAVE_INFO_ESTOQUE)
+      if (estoqueTotal.length) await db.estoqueTotal.bulkPut(estoqueTotal)
+      if (estoqueTotal.length && estoqueTotalInfo) await db.config.put({ ...estoqueTotalInfo, chave: CHAVE_INFO_ESTOQUE })
     }
   })
 

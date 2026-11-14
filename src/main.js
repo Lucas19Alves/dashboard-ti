@@ -12,6 +12,7 @@ import '@fortawesome/fontawesome-free/css/all.css'
 import { useAuditoriasStore } from './stores/auditoriasStore'
 import { useVencimentosStore } from './stores/vencimentosStore'
 import { useNaoVinculadosStore } from './stores/naoVinculadosStore'
+import { useEstoqueTotalStore } from './stores/estoqueTotalStore'
 
 // Uma aba aberta antes do deploy pode pedir um chunk cujo nome ja nao existe.
 window.addEventListener('vite:preloadError', event => {
@@ -41,7 +42,8 @@ const demo = import.meta.env.DEV && new URLSearchParams(location.search).has('de
 demo.then(() => Promise.all([
   auditoriasStore.carregarAuditoriasPersistidas(),
   vencimentosStore.carregarVencimentosPersistidos(),
-  useNaoVinculadosStore(pinia).carregar().catch(e => console.error('Erro ao carregar não vinculados', e))
+  useNaoVinculadosStore(pinia).carregar().catch(e => console.error('Erro ao carregar não vinculados', e)),
+  useEstoqueTotalStore(pinia).carregar().catch(e => console.error('Erro ao carregar o estoque total', e))
 ])).finally(() => {
   app.mount('#app')
   iniciarBackupAutomatico()

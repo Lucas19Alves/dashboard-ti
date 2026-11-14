@@ -133,8 +133,14 @@ Itens que chegam na loja sem local no sistema ficam fora da auditoria. A aba **E
 - **Relatórios PDF** no mesmo modal dos outros relatórios (seções, colunas, orientação, observações e assinaturas): o geral (indicadores, itens por maior estoque, por local sugerido, por setor, vínculos suspeitos), o da lista filtrada na aba Itens e o dos vínculos suspeitos.
 - **Salvar imagem** quadrada para o WhatsApp (não vinculados, recebidos hoje, por setor e os de maior estoque com local sugerido e dias sem venda), CSV da lista filtrada e **Recalcular** as sugestões depois de importar novas auditorias.
 
-### 4.10 Estoque (`pages/Estoque.vue`, `utils/estoque.js`, `composables/useAnaliseEstoque.js`)
+### 4.10 Estoque (`pages/Estoque.vue`, `utils/estoque.js`, `utils/estoqueTotal.js`, `composables/useAnaliseEstoque.js`)
 A aba **Estoque** reúne os problemas de estoque calculados a partir das auditorias de **Presença e Ruptura** (as que leem a gôndola), das validades e dos não vinculados. Cada código é avaliado pela situação na última vez em que apareceu; só entram itens vistos desde a última Presença (ciclo atual). *Lido não pertence* não conta como leitura: o local vinculado continuou vazio.
+- **Estoque total** (`stores/estoqueTotalStore.js`): o relatório de produtos com estoque do sistema (Código, Nome, Estoque, Estoque Indisponível, Dias sem venda, Última venda/compra, Classe de Produto, Classe de Produto Raiz, Ranking de Vendas, Fornecedor, Gerenciado, Peso Variável). Estoque em kg ("26,694 KG") vira número com unidade. Setor, classe e fornecedor perdem o código ("35 - MERCEARIA DOCE" → "MERCEARIA DOCE") para bater com as auditorias. Cada importação substitui a anterior; fica no IndexedDB (`estoqueTotal`, data e arquivo em `config`) e vai no backup. Quando existe, é a base das listas:
+  - **Reincidências** só com itens que estão nela com estoque, usando o estoque e os dias sem venda dela;
+  - **Estoque zerado** perde quem já tem estoque nela (entrada lançada depois da auditoria);
+  - **Parados** passam a considerar todos os itens dela, também os que não aparecem nas auditorias;
+  - **Fora das auditorias** (nova lista): itens com estoque nela que não entraram na última Presença. *Saiu* = já foi auditado (provável vínculo perdido); *nunca* = sem local ou setor não auditado. Local sugerido pelo histórico do item ou pela classe (mesma regra dos não vinculados);
+  - **Estoque da loja**: todos os itens dela com local, situação na última auditoria, última leitura, validade e problemas, com filtros e CSV.
 - **Reincidências**: itens com estoque não lidos há 14+ dias (14/21/30/60, lembrado no navegador). Mostra dias e auditorias seguidas sem leitura, última leitura, ruptura acumulada (`Custo Ruptura`) e um diagnóstico: achado em outro local, vende mas não é achado (depósito), nunca lido e sem venda (estoque provavelmente inexistente).
 - **Estoque zerado**: itens lidos na gôndola com estoque zerado no sistema, com quantas auditorias seguidas.
 - **Parados**: itens com estoque e 30+ dias sem venda (30/60/90), cruzados com a menor validade do código.

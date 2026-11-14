@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { TIPOS_PROBLEMA } from '../../utils/estoque'
+import { formatarQuantidade } from '../../utils/estoqueTotal'
 import { baixarCsv } from '../../utils/csv'
 import { abrirRelatorioTabela } from '../../composables/useRelatorio'
 import UiButton from '../ui/UiButton.vue'
@@ -51,10 +52,12 @@ const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', 
 const destaque = l => ({
   reincidencia: `${l.dias} dias sem leitura`,
   semEstoque: l.vezes > 1 ? `Zerado em ${l.vezes} auditorias` : 'Zerado na última',
-  parado: `${l.dias} dias sem venda`
+  parado: `${l.dias} dias sem venda`,
+  foraAuditoria: l.motivo === 'saiu' ? `Fora da auditoria desde ${br(l.ultimaData)}` : l.naoVinculado ? 'Sem local vinculado' : 'Nunca auditado'
 })[l.tipo]
+const qtd = l => formatarQuantidade(l.estoque, l.unidade)
 const detalhe = (l) => {
-  const partes = [`${int(l.estoque)} em estoque`]
+  const partes = [`${qtd(l)} em estoque`]
   if (l.tipo === 'reincidencia') {
     partes.push(l.nuncaLido ? 'nunca lido' : `lido pela última vez em ${br(l.ultimaLeitura)}`, `${l.auditoriasSemLeitura} auditorias seguidas`)
     if (l.diasSemVenda !== null) partes.push(`sem venda há ${l.diasSemVenda} d`)
@@ -62,9 +65,15 @@ const detalhe = (l) => {
   } else if (l.tipo === 'semEstoque') {
     partes[0] = `desde ${br(l.desde)}`
     if (l.diasSemVenda !== null) partes.push(`sem venda há ${l.diasSemVenda} d`)
+  } else if (l.tipo === 'foraAuditoria') {
+    partes.push(l.diasSemVenda === null ? 'sem venda registrada' : `sem venda há ${l.diasSemVenda} d`)
+    if (l.ultimaLeitura) partes.push(`lido pela última vez em ${br(l.ultimaLeitura)}`)
+    if (l.sugerido) partes.push(`local sugerido ${l.sugerido}`)
+    if (!l.gerenciado) partes.push('não gerenciado')
   } else {
     if (l.validade) partes.push(l.venceEm < 0 ? `vencido em ${br(l.validade)}` : `vence em ${br(l.validade)}`)
     if (l.naoAchado) partes.push('não achado na última auditoria')
+    if (l.foraAuditoria) partes.push(l.local ? 'fora da última Presença' : 'fora das auditorias')
   }
   return partes.join(', ')
 }
@@ -78,7 +87,7 @@ const COLUNAS = [
   { chave: 'local', titulo: 'Local' },
   { chave: 'setor', titulo: 'Setor' },
   { chave: 'fornecedor', titulo: 'Fornecedor' },
-  { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right' },
+  { chave: 'estoque', titulo: 'Estoque', alinhamento: 'right', valor: qtd },
   { chave: 'destaque', titulo: 'Situação', valor: destaque },
   { chave: 'diagnostico', titulo: 'O que fazer' }
 ]
@@ -130,7 +139,7 @@ const temFiltro = computed(() => Boolean(f.value.busca || f.value.setor || f.val
               <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="corGravidade(l.gravidade)" :title="`Gravidade ${l.gravidade}`"></span>
               <div class="min-w-0">
                 <button type="button" class="block max-w-full truncate text-left font-semibold text-slate-900 hover:text-blue-700 hover:underline" :title="`Ver tudo sobre ${l.produto}`" @click="emit('abrir', l.codigo)">{{ l.produto }}</button>
-                <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b></template>, {{ l.setor }}</p>
+                <p class="truncate text-xs text-slate-500">{{ l.codigo }}<template v-if="l.local">, <b class="font-semibold text-slate-700">{{ l.local }}</b></template><template v-else-if="l.sugerido">, sugerido <b class="font-semibold text-slate-700">{{ l.sugerido }}</b></template>, {{ l.setor }}</p>
               </div>
             </div>
             <div class="min-w-0 text-sm">

@@ -24,6 +24,7 @@ import { estadoBackup } from '../utils/lembreteBackup'
 import { itensParaMeta } from '../utils/analiseHistorica'
 import { useAnaliseEstoque } from '../composables/useAnaliseEstoque'
 import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
+import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import StatCard from '../components/ui/StatCard.vue'
 import UiButton from '../components/ui/UiButton.vue'
 import BackupPastaConfig from '../components/BackupPastaConfig.vue'
@@ -172,6 +173,7 @@ const prioridades = computed(() => {
   const e = estoque.resumo.value
   if (e.reincidentes) lista.push({ tom: 'atencao', icone: 'fas fa-repeat', titulo: `${plural(e.reincidentes, 'item', 'itens')} com estoque sem leitura há ${estoque.limiarReincidencia.value}+ dias`, detalhe: 'Procurar, repor ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'reincidencias' } }, ordem: 3 })
   if (e.semEstoque) lista.push({ tom: 'atencao', icone: 'fas fa-box-open', titulo: `${plural(e.semEstoque, 'item', 'itens')} na gôndola com estoque zerado`, detalhe: 'Lançar a entrada ou ajustar o estoque.', to: { path: '/estoque', query: { aba: 'sem-estoque' } }, ordem: 3 })
+  if (e.foraAuditoria) lista.push({ tom: 'info', icone: 'fas fa-eye-slash', titulo: `${plural(e.foraAuditoria, 'item', 'itens')} com estoque fora das auditorias`, detalhe: 'Estão na planilha de estoque total e não entraram na última Presença.', to: { path: '/estoque', query: { aba: 'fora-auditoria' } }, ordem: 4 })
   const hoje = paraISOLocal(agora)
   const nvHoje = nvStore.itens.filter(i => i.status !== 'resolvido' && i.primeiroVisto === hoje).length
   if (e.naoVinculados) lista.push({ tom: 'info', icone: 'fas fa-link-slash', titulo: `Vincular ${plural(e.naoVinculados, 'item sem local', 'itens sem local')}`, detalhe: nvHoje ? `${nvHoje} chegaram hoje.` : 'Ficam fora da auditoria até ter local.', to: { path: '/estoque', query: { aba: 'nao-vinculados' } }, ordem: 5 })
@@ -231,6 +233,7 @@ const handleArquivoBackup = async (e) => {
     await auditoriasStore.carregarAuditoriasPersistidas()
     await vencStore.carregarVencimentosPersistidos()
     await nvStore.carregar()
+    await useEstoqueTotalStore().carregar()
     armazenamento.value = await obterUsoArmazenamento()
     const mensagem = resultado.origem === 'backup-regional'
       ? `Backup regional convertido: ${resultado.auditorias.length} auditorias importadas.`

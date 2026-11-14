@@ -105,9 +105,9 @@ const PASSOS = [
     icone: 'fas fa-calendar-alt',
     resumo: 'Controle das validades a partir da planilha do sistema.',
     itens: [
-      ['Importar', 'Clique em Nova importação e envie a planilha de validades. A nova substitui a anterior, mantendo as ações já registradas.'],
+      ['Importar', 'Clique em Nova importação e envie a planilha de validades. A nova substitui a anterior.'],
       ['Visão geral', 'Vencidos, que vencem hoje e em até 3 dias, com os itens mais urgentes.'],
-      ['Explorar', 'Filtre por setor, fornecedor, prazo ou busca. Registre a ação feita em cada item (ex.: retirado, rebaixado) e o responsável.'],
+      ['Explorar', 'Filtre por setor, fornecedor, prazo ou busca. Exporte a lista filtrada em CSV.'],
       ['Análise', 'Setores e fornecedores com mais itens críticos.'],
       ['Mapa e ruptura', 'Onde estão os itens perto de vencer e quais vencem no estoque enquanto faltam na gôndola.'],
       ['Compartilhar', 'Relatório em PDF, CSV da lista filtrada e imagem quadrada para o WhatsApp.']
@@ -117,12 +117,15 @@ const PASSOS = [
     titulo: 'Estoque',
     rota: '/estoque',
     icone: 'fas fa-boxes-stacked',
-    resumo: 'Problemas de estoque calculados a partir das auditorias de Presença e Ruptura, das validades e dos não vinculados.',
+    resumo: 'Problemas de estoque a partir da planilha de estoque total da loja, cruzada com as auditorias de Presença e Ruptura, as validades e os não vinculados.',
     itens: [
+      ['Importar estoque total', 'Envie o relatório de produtos com estoque do sistema (Código, Nome, Estoque, Dias sem venda...). Ele passa a ser a base: só entram os itens dele, com o estoque e os dias sem venda dele. Importe de novo para atualizar.'],
       ['Visão geral', 'Quantos problemas há de cada tipo, os itens mais graves e os locais com mais problemas.'],
+      ['Estoque da loja', 'Todos os itens da planilha com local, situação na última auditoria, validade e problemas. Filtre por situação, setor e local e exporte em CSV.'],
       ['Reincidências', 'Itens com estoque que não são lidos há 14 dias ou mais (dá para mudar para 21, 30 ou 60). O diagnóstico diz se o item vende, se foi achado em outro local ou se o estoque provavelmente não existe.'],
       ['Estoque zerado', 'Itens lidos na gôndola com estoque zerado no sistema: falta lançar a entrada ou ajustar.'],
       ['Parados', 'Itens com estoque e 30+ dias sem venda, cruzados com as validades.'],
+      ['Fora das auditorias', 'Itens com estoque na planilha que não entraram na última Presença: perderam o vínculo do local ou nunca tiveram local. Mostra o local sugerido.'],
       ['Onde agir', 'Os problemas somados por local, setor ou fornecedor. Clique num número para ver os itens.'],
       ['Consultar item', 'Busque um código ou nome para ver a ficha do produto em todas as auditorias.']
     ]

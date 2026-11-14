@@ -13,8 +13,8 @@ const isoDe = v => {
   const m = texto(v).match(/^(\d{2})\/(\d{2})\/(\d{4})/)
   return m ? `${m[3]}-${m[2]}-${m[1]}` : texto(v).slice(0, 10)
 }
-// "35.6.4.2 - INSTANTANEO" → "35.6.4.2"
-const classeCodigo = v => texto(v).split(' - ')[0]
+// Classe pelo nome: as auditorias trazem "INSTANTANEO" e a planilha do ERP "35.6.4.2 - INSTANTANEO".
+const classeCodigo = v => texto(v).replace(/^d+(?:.d+)*s+-s+/, '').toUpperCase()
 
 // Linha da planilha do ERP → item de tratamento.
 export const normalizarLinha = row => ({
@@ -135,8 +135,8 @@ export const mesclarImportacao = (anteriores, novos, hoje) => {
 // Fica de fora quando: o local da leitura também é um local vinculado do item; não se sabe onde está
 // vinculado (nunca apareceu como item do local); ou depois da última leitura fora do lugar ele foi lido
 // no local vinculado (vínculo já corrigido).
-export const vinculosSuspeitos = (auditorias, { minVezes = 2 } = {}) => {
-  const indice = indexarHistorico(auditorias)
+export const vinculosSuspeitos = (auditorias, { minVezes = 2, historico = null } = {}) => {
+  const indice = historico || indexarHistorico(auditorias)
   const linhas = []
   for (const [codigo, reg] of indice.porCodigo) {
     if (!reg.vinculado.size) continue

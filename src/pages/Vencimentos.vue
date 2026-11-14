@@ -54,9 +54,6 @@ const fornecedorSelecionado = ref('')
 const modalSetorAberto = ref(false)
 const setorModalNome = ref('')
 const modalFornecedorAberto = ref(false)
-const modalAcaoAberto = ref(false)
-const itemAcao = ref(null)
-const formularioAcao = ref({ acao: 'Verificar na gôndola', responsavel: '' })
 
 // --- Table state ---
 const paginaItensFiltrados = ref(1)
@@ -130,25 +127,6 @@ const limparDados = async () => {
   mostrarUpload.value = true
   abaAtiva.value = 'visao'
   toastStore.addToast('Dados de vencimentos removidos.', 'info')
-}
-
-const abrirAcao = item => {
-  itemAcao.value = item
-  formularioAcao.value = {
-    acao: item._acao || 'Verificar na gôndola',
-    responsavel: item._responsavel || ''
-  }
-  modalAcaoAberto.value = true
-}
-
-const salvarAcao = async () => {
-  try {
-    await store.registrarAcao(itemAcao.value, formularioAcao.value.acao, formularioAcao.value.responsavel)
-    toastStore.addToast('Ação registrada no histórico do item.', 'success')
-    modalAcaoAberto.value = false
-  } catch (error) {
-    toastStore.addToast(error?.message || 'Não foi possível registrar a ação.', 'error')
-  }
 }
 
 const fecharModalUpload = () => {
@@ -594,8 +572,7 @@ const exportarFiltradosCsv = () => {
   const base = itensFiltradosOrdenados.value
   if (!base.length) return
   const linhas = base.map(item => ({ ...item, _prazo: prazoBadgeLabel(item._prazo) }))
-  const colunas = [...colunasItens, { chave: '_acao', titulo: 'Ação' }, { chave: '_responsavel', titulo: 'Responsável' }]
-  baixarCsv(linhas, colunas, `vencimentos-${new Date().toISOString().slice(0, 10)}`)
+  baixarCsv(linhas, colunasItens, `vencimentos-${new Date().toISOString().slice(0, 10)}`)
   toastStore.addToast(`${base.length} itens exportados em CSV.`, 'success')
 }
 
@@ -932,12 +909,11 @@ const exportarDetalhamentoSetor = async () => {
                       <i v-else class="fas fa-sort-down text-blue-600 ml-1"></i>
                     </template>
                   </th>
-                  <th class="px-3 py-2.5 text-left text-xs font-semibold text-slate-500">Ação</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="itensFiltradosPaginados.length === 0">
-                  <td :colspan="colunasItens.length + 1" class="text-center py-10 text-slate-400">
+                  <td :colspan="colunasItens.length" class="text-center py-10 text-slate-400">
                     <i class="fas fa-inbox text-3xl mb-2 block"></i>
                     <p class="text-sm">Nenhum item encontrado</p>
                   </td>
@@ -957,15 +933,6 @@ const exportarDetalhamentoSetor = async () => {
                       :class="prazoBadgeClasses(item._prazo)">
                       {{ prazoBadgeLabel(item._prazo) }}
                     </span>
-                  </td>
-                  <td class="px-3 py-2">
-                    <button type="button" class="ui-btn-secondary !px-2.5 !py-1.5 !text-xs whitespace-nowrap" @click="abrirAcao(item)">
-                      <i class="fas fa-clipboard-check"></i>
-                      {{ item._acao ? 'Atualizar' : 'Registrar' }}
-                    </button>
-                    <p v-if="item._responsavel" class="mt-1 max-w-28 truncate text-[10px] text-slate-500" :title="item._acao">
-                      {{ item._responsavel }} · {{ item._acao }}
-                    </p>
                   </td>
                 </tr>
               </tbody>
@@ -1218,38 +1185,6 @@ const exportarDetalhamentoSetor = async () => {
           <UiListaItens :itens="itensSetorModal" :colunas="colunasListaVenc" :facetas="facetasListaVenc" :titulo="`Vencimentos - ${setorModalNome}`" :ordem-inicial="{ chave: '_diasParaVencer', direcao: 'asc' }" />
         </div>
       </UiModal>
-      <div v-if="modalAcaoAberto" class="ui-modal-backdrop" @click.self="modalAcaoAberto = false">
-        <form class="ui-modal p-6" @submit.prevent="salvarAcao">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h2 class="text-lg font-bold text-slate-900">Registrar ação operacional</h2>
-              <p class="mt-1 text-sm text-slate-500">{{ itemAcao?._codigo }} · {{ itemAcao?._produto }}</p>
-            </div>
-            <button type="button" class="text-slate-400 hover:text-slate-700" aria-label="Fechar" @click="modalAcaoAberto = false"><i class="fas fa-times"></i></button>
-          </div>
-          <div class="mt-5 space-y-4">
-            <div>
-              <label class="ui-label">Ação</label>
-              <select v-model="formularioAcao.acao" class="ui-input">
-                <option>Verificar na gôndola</option>
-                <option>Aplicar desconto</option>
-                <option>Separar para quebra</option>
-                <option>Devolver ao fornecedor</option>
-                <option>Resolvido</option>
-              </select>
-            </div>
-            <div>
-              <label class="ui-label">Responsável</label>
-              <input v-model.trim="formularioAcao.responsavel" class="ui-input" required maxlength="80" placeholder="Nome ou matrícula" />
-            </div>
-          </div>
-          <div class="mt-6 flex justify-end gap-2">
-            <button type="button" class="ui-btn-secondary" @click="modalAcaoAberto = false">Cancelar</button>
-            <button type="submit" class="ui-btn-primary"><i class="fas fa-check"></i>Salvar ação</button>
-          </div>
-        </form>
-      </div>
-
       <!-- ===== MODAL FORNECEDOR ===== -->
       <UiModal v-if="modalFornecedorAberto && fornecedorSelecionado" :title="fornecedorSelecionado" :subtitle="`${itensFornecedor.length} itens deste fornecedor`" width="max-w-6xl" @close="limparFornecedor">
         <div class="space-y-4">

@@ -6,13 +6,16 @@ import { isItemLido } from './itemLido'
 // - sem estoque no sistema: itens lidos na gôndola com estoque zerado (entrada não lançada);
 // - estoque parado: itens com estoque e muitos dias sem venda.
 // Tudo parte da situação de cada código na última vez em que apareceu nas auditorias.
+// Com a planilha de estoque total importada (`total`: Map código → item), ela vira a base: só entram
+// os itens que estão nela, com o estoque e os dias sem venda dela (ver utils/estoqueTotal.js).
 
 export const LIMIAR_REINCIDENCIA_DIAS = 14
 export const LIMIAR_PARADO_DIAS = 30
 export const TIPOS_PROBLEMA = {
   reincidencia: { rotulo: 'Reincidência', curto: 'Sem leitura', icone: 'fas fa-repeat' },
   semEstoque: { rotulo: 'Sem estoque no sistema', curto: 'Estoque zerado', icone: 'fas fa-box-open' },
-  parado: { rotulo: 'Estoque parado', curto: 'Sem venda', icone: 'fas fa-hourglass-half' }
+  parado: { rotulo: 'Estoque parado', curto: 'Sem venda', icone: 'fas fa-hourglass-half' },
+  foraAuditoria: { rotulo: 'Fora das auditorias', curto: 'Fora da auditoria', icone: 'fas fa-eye-slash' }
 }
 
 const TIPOS_LEITURA = new Set(['Presença', 'Ruptura'])
@@ -126,9 +129,20 @@ export const indexarEstoque = (auditorias) => {
   }
 }
 
-const base = r => ({
-  codigo: r.codigo, produto: r.produto, setor: r.setor, fornecedor: r.fornecedor, local: r.local || '',
-  estoque: r.estoque, diasSemVenda: r.diasSemVenda, ultimaData: r.ultimaData, ultimaLeitura: r.ultimaLeitura
+// Dados comuns de uma linha: cadastro pelas auditorias (mesmos nomes de setor e fornecedor das outras
+// telas) e estoque/dias sem venda pela planilha de estoque total, quando ela existe.
+const base = (r, t = null) => ({
+  codigo: r?.codigo || t.codigo,
+  produto: r?.produto || t.produto,
+  setor: r?.setor || t.setor,
+  fornecedor: r?.fornecedor || t.fornecedor,
+  local: r?.local || '',
+  estoque: t ? t.estoque : r.estoque,
+  unidade: t?.unidade || '',
+  diasSemVenda: t ? t.diasSemVenda : r.diasSemVenda,
+  ultimaVenda: t?.ultimaVenda || '',
+  ultimaData: r?.ultimaData || '',
+  ultimaLeitura: r?.ultimaLeitura || ''
 })
 
 // Onde o item foi achado fora do lugar depois da última leitura no local vinculado.
@@ -147,18 +161,22 @@ export const diagnosticoReincidencia = ({ nuncaLido, diasSemVenda, achado, dias 
 }
 
 // Itens com estoque que não são lidos há `limiar` dias ou mais (Presença/Ruptura).
-export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS } = {}) => {
+// Com a planilha de estoque total, só quem ainda tem estoque nela.
+export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS, total = null } = {}) => {
   const linhas = []
   for (const r of indice.itens.values()) {
     if (!r.ativo || r.situacao !== 'pendente') continue
+    const t = total?.get(r.codigo) || null
+    if (total && !(t?.estoque > 0)) continue
+    const diasSemVenda = t ? t.diasSemVenda : r.diasSemVenda
     const nuncaLido = !r.ultimaLeitura
     const desde = r.ultimaLeitura || r.pendenteDesde
     const dias = diasEntre(desde, r.ultimaData)
     if (dias === null || dias < limiar) continue
     const achado = achadoEm(r, desde)
-    const vende = r.diasSemVenda !== null && r.diasSemVenda <= 7
+    const vende = diasSemVenda !== null && diasSemVenda <= 7
     linhas.push({
-      ...base(r),
+      ...base(r, t),
       tipo: 'reincidencia',
       dias,
       nuncaLido,
@@ -167,17 +185,19 @@ export const reincidencias = (indice, { limiar = LIMIAR_REINCIDENCIA_DIAS } = {}
       custoAcumulado: r.custoAcumulado,
       achadoEm: achado,
       gravidade: 2 + (vende ? 2 : 0) + Math.min(3, Math.floor(dias / 14)) + (r.custoAcumulado > 0 ? 1 : 0) + (achado ? 1 : 0),
-      diagnostico: diagnosticoReincidencia({ nuncaLido, diasSemVenda: r.diasSemVenda, achado, dias })
+      diagnostico: diagnosticoReincidencia({ nuncaLido, diasSemVenda, achado, dias })
     })
   }
   return linhas.sort((a, b) => b.gravidade - a.gravidade || b.dias - a.dias || b.custoAcumulado - a.custoAcumulado)
 }
 
 // Itens lidos na gôndola com estoque zerado no sistema na última auditoria em que apareceram.
-export const semEstoqueNoSistema = (indice) => {
+// Com a planilha de estoque total, sai quem já tem estoque nela (a entrada foi lançada).
+export const semEstoqueNoSistema = (indice, { total = null } = {}) => {
   const linhas = []
   for (const r of indice.itens.values()) {
     if (!r.ativo || r.situacao !== 'lidoSemEstoque') continue
+    if (total?.get(r.codigo)?.estoque > 0) continue
     const vezes = r.semEstoqueVezes
     linhas.push({
       ...base(r),
@@ -207,28 +227,38 @@ export const validadePorCodigo = (vencimentos) => {
 }
 
 // Itens com estoque e `limiar` dias ou mais sem venda.
-export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO_DIAS } = {}) => {
+// Com a planilha de estoque total, entram todos os itens dela (também os que não aparecem nas auditorias).
+export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO_DIAS, total = null } = {}) => {
   const validades = validadePorCodigo(vencimentos)
+  const fontes = total
+    ? [...total.values()].map(t => ({ t, r: indice.itens.get(t.codigo) || null }))
+    : [...indice.itens.values()].filter(r => r.ativo && r.comEstoque).map(r => ({ t: null, r }))
   const linhas = []
-  for (const r of indice.itens.values()) {
-    if (!r.ativo || !r.comEstoque || r.diasSemVenda === null || r.diasSemVenda < limiar) continue
-    const v = validades.get(r.codigo)
+  for (const { t, r } of fontes) {
+    const estoque = t ? t.estoque : r.estoque
+    const diasSemVenda = t ? t.diasSemVenda : r.diasSemVenda
+    if (!(estoque > 0) || diasSemVenda === null || diasSemVenda < limiar) continue
+    const codigo = t?.codigo || r.codigo
+    const v = validades.get(codigo)
     const venceEm = v && v.dias !== null ? Number(v.dias) : null
-    const naoAchado = r.situacao === 'pendente'
+    const naoAchado = Boolean(r?.ativo) && r.situacao === 'pendente'
+    const foraAuditoria = !r?.ativo
     let diagnostico
     if (venceEm !== null && venceEm < 0) diagnostico = 'Vencido e sem venda: retirar, registrar a perda e rever o pedido'
     else if (venceEm !== null && venceEm <= 30) diagnostico = `Vence em ${venceEm} dia(s) e não gira: rebaixar ou negociar troca com o fornecedor`
     else if (naoAchado) diagnostico = 'Sem venda e não achado na gôndola: contar o físico, pode ser estoque que não existe'
-    else if (r.diasSemVenda >= 90) diagnostico = `Sem venda há ${r.diasSemVenda} dias: suspender o pedido e avaliar saída do mix`
-    else diagnostico = `Sem venda há ${r.diasSemVenda} dias: melhorar a exposição ou rebaixar`
+    else if (foraAuditoria) diagnostico = `Sem venda há ${diasSemVenda} dias e fora das auditorias: achar o produto, vincular a um local e expor, ou contar e ajustar`
+    else if (diasSemVenda >= 90) diagnostico = `Sem venda há ${diasSemVenda} dias: suspender o pedido e avaliar saída do mix`
+    else diagnostico = `Sem venda há ${diasSemVenda} dias: melhorar a exposição ou rebaixar`
     linhas.push({
-      ...base(r),
+      ...base(r, t),
       tipo: 'parado',
-      dias: r.diasSemVenda,
+      dias: diasSemVenda,
       validade: v?.validade || '',
       venceEm,
       naoAchado,
-      gravidade: 1 + (venceEm !== null && venceEm <= 30 ? 3 : 0) + (naoAchado ? 1 : 0) + (r.estoque >= 50 ? 1 : 0) + (r.diasSemVenda >= 90 ? 1 : 0),
+      foraAuditoria,
+      gravidade: 1 + (venceEm !== null && venceEm <= 30 ? 3 : 0) + (naoAchado || foraAuditoria ? 1 : 0) + (estoque >= 50 ? 1 : 0) + (diasSemVenda >= 90 ? 1 : 0),
       diagnostico
     })
   }
@@ -237,11 +267,11 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
 
 // ---------- Onde agir ----------
 // Soma os problemas por local, setor ou fornecedor.
-export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados = [], naoVinculados = [], suspeitos = [] }, campo) => {
+export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados = [], foraAuditoria = [], naoVinculados = [], suspeitos = [] }, campo) => {
   const mapa = new Map()
   const somar = (chave, tipo, extra = 0) => {
     const k = chave || (campo === 'local' ? 'Sem local' : 'Não informado')
-    const r = mapa.get(k) || { chave: k, reincidentes: 0, semEstoque: 0, parados: 0, naoVinculados: 0, suspeitos: 0, custo: 0, total: 0 }
+    const r = mapa.get(k) || { chave: k, reincidentes: 0, semEstoque: 0, parados: 0, foraAuditoria: 0, naoVinculados: 0, suspeitos: 0, custo: 0, total: 0 }
     r[tipo]++
     r.total++
     r.custo += extra
@@ -250,22 +280,40 @@ export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados =
   for (const l of reincidentes) somar(l[campo], 'reincidentes', l.custoAcumulado || 0)
   for (const l of semEstoque) somar(l[campo], 'semEstoque')
   for (const l of parados) somar(l[campo], 'parados')
+  for (const l of foraAuditoria) somar(campo === 'local' ? l.local || l.sugerido : l[campo], 'foraAuditoria')
+  // Não vinculados que já estão em "fora das auditorias" não contam duas vezes.
+  const jaContados = new Set(foraAuditoria.filter(l => l.naoVinculado).map(l => l.codigo))
+  naoVinculados = naoVinculados.filter(i => !jaContados.has(i.codigo))
   const campoNv = { local: i => i.sugestao?.local, setor: i => i.setor, fornecedor: i => i.fornecedor }[campo]
   if (campoNv) for (const i of naoVinculados) somar(campoNv(i), 'naoVinculados')
   if (campo === 'local' || campo === 'setor') for (const s of suspeitos) somar(campo === 'local' ? s.vinculadoEm : s.setor, 'suspeitos')
   return [...mapa.values()].sort((a, b) => b.total - a.total || b.custo - a.custo || a.chave.localeCompare(b.chave, 'pt-BR', { numeric: true }))
 }
 
-// Busca de itens no índice (código exato primeiro, depois por nome).
-export const buscarItens = (indice, termo, limite = 30) => {
+// Busca de itens no índice e na planilha de estoque total (código exato primeiro, depois por nome).
+// Com a planilha, o estoque mostrado é o dela.
+export const buscarItens = (indice, termo, limite = 30, total = null) => {
   const t = texto(termo).toLowerCase()
   if (t.length < 2) return []
-  const exato = indice.itens.get(texto(termo))
-  const resultado = exato ? [exato] : []
+  const casa = (codigo, produto) => codigo.toLowerCase().includes(t) || produto.toLowerCase().includes(t)
+  const vistos = new Set()
+  const resultado = []
+  const incluir = (codigo) => {
+    if (vistos.has(codigo)) return
+    const r = indice.itens.get(codigo) || null
+    const e = total?.get(codigo) || null
+    if (!r && !e) return
+    vistos.add(codigo)
+    resultado.push({ ...base(r, e), noEstoqueTotal: Boolean(e) })
+  }
+  incluir(texto(termo))
   for (const r of indice.itens.values()) {
     if (resultado.length >= limite) break
-    if (r === exato) continue
-    if (r.codigo.includes(t) || r.produto.toLowerCase().includes(t)) resultado.push(r)
+    if (casa(r.codigo, r.produto)) incluir(r.codigo)
+  }
+  for (const e of total?.values() || []) {
+    if (resultado.length >= limite) break
+    if (casa(e.codigo, e.produto)) incluir(e.codigo)
   }
   return resultado
 }

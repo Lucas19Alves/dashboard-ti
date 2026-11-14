@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
+import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
+import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import { importarBackupJson } from '../utils/backup'
 
 // Primeira abertura (nada salvo neste navegador): oferece importar um backup. Dispensável.
@@ -28,6 +30,7 @@ const importar = async (e) => {
     const resultado = await importarBackupJson(arquivo)
     await auditorias.carregarAuditoriasPersistidas()
     await vencimentos.carregarVencimentosPersistidos()
+    await Promise.all([useNaoVinculadosStore().carregar(), useEstoqueTotalStore().carregar()])
     auditorias.addToast(resultado.origem === 'backup-regional'
       ? `Backup regional convertido: ${resultado.auditorias.length} auditorias importadas.`
       : 'Backup importado com sucesso!', 'success')
