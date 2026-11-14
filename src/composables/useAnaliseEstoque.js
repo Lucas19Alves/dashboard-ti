@@ -2,8 +2,10 @@ import { computed, effectScope, ref, watch } from 'vue'
 import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
-import { LIMIAR_PARADO_DIAS, LIMIAR_REINCIDENCIA_DIAS, estoqueParado, indexarEstoque, reincidencias, semEstoqueNoSistema } from '../utils/estoque'
-import { vinculosSuspeitos } from '../utils/naoVinculados'
+import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
+import { LIMIAR_PARADO_DIAS, LIMIAR_REINCIDENCIA_DIAS, estoqueParado, indexarEstoque, reincidencias, semEstoqueNoSistema, validadePorCodigo } from '../utils/estoque'
+import { cruzarEstoqueTotal, foraDasAuditorias, mapaEstoqueTotal } from '../utils/estoqueTotal'
+import { indexarHistorico, vinculosSuspeitos } from '../utils/naoVinculados'
 
 // Limiares escolhidos na tela, lembrados neste navegador.
 const ler = (chave, padrao) => {
@@ -15,7 +17,7 @@ watch(limiarReincidencia, v => { try { localStorage.setItem('dashboard_ti_estoqu
 watch(limiarParado, v => { try { localStorage.setItem('dashboard_ti_estoque_limiar_parado', String(v)) } catch {} })
 
 // Uma instância só para o app inteiro: Início, Estoque e Não vinculados usam os mesmos cálculos,
-// que só refazem quando auditorias, validades ou não vinculados mudam (não a cada troca de página).
+// que só refazem quando auditorias, validades, não vinculados ou o estoque total mudam.
 let compartilhado = null
 export const useAnaliseEstoque = () => {
   if (!compartilhado) compartilhado = effectScope(true).run(criarAnalise)
@@ -26,22 +28,43 @@ const criarAnalise = () => {
   const auditorias = useAuditoriasStore()
   const vencimentos = useVencimentosStore()
   const naoVinculadosStore = useNaoVinculadosStore()
+  const estoqueTotalStore = useEstoqueTotalStore()
 
   const indice = computed(() => indexarEstoque(auditorias.auditorias))
-  const reincidentes = computed(() => reincidencias(indice.value, { limiar: limiarReincidencia.value }))
-  const semEstoque = computed(() => semEstoqueNoSistema(indice.value))
-  const parados = computed(() => estoqueParado(indice.value, vencimentos.itens, { limiar: limiarParado.value }))
+  const historico = computed(() => indexarHistorico(auditorias.auditorias))
+  // Planilha de estoque total: quando existe, é a base das listas (só os itens dela, com o estoque dela).
+  const total = computed(() => (estoqueTotalStore.itens.length ? mapaEstoqueTotal(estoqueTotalStore.itens) : null))
+  const infoEstoqueTotal = computed(() => estoqueTotalStore.info)
+
+  const reincidentes = computed(() => reincidencias(indice.value, { limiar: limiarReincidencia.value, total: total.value }))
+  const semEstoque = computed(() => semEstoqueNoSistema(indice.value, { total: total.value }))
+  const parados = computed(() => estoqueParado(indice.value, vencimentos.itens, { limiar: limiarParado.value, total: total.value }))
   const naoVinculados = computed(() => naoVinculadosStore.itens.filter(i => i.status !== 'resolvido'))
-  const suspeitos = computed(() => vinculosSuspeitos(auditorias.auditorias))
+  const suspeitos = computed(() => vinculosSuspeitos(null, { historico: historico.value }))
+  const foraAuditoria = computed(() => foraDasAuditorias({ total: total.value, indice: indice.value, historico: historico.value, naoVinculados: naoVinculados.value }))
+  // Zerados que a planilha mostra com estoque de novo (entrada lançada depois da auditoria).
+  const zeradosResolvidos = computed(() => {
+    if (!total.value) return 0
+    return semEstoqueNoSistema(indice.value).length - semEstoque.value.length
+  })
 
   // Fila única por gravidade: os itens mais graves de todos os tipos.
-  const prioridades = computed(() => [...reincidentes.value, ...semEstoque.value, ...parados.value]
+  const prioridades = computed(() => [...reincidentes.value, ...semEstoque.value, ...parados.value, ...foraAuditoria.value]
     .sort((a, b) => b.gravidade - a.gravidade || (b.dias || 0) - (a.dias || 0)))
+
+  // Lista completa da planilha, cruzada com auditorias e validades.
+  const itensEstoque = computed(() => (total.value ? cruzarEstoqueTotal({ total: total.value, indice: indice.value, validades: validadePorCodigo(vencimentos.itens) }) : []))
+  const problemasPorCodigo = computed(() => {
+    const m = new Map()
+    for (const l of [...reincidentes.value, ...semEstoque.value, ...parados.value, ...foraAuditoria.value]) m.set(l.codigo, [...(m.get(l.codigo) || []), l])
+    return m
+  })
 
   const resumo = computed(() => ({
     reincidentes: reincidentes.value.length,
     semEstoque: semEstoque.value.length,
     parados: parados.value.length,
+    foraAuditoria: foraAuditoria.value.length,
     naoVinculados: naoVinculados.value.length,
     suspeitos: suspeitos.value.length,
     custoReincidentes: reincidentes.value.reduce((s, l) => s + (l.custoAcumulado || 0), 0)
@@ -50,5 +73,8 @@ const criarAnalise = () => {
   // Enquanto os itens chegam em segundo plano, as listas ainda não estão completas.
   const carregando = computed(() => !auditorias.itensCarregados)
 
-  return { carregando, indice, reincidentes, semEstoque, parados, naoVinculados, suspeitos, prioridades, resumo, limiarReincidencia, limiarParado }
+  return {
+    carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, foraAuditoria, zeradosResolvidos,
+    naoVinculados, suspeitos, prioridades, itensEstoque, problemasPorCodigo, resumo, limiarReincidencia, limiarParado
+  }
 }

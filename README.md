@@ -31,7 +31,6 @@ O **Dashboard Loja** é uma solução web moderna e robusta desenvolvida para ot
 - **Privacidade**: Todos os dados permanecem no navegador do usuário.
 - **Backup compacto e compatível**: formato colunar sem perda (~6x menor) com Gzip, importação dos backups antigos (v1 e v2) do Dashboard Loja e migração automática dos backups regionais baseados em sessões.
 - **Modo offline**: Instalação como PWA e acesso ao painel mesmo sem conexão após o primeiro carregamento.
-- **Fluxo operacional**: Registro de ação e responsável para itens de vencimento, mantendo histórico local.
 
 ---
 

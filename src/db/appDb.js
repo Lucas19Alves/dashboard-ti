@@ -54,3 +54,15 @@ db.version(7).stores({
   await tx.table('itensAuditoria').bulkPut(auditorias.map(a => ({ auditoriaId: a.id, dados: Array.isArray(a.dados) ? a.dados : [] })))
   await tx.table('auditorias').toCollection().modify((a) => { delete a.dados })
 })
+
+// Planilha de estoque total da loja (um registro por código; a importação substitui a anterior).
+// Data e nome do arquivo ficam em config ('estoqueTotal').
+db.version(8).stores({
+  auditorias: '++id, data, tipo, status, [data+tipo]',
+  vencimentos: '++id, _validadeISO, _prazo, _setor, _fornecedor, _codigo',
+  planosAcao: '++id, auditoriaId, status',
+  config: 'chave',
+  naoVinculados: 'codigo, status',
+  itensAuditoria: 'auditoriaId',
+  estoqueTotal: 'codigo'
+})

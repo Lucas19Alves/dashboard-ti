@@ -3,10 +3,12 @@ import { computed } from 'vue'
 import { useVencimentosStore } from '../../stores/vencimentosStore'
 import { useNaoVinculadosStore } from '../../stores/naoVinculadosStore'
 import { TIPOS_PROBLEMA } from '../../utils/estoque'
+import { formatarQuantidade } from '../../utils/estoqueTotal'
+import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
 import UiModal from '../ui/UiModal.vue'
 
-// Tudo o que o sistema sabe de um código: situação atual, histórico nas auditorias de leitura,
-// validades e não vinculado.
+// Tudo o que o sistema sabe de um código: estoque total, situação atual, histórico nas auditorias
+// de leitura, validades e não vinculado.
 const props = defineProps({
   codigo: { type: String, required: true },
   indice: { type: Object, required: true },
@@ -15,12 +17,28 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const registro = computed(() => props.indice.itens.get(props.codigo) || null)
+const { total, infoEstoqueTotal } = useAnaliseEstoque()
+const planilha = computed(() => total.value?.get(props.codigo) || null)
 const validades = computed(() => useVencimentosStore().itens.filter(v => String(v._codigo).trim() === props.codigo).sort((a, b) => String(a._validadeISO).localeCompare(String(b._validadeISO))))
 const naoVinculado = computed(() => useNaoVinculadosStore().itens.find(i => i.codigo === props.codigo) || null)
-const titulo = computed(() => registro.value?.produto || naoVinculado.value?.produto || validades.value[0]?._produto || props.codigo)
+const titulo = computed(() => registro.value?.produto || planilha.value?.produto || naoVinculado.value?.produto || validades.value[0]?._produto || props.codigo)
 const historico = computed(() => [...(registro.value?.historico || [])].reverse())
 
 const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—')
+const dadosPlanilha = computed(() => {
+  const t = planilha.value
+  if (!t) return []
+  return [
+    { rotulo: 'Estoque', valor: formatarQuantidade(t.estoque, t.unidade) },
+    { rotulo: 'Indisponível', valor: t.indisponivel ? formatarQuantidade(t.indisponivel, t.unidade) : '—' },
+    { rotulo: 'Dias sem venda', valor: t.diasSemVenda ?? '—' },
+    { rotulo: 'Última venda', valor: br(t.ultimaVenda) },
+    { rotulo: 'Última compra', valor: br(t.ultimaCompra) },
+    { rotulo: 'Ranking de vendas', valor: t.ranking ? `${t.ranking.toLocaleString('pt-BR')}º` : '—' },
+    { rotulo: 'Classe', valor: t.classe || '—' },
+    { rotulo: 'Gerenciado', valor: t.gerenciado ? 'Sim' : 'Não' }
+  ]
+})
 const SITUACAO = {
   lido: { rotulo: 'Lido', classe: 'text-emerald-700' },
   pendente: { rotulo: 'Não lido com estoque', classe: 'text-red-700' },
@@ -30,10 +48,11 @@ const SITUACAO = {
 const resumo = computed(() => {
   const r = registro.value
   if (!r) return []
+  const t = planilha.value
   return [
     { rotulo: 'Local vinculado', valor: r.local || '—' },
-    { rotulo: 'Estoque', valor: r.estoque?.toLocaleString('pt-BR') ?? '—' },
-    { rotulo: 'Dias sem venda', valor: r.diasSemVenda ?? '—' },
+    { rotulo: t ? 'Estoque na última auditoria' : 'Estoque', valor: r.estoque?.toLocaleString('pt-BR') ?? '—' },
+    { rotulo: t ? 'Sem venda (na auditoria)' : 'Dias sem venda', valor: r.diasSemVenda ?? '—' },
     { rotulo: 'Última leitura', valor: r.ultimaLeitura ? br(r.ultimaLeitura) : 'Nunca' },
     { rotulo: 'Lido', valor: `${r.leituras} de ${r.aparicoes}` },
     { rotulo: 'Ruptura acumulada', valor: r.custoAcumulado ? r.custoAcumulado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—' }
@@ -42,7 +61,7 @@ const resumo = computed(() => {
 </script>
 
 <template>
-  <UiModal :title="titulo" :subtitle="`${codigo}${registro ? ` · ${registro.setor}` : ''}${registro?.fornecedor ? ` · ${registro.fornecedor}` : ''}`" width="max-w-3xl" @close="emit('close')">
+  <UiModal :title="titulo" :subtitle="`${codigo}${(registro || planilha) ? ` · ${(registro || planilha).setor}` : ''}${(registro || planilha)?.fornecedor ? ` · ${(registro || planilha).fornecedor}` : ''}`" width="max-w-3xl" @close="emit('close')">
     <div class="space-y-5">
       <div v-if="problemas.length" class="space-y-2">
         <article v-for="p in problemas" :key="p.tipo" class="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5">
@@ -50,6 +69,17 @@ const resumo = computed(() => {
           <p class="text-sm text-slate-800">{{ p.diagnostico }}</p>
         </article>
       </div>
+
+      <section v-if="planilha">
+        <h3 class="mb-2 text-sm font-semibold text-slate-900">Estoque total <span class="text-xs font-normal text-slate-500">planilha de {{ br(infoEstoqueTotal?.importadoEm?.slice(0, 10)) }}</span></h3>
+        <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div v-for="r in dadosPlanilha" :key="r.rotulo" class="rounded-lg bg-blue-50/60 px-3 py-2">
+            <dt class="text-xs text-slate-500">{{ r.rotulo }}</dt>
+            <dd class="truncate font-semibold tabular-nums text-slate-900" :title="String(r.valor)">{{ r.valor }}</dd>
+          </div>
+        </dl>
+      </section>
+      <p v-else-if="total" class="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">Este código não está na planilha de estoque total (sem estoque na loja).</p>
 
       <dl v-if="resumo.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div v-for="r in resumo" :key="r.rotulo" class="rounded-lg bg-slate-50 px-3 py-2">
