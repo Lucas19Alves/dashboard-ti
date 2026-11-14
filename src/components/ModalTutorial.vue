@@ -125,7 +125,7 @@ const PASSOS = [
       ['Reincidências', 'Itens com estoque que não são lidos há 14 dias ou mais (dá para mudar para 21, 30 ou 60). O diagnóstico diz se o item vende, se foi achado em outro local ou se o estoque provavelmente não existe.'],
       ['Estoque zerado', 'Itens lidos na gôndola com estoque zerado no sistema: falta lançar a entrada ou ajustar.'],
       ['Parados', 'Itens com estoque e 30+ dias sem venda, cruzados com as validades.'],
-      ['Sem local', 'Itens com estoque na planilha que nunca apareceram nas auditorias: não vinculados, com o local sugerido. Insumos (setor Outros) ficam de fora. Os que já foram auditados e saíram da Presença entram nas Reincidências.'],
+      ['Nunca lidos', 'Itens com estoque, comprados antes da última Presença, que nunca apareceram em nenhuma auditoria. Os que chegaram depois da última auditoria ficam de fora (ainda não houve como ler); os sem local estão em Não vinculados; os que já foram auditados e saíram da Presença entram nas Reincidências.'],
       ['Insumos', 'Itens do setor Outros (sacolas, pallets, tabloides...): não entram em nenhuma lista de problema; a aba serve para acompanhar o estoque e o consumo deles.'],
       ['Filtros das listas', 'Toda tabela do sistema tem a mesma barra: busca, filtros rápidos por coluna, atalhos, filtros avançados (condições por qualquer coluna), ordenação por vários critérios, colunas, agrupamento, CSV, impressão e paginação.'],
       ['Onde agir', 'Os problemas somados por local, setor ou fornecedor. Clique num número para ver os itens.'],

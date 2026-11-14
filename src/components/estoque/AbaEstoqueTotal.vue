@@ -24,9 +24,9 @@ const antiga = computed(() => (diasDesde(infoEstoqueTotal.value?.importadoEm) ??
 
 // --- Resumo (cada cartão filtra a lista) ---
 // "Saiu" e "sem local" contam só com estoque, como nas listas de reincidência e sem local.
-const casaSituacao = (i, s) => i.situacao === s && (!['saiu', 'semLocal'].includes(s) || i.estoque > 0)
+const casaSituacao = (i, s) => i.situacao === s && (!['saiu', 'nuncaLido', 'aguardando', 'naoVinculado'].includes(s) || i.estoque > 0)
 const contagem = computed(() => {
-  const c = { total: 0, lido: 0, pendente: 0, saiu: 0, semLocal: 0, insumo: 0, problema: 0 }
+  const c = { total: 0, lido: 0, pendente: 0, saiu: 0, nuncaLido: 0, aguardando: 0, naoVinculado: 0, insumo: 0, problema: 0 }
   for (const i of itensEstoque.value) {
     c.total++
     if (i.situacao in c && casaSituacao(i, i.situacao)) c[i.situacao]++
@@ -40,7 +40,7 @@ const cartoes = computed(() => [
   { chave: 'lido', rotulo: 'Lidos na auditoria', valor: contagem.value.lido, nota: `${pct(contagem.value.lido)} achados na gôndola` },
   { chave: 'pendente', rotulo: 'Não lidos', valor: contagem.value.pendente, nota: 'com estoque e sem leitura na última' },
   { chave: 'saiu', rotulo: 'Saíram da auditoria', valor: contagem.value.saiu, nota: 'já auditados, fora da última Presença' },
-  { chave: 'semLocal', rotulo: 'Sem local', valor: contagem.value.semLocal, nota: 'nunca auditados: não vinculados' },
+  { chave: 'nuncaLido', rotulo: 'Nunca lidos', valor: contagem.value.nuncaLido, nota: `${int(contagem.value.aguardando)} chegaram depois da última auditoria, ${int(contagem.value.naoVinculado)} sem local` },
   { chave: 'problema', rotulo: 'Com problema', valor: contagem.value.problema, nota: 'aparecem em alguma lista' }
 ])
 
@@ -94,7 +94,7 @@ const filtrarCartao = (c) => {
 }
 
 // --- Texto de cada linha ---
-const COR_SITUACAO = { lido: 'text-emerald-700', pendente: 'text-red-700', lidoSemEstoque: 'text-amber-700', semEstoque: 'text-slate-500', saiu: 'text-red-700', semLocal: 'text-blue-700', insumo: 'text-slate-500' }
+const COR_SITUACAO = { lido: 'text-emerald-700', pendente: 'text-red-700', lidoSemEstoque: 'text-amber-700', semEstoque: 'text-slate-500', saiu: 'text-red-700', nuncaLido: 'text-red-700', aguardando: 'text-slate-500', naoVinculado: 'text-blue-700', insumo: 'text-slate-500' }
 const textoValidade = i => (!i.validade ? '' : i.venceEm !== null && i.venceEm < 0 ? `vencido em ${br(i.validade)}` : `vence em ${br(i.validade)}${i.venceEm !== null ? ` (${i.venceEm} d)` : ''}`)
 
 // --- Ações ---
@@ -145,7 +145,7 @@ const apagar = async () => {
             </div>
             <div class="min-w-0 text-sm">
               <p class="truncate"><b class="text-slate-900">{{ i.local || 'Sem local' }}</b> <span class="text-xs font-medium" :class="COR_SITUACAO[i.situacao]">{{ i.situacaoTxt }}</span></p>
-              <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : i.situacao === 'insumo' ? 'insumo, não entra na auditoria' : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
+              <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : i.situacao === 'insumo' ? 'insumo, não entra na auditoria' : i.situacao === 'aguardando' ? `comprado em ${br(i.ultimaCompra)}, ainda sem auditoria` : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
             </div>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="p in problemas(i)" :key="p.tipo" type="button" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800 hover:bg-amber-100" :title="p.diagnostico" @click="emit('abrir', i.codigo)"><i :class="[TIPOS_PROBLEMA[p.tipo].icone, 'mr-1']"></i>{{ TIPOS_PROBLEMA[p.tipo].curto }}</button>

@@ -1,5 +1,4 @@
 import { numeroBR } from './itemAuditoria'
-import { sugerirLocal } from './naoVinculados'
 
 // Planilha de estoque total da loja (relatório "Produto" do ERP): todos os itens com estoque.
 // Ela não traz local, leitura nem validade; esses dados vêm das auditorias, das validades e dos
@@ -76,17 +75,25 @@ export const formatarQuantidade = (valor, unidade = '') => {
 // Insumos (setor OUTROS: sacolas, pallets, tabloides...) não entram na auditoria e não são problema.
 export const ehInsumo = item => /^outros$/i.test(texto(item?.setor))
 
-// Itens com estoque na planilha que nunca apareceram nas auditorias de Presença/Ruptura:
-// sem local vinculado no sistema (não vinculados). Insumos ficam de fora.
-// Quem já apareceu e saiu da auditoria é reincidência (ver reincidencias em utils/estoque.js).
-export const semLocalNaPlanilha = ({ total, indice, historico, naoVinculados = [] }) => {
+// Itens com estoque na planilha que nunca apareceram nas auditorias de Presença/Ruptura, por quê:
+// - não vinculado: está na lista de não vinculados (sem local no sistema; aba Não vinculados);
+// - aguardando: comprado no dia da última Presença ou depois (pode ter chegado após a contagem);
+// - nunca lido: comprado antes da última Presença (ou sem data de compra) e nunca lido: problema.
+// Insumos ficam de fora. Quem já apareceu e saiu da auditoria é reincidência (utils/estoque.js).
+export const motivoForaDaAuditoria = (t, { nv, inicioCiclo }) => {
+  if (nv?.has(t.codigo)) return 'naoVinculado'
+  if (t.ultimaCompra && inicioCiclo && t.ultimaCompra >= inicioCiclo) return 'aguardando'
+  return 'nuncaLido'
+}
+const codigosNaoVinculados = naoVinculados => new Set((naoVinculados || []).filter(i => i.status !== 'resolvido').map(i => i.codigo))
+
+export const nuncaLidosNaPlanilha = ({ total, indice, naoVinculados = [] }) => {
   if (!total?.size || !indice?.auditorias) return []
-  const nv = new Map((naoVinculados || []).filter(i => i.status !== 'resolvido').map(i => [i.codigo, i]))
+  const nv = codigosNaoVinculados(naoVinculados)
   const linhas = []
   for (const t of total.values()) {
     if (!(t.estoque > 0) || ehInsumo(t) || indice.itens.has(t.codigo)) continue
-    const daLista = nv.get(t.codigo)
-    const sugestao = daLista?.sugestao?.local ? daLista.sugestao : historico ? sugerirLocal(t, historico) : null
+    if (motivoForaDaAuditoria(t, { nv, inicioCiclo: indice.inicioCiclo }) !== 'nuncaLido') continue
     const vende = t.diasSemVenda !== null && t.diasSemVenda <= 7
     linhas.push({
       codigo: t.codigo,
@@ -98,18 +105,15 @@ export const semLocalNaPlanilha = ({ total, indice, historico, naoVinculados = [
       unidade: t.unidade,
       diasSemVenda: t.diasSemVenda,
       ultimaVenda: t.ultimaVenda,
+      ultimaCompra: t.ultimaCompra,
       ultimaData: '',
       ultimaLeitura: '',
-      tipo: 'semLocal',
-      naLista: Boolean(daLista),
+      tipo: 'nuncaLido',
       gerenciado: t.gerenciado,
-      sugerido: sugestao?.local || '',
-      motivoSugestao: sugestao?.motivo || '',
-      confianca: sugestao?.confianca || 'nenhuma',
-      gravidade: 1 + (vende ? 2 : 0) + (t.gerenciado ? 1 : 0) + (t.estoque >= 50 ? 1 : 0),
-      diagnostico: sugestao?.local
-        ? `Não vinculado: vincular em ${sugestao.local} (${sugestao.motivo.charAt(0).toLowerCase()}${sugestao.motivo.slice(1)})`
-        : 'Não vinculado: definir o local e vincular no sistema'
+      gravidade: 2 + (vende ? 2 : 0) + (t.gerenciado ? 1 : 0) + (t.estoque >= 50 ? 1 : 0),
+      diagnostico: vende
+        ? 'Vende, mas nunca foi lido em nenhuma auditoria: conferir em qual local está vinculado e se o local entra na Presença'
+        : 'Tem estoque e nunca foi lido em nenhuma auditoria: conferir o local vinculado e contar o físico'
     })
   }
   return linhas.sort((a, b) => b.gravidade - a.gravidade || (a.diasSemVenda ?? 9999) - (b.diasSemVenda ?? 9999) || b.estoque - a.estoque)
@@ -122,13 +126,21 @@ export const SITUACAO_ITEM = {
   lidoSemEstoque: 'Lido com estoque zerado',
   semEstoque: 'Sem estoque na auditoria',
   saiu: 'Saiu da auditoria',
-  semLocal: 'Sem local (não vinculado)',
+  naoVinculado: 'Sem local (não vinculado)',
+  aguardando: 'Chegou depois da última auditoria',
+  nuncaLido: 'Nunca lido',
   insumo: 'Insumo (não auditado)'
 }
-export const situacaoNoEstoque = (r, t) => (r?.ativo ? r.situacao : ehInsumo(t) ? 'insumo' : r ? 'saiu' : 'semLocal')
+export const situacaoNoEstoque = (r, t, contexto = {}) => {
+  if (r?.ativo) return r.situacao
+  if (ehInsumo(t)) return 'insumo'
+  if (r) return 'saiu'
+  return motivoForaDaAuditoria(t, contexto)
+}
 
 // Lista completa: cada item da planilha com local, leitura, validade e situação nas auditorias.
-export const cruzarEstoqueTotal = ({ total, indice, validades }) => {
+export const cruzarEstoqueTotal = ({ total, indice, validades, naoVinculados = [] }) => {
+  const contexto = { nv: codigosNaoVinculados(naoVinculados), inicioCiclo: indice?.inicioCiclo || '' }
   const linhas = []
   for (const t of total?.values() || []) {
     const r = indice?.itens.get(t.codigo)
@@ -138,7 +150,7 @@ export const cruzarEstoqueTotal = ({ total, indice, validades }) => {
       local: r?.local || '',
       ultimaLeitura: r?.ultimaLeitura || '',
       ultimaData: r?.ultimaData || '',
-      situacao: situacaoNoEstoque(r, t),
+      situacao: situacaoNoEstoque(r, t, contexto),
       validade: v?.validade || '',
       venceEm: v && v.dias !== null ? Number(v.dias) : null
     })

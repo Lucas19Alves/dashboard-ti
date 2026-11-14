@@ -16,7 +16,7 @@ export const TIPOS_PROBLEMA = {
   reincidencia: { rotulo: 'Reincidência', curto: 'Sem leitura', icone: 'fas fa-repeat' },
   semEstoque: { rotulo: 'Sem estoque no sistema', curto: 'Estoque zerado', icone: 'fas fa-box-open' },
   parado: { rotulo: 'Estoque parado', curto: 'Sem venda', icone: 'fas fa-hourglass-half' },
-  semLocal: { rotulo: 'Sem local (não vinculado)', curto: 'Sem local', icone: 'fas fa-link-slash' }
+  nuncaLido: { rotulo: 'Nunca lido', curto: 'Nunca lido', icone: 'fas fa-eye-slash' }
 }
 
 const TIPOS_LEITURA = new Set(['Presença', 'Ruptura'])
@@ -273,13 +273,13 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
     const v = validades.get(codigo)
     const venceEm = v && v.dias !== null ? Number(v.dias) : null
     const naoAchado = Boolean(r?.ativo) && r.situacao === 'pendente'
-    const semLocal = !r
+    const nuncaAuditado = !r
     const saiu = Boolean(r) && !r.ativo
     let diagnostico
     if (venceEm !== null && venceEm < 0) diagnostico = 'Vencido e sem venda: retirar, registrar a perda e rever o pedido'
     else if (venceEm !== null && venceEm <= 30) diagnostico = `Vence em ${venceEm} dia(s) e não gira: rebaixar ou negociar troca com o fornecedor`
     else if (naoAchado) diagnostico = 'Sem venda e não achado na gôndola: contar o físico, pode ser estoque que não existe'
-    else if (semLocal) diagnostico = `Sem venda há ${diasSemVenda} dias e sem local: vincular a um local e expor, ou avaliar saída do mix`
+    else if (nuncaAuditado) diagnostico = `Sem venda há ${diasSemVenda} dias e nunca apareceu nas auditorias: achar o produto, conferir o local e expor, ou contar e ajustar`
     else if (saiu) diagnostico = `Sem venda há ${diasSemVenda} dias e fora da auditoria: achar o produto e expor, ou contar e ajustar`
     else if (diasSemVenda >= 90) diagnostico = `Sem venda há ${diasSemVenda} dias: suspender o pedido e avaliar saída do mix`
     else diagnostico = `Sem venda há ${diasSemVenda} dias: melhorar a exposição ou rebaixar`
@@ -290,9 +290,9 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
       validade: v?.validade || '',
       venceEm,
       naoAchado,
-      semLocal,
+      nuncaAuditado,
       saiu,
-      gravidade: 1 + (venceEm !== null && venceEm <= 30 ? 3 : 0) + (naoAchado || semLocal || saiu ? 1 : 0) + (estoque >= 50 ? 1 : 0) + (diasSemVenda >= 90 ? 1 : 0),
+      gravidade: 1 + (venceEm !== null && venceEm <= 30 ? 3 : 0) + (naoAchado || nuncaAuditado || saiu ? 1 : 0) + (estoque >= 50 ? 1 : 0) + (diasSemVenda >= 90 ? 1 : 0),
       diagnostico
     })
   }
@@ -301,11 +301,11 @@ export const estoqueParado = (indice, vencimentos = [], { limiar = LIMIAR_PARADO
 
 // ---------- Onde agir ----------
 // Soma os problemas por local, setor ou fornecedor.
-export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados = [], semLocal = [], naoVinculados = [], suspeitos = [] }, campo) => {
+export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados = [], nuncaLidos = [], naoVinculados = [], suspeitos = [] }, campo) => {
   const mapa = new Map()
   const somar = (chave, tipo, extra = 0) => {
     const k = chave || (campo === 'local' ? 'Sem local' : 'Não informado')
-    const r = mapa.get(k) || { chave: k, reincidentes: 0, semEstoque: 0, parados: 0, semLocal: 0, naoVinculados: 0, suspeitos: 0, custo: 0, total: 0 }
+    const r = mapa.get(k) || { chave: k, reincidentes: 0, semEstoque: 0, parados: 0, nuncaLidos: 0, naoVinculados: 0, suspeitos: 0, custo: 0, total: 0 }
     r[tipo]++
     r.total++
     r.custo += extra
@@ -314,10 +314,7 @@ export const agruparProblemas = ({ reincidentes = [], semEstoque = [], parados =
   for (const l of reincidentes) somar(l[campo], 'reincidentes', l.custoAcumulado || 0)
   for (const l of semEstoque) somar(l[campo], 'semEstoque')
   for (const l of parados) somar(l[campo], 'parados')
-  for (const l of semLocal) somar(campo === 'local' ? l.sugerido : l[campo], 'semLocal')
-  // Não vinculados da planilha do dia que já estão em "sem local" não contam duas vezes.
-  const jaContados = new Set(semLocal.map(l => l.codigo))
-  naoVinculados = naoVinculados.filter(i => !jaContados.has(i.codigo))
+  for (const l of nuncaLidos) somar(l[campo], 'nuncaLidos')
   const campoNv = { local: i => i.sugestao?.local, setor: i => i.setor, fornecedor: i => i.fornecedor }[campo]
   if (campoNv) for (const i of naoVinculados) somar(campoNv(i), 'naoVinculados')
   if (campo === 'local' || campo === 'setor') for (const s of suspeitos) somar(campo === 'local' ? s.vinculadoEm : s.setor, 'suspeitos')

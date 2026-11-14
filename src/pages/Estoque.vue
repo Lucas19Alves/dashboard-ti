@@ -20,13 +20,13 @@ import ImportarEstoqueTotal from '../components/estoque/ImportarEstoqueTotal.vue
 const route = useRoute()
 const router = useRouter()
 const {
-  carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, semLocal, insumos, zeradosResolvidos,
+  carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, nuncaLidos, insumos, zeradosResolvidos,
   naoVinculados, suspeitos, prioridades, problemasPorCodigo, resumo, limiarReincidencia, limiarParado
 } = useAnaliseEstoque()
 const mostrarImportar = ref(false)
 
 // --- Abas (na URL, para o Início e a busca abrirem direto) ---
-const ABAS = ['visao', 'estoque-total', 'reincidencias', 'sem-estoque', 'parados', 'sem-local', 'insumos', 'nao-vinculados', 'onde-agir', 'consultar']
+const ABAS = ['visao', 'estoque-total', 'reincidencias', 'sem-estoque', 'parados', 'nunca-lidos', 'insumos', 'nao-vinculados', 'onde-agir', 'consultar']
 const aba = ref(ABAS.includes(route.query.aba) ? route.query.aba : 'visao')
 watch(() => route.query.aba, v => { if (ABAS.includes(v)) aba.value = v })
 watch(aba, v => { if (route.query.aba !== v) router.replace({ query: { ...route.query, aba: v } }) })
@@ -37,7 +37,7 @@ const abas = computed(() => [
   { value: 'sem-estoque', label: `Estoque zerado (${resumo.value.semEstoque})`, icon: TIPOS_PROBLEMA.semEstoque.icone },
   { value: 'parados', label: `Parados (${resumo.value.parados})`, icon: TIPOS_PROBLEMA.parado.icone },
   ...(total.value ? [
-    { value: 'sem-local', label: `Sem local (${resumo.value.semLocal})`, icon: TIPOS_PROBLEMA.semLocal.icone },
+    { value: 'nunca-lidos', label: `Nunca lidos (${resumo.value.nuncaLidos})`, icon: TIPOS_PROBLEMA.nuncaLido.icone },
     { value: 'insumos', label: `Insumos (${resumo.value.insumos})`, icon: 'fas fa-box-archive' }
   ] : []),
   { value: 'nao-vinculados', label: `Não vinculados (${resumo.value.naoVinculados})`, icon: 'fas fa-link-slash' },
@@ -65,7 +65,7 @@ const cartoes = computed(() => [
   { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.saiuDaAuditoria ? `, ${int(resumo.value.saiuDaAuditoria)} saíram da auditoria` : ''}${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em ruptura` : ''}`, tom: 'bg-red-600' },
   { aba: 'sem-estoque', rotulo: 'Estoque zerado na gôndola', valor: resumo.value.semEstoque, nota: 'lidos com estoque zerado no sistema', tom: 'bg-amber-500' },
   { aba: 'parados', rotulo: 'Estoque parado', valor: resumo.value.parados, nota: `${limiarParado.value}+ dias sem venda com estoque`, tom: 'bg-indigo-500' },
-  ...(total.value ? [{ aba: 'sem-local', rotulo: 'Sem local', valor: resumo.value.semLocal, nota: 'com estoque e nunca auditados: não vinculados (sem insumos)', tom: 'bg-cyan-600' }] : []),
+  ...(total.value ? [{ aba: 'nunca-lidos', rotulo: 'Nunca lidos', valor: resumo.value.nuncaLidos, nota: 'com estoque, comprados antes da última Presença e nunca lidos', tom: 'bg-cyan-600' }] : []),
   { aba: 'nao-vinculados', rotulo: 'Não vinculados', valor: resumo.value.naoVinculados, nota: `${suspeitos.value.length} vínculos suspeitos`, tom: 'bg-blue-600' },
 ])
 
@@ -97,7 +97,7 @@ const abrirCartao = (c) => {
 // --- Onde agir ---
 const campoGrupo = ref('local')
 const CAMPOS = [{ valor: 'local', rotulo: 'Local' }, { valor: 'setor', rotulo: 'Setor' }, { valor: 'fornecedor', rotulo: 'Fornecedor' }]
-const listasProblemas = () => ({ reincidentes: reincidentes.value, semEstoque: semEstoque.value, parados: parados.value, semLocal: semLocal.value, naoVinculados: naoVinculados.value, suspeitos: suspeitos.value })
+const listasProblemas = () => ({ reincidentes: reincidentes.value, semEstoque: semEstoque.value, parados: parados.value, nuncaLidos: nuncaLidos.value, naoVinculados: naoVinculados.value, suspeitos: suspeitos.value })
 const grupos = computed(() => agruparProblemas(listasProblemas(), campoGrupo.value))
 const locaisTopo = computed(() => agruparProblemas(listasProblemas(), 'local').slice(0, 8))
 const maiorGrupo = computed(() => Math.max(1, ...locaisTopo.value.map(g => g.total)))
@@ -105,7 +105,7 @@ const COLUNAS_GRUPO = [
   { chave: 'reincidentes', rotulo: 'Reincidências', aba: 'reincidencias', cor: 'bg-red-500' },
   { chave: 'semEstoque', rotulo: 'Zerados', aba: 'sem-estoque', cor: 'bg-amber-400' },
   { chave: 'parados', rotulo: 'Parados', aba: 'parados', cor: 'bg-indigo-400' },
-  { chave: 'semLocal', rotulo: 'Sem local', aba: 'sem-local', cor: 'bg-cyan-500' },
+  { chave: 'nuncaLidos', rotulo: 'Nunca lidos', aba: 'nunca-lidos', cor: 'bg-cyan-500' },
   { chave: 'naoVinculados', rotulo: 'Não vinc.', aba: 'nao-vinculados', cor: 'bg-blue-400' },
   { chave: 'suspeitos', rotulo: 'Suspeitos', aba: 'nao-vinculados', cor: 'bg-slate-400' }
 ]
@@ -149,7 +149,7 @@ const relatorioGeral = () => abrirRelatorio({
     { id: 'reincidencias', titulo: `Reincidências (${reincidentes.value.length})`, descricao: 'Itens com estoque e sem leitura na Presença/Ruptura, incluindo os que saíram da auditoria.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(reincidentes.value, l => `${l.dias} dias sem leitura${l.saiuDaAuditoria ? ', saiu da auditoria' : ''}`) }) || '<p class="nota">Nenhuma reincidência.</p>' },
     { id: 'zerados', titulo: `Estoque zerado na gôndola (${semEstoque.value.length})`, descricao: 'Lidos com estoque zerado no sistema.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(semEstoque.value, l => `zerado em ${l.vezes} auditoria(s)`) }) || '<p class="nota">Nenhum item.</p>' },
     { id: 'parados', titulo: `Estoque parado (${parados.value.length})`, descricao: 'Itens com estoque e muitos dias sem venda.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(parados.value, l => `${l.dias} dias sem venda`) }) || '<p class="nota">Nenhum item.</p>' },
-    ...(total.value ? [{ id: 'sem-local', titulo: `Sem local (${semLocal.value.length})`, descricao: 'Itens com estoque na planilha que nunca apareceram nas auditorias (não vinculados), com o local sugerido. Insumos ficam de fora.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(semLocal.value, l => (l.sugerido ? `sugerido ${l.sugerido}` : 'sem sugestão')) }) || '<p class="nota">Nenhum item.</p>' }] : [])
+    ...(total.value ? [{ id: 'nunca-lidos', titulo: `Nunca lidos (${nuncaLidos.value.length})`, descricao: 'Itens com estoque, comprados antes da última Presença, que nunca apareceram nas auditorias e não estão na lista de não vinculados. Insumos ficam de fora.', padrao: true, gerar: () => blocoTabela({ colunas: COLS, linhas: linhasRel(nuncaLidos.value, l => (l.diasSemVenda === null ? 'sem venda registrada' : `sem venda há ${l.diasSemVenda} d`)) }) || '<p class="nota">Nenhum item.</p>' }] : [])
   ]
 })
 </script>
@@ -266,12 +266,10 @@ const relatorioGeral = () => abrirRelatorio({
       <ListaProblemasEstoque id="estoque-parados" titulo="Estoque parado" :linhas="parados" :filtros-iniciais="preFiltro" vazio="Nenhum item parado nesse período." @abrir="fichaCodigo = $event" />
     </section>
 
-    <!-- Sem local -->
-    <section v-else-if="aba === 'sem-local'" class="space-y-4">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque na planilha que nunca apareceram nas auditorias de Presença e Ruptura: estão sem local vinculado no sistema (não vinculados) e por isso ninguém confere. Insumos (setor Outros) ficam de fora. O local sugerido vem do histórico do item ou dos itens da mesma classe.</p>
-      </div>
-      <ListaProblemasEstoque id="estoque-sem-local" titulo="Itens sem local" :linhas="semLocal" :filtros-iniciais="preFiltro" :vazio="indice.auditorias ? 'Todos os itens com estoque já apareceram nas auditorias.' : 'Importe auditorias de Presença para cruzar com a planilha.'" @abrir="fichaCodigo = $event" />
+    <!-- Nunca lidos -->
+    <section v-else-if="aba === 'nunca-lidos'" class="space-y-4">
+      <p class="max-w-[80ch] text-sm leading-relaxed text-slate-600">Itens com estoque na planilha que nunca apareceram em nenhuma auditoria de Presença ou Ruptura, embora tenham sido comprados antes da última Presença ({{ br(indice.inicioCiclo) }}). Ficam de fora: os que chegaram depois da última auditoria (ainda não houve como ler), os da lista de não vinculados (aba Não vinculados) e os insumos.</p>
+      <ListaProblemasEstoque id="estoque-nunca-lidos" titulo="Nunca lidos" :linhas="nuncaLidos" :filtros-iniciais="preFiltro" :vazio="indice.auditorias ? 'Todos os itens com estoque já apareceram nas auditorias.' : 'Importe auditorias de Presença para cruzar com a planilha.'" @abrir="fichaCodigo = $event" />
     </section>
 
     <!-- Insumos -->

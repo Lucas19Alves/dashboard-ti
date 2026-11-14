@@ -4,7 +4,7 @@ import { useVencimentosStore } from '../stores/vencimentosStore'
 import { useNaoVinculadosStore } from '../stores/naoVinculadosStore'
 import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import { LIMIAR_PARADO_DIAS, LIMIAR_REINCIDENCIA_DIAS, estoqueParado, indexarEstoque, reincidencias, semEstoqueNoSistema, validadePorCodigo } from '../utils/estoque'
-import { cruzarEstoqueTotal, insumosNaPlanilha, mapaEstoqueTotal, semLocalNaPlanilha } from '../utils/estoqueTotal'
+import { cruzarEstoqueTotal, insumosNaPlanilha, mapaEstoqueTotal, nuncaLidosNaPlanilha } from '../utils/estoqueTotal'
 import { indexarHistorico, vinculosSuspeitos } from '../utils/naoVinculados'
 
 // Limiares escolhidos na tela, lembrados neste navegador.
@@ -43,8 +43,9 @@ const criarAnalise = () => {
   const suspeitos = computed(() => vinculosSuspeitos(null, { historico: historico.value }))
   // Insumos (setor OUTROS): ficam numa aba própria, fora das listas de problemas.
   const insumos = computed(() => insumosNaPlanilha({ total: total.value, indice: indice.value }))
-  // Itens com estoque que nunca apareceram nas auditorias: não vinculados (sem os insumos).
-  const semLocal = computed(() => semLocalNaPlanilha({ total: total.value, indice: indice.value, historico: historico.value, naoVinculados: naoVinculados.value }))
+  // Itens com estoque, comprados antes da última Presença, que nunca apareceram nas auditorias e não estão
+  // na lista de não vinculados (sem os insumos e sem os que chegaram depois da última auditoria).
+  const nuncaLidos = computed(() => nuncaLidosNaPlanilha({ total: total.value, indice: indice.value, naoVinculados: naoVinculados.value }))
   // Zerados que a planilha mostra com estoque de novo (entrada lançada depois da auditoria).
   const zeradosResolvidos = computed(() => {
     if (!total.value) return 0
@@ -52,14 +53,14 @@ const criarAnalise = () => {
   })
 
   // Fila única por gravidade: os itens mais graves de todos os tipos.
-  const prioridades = computed(() => [...reincidentes.value, ...semEstoque.value, ...parados.value, ...semLocal.value]
+  const prioridades = computed(() => [...reincidentes.value, ...semEstoque.value, ...parados.value, ...nuncaLidos.value]
     .sort((a, b) => b.gravidade - a.gravidade || (b.dias || 0) - (a.dias || 0)))
 
   // Lista completa da planilha, cruzada com auditorias e validades.
-  const itensEstoque = computed(() => (total.value ? cruzarEstoqueTotal({ total: total.value, indice: indice.value, validades: validadePorCodigo(vencimentos.itens) }) : []))
+  const itensEstoque = computed(() => (total.value ? cruzarEstoqueTotal({ total: total.value, indice: indice.value, validades: validadePorCodigo(vencimentos.itens), naoVinculados: naoVinculados.value }) : []))
   const problemasPorCodigo = computed(() => {
     const m = new Map()
-    for (const l of [...reincidentes.value, ...semEstoque.value, ...parados.value, ...semLocal.value]) m.set(l.codigo, [...(m.get(l.codigo) || []), l])
+    for (const l of [...reincidentes.value, ...semEstoque.value, ...parados.value, ...nuncaLidos.value]) m.set(l.codigo, [...(m.get(l.codigo) || []), l])
     return m
   })
 
@@ -67,7 +68,7 @@ const criarAnalise = () => {
     reincidentes: reincidentes.value.length,
     semEstoque: semEstoque.value.length,
     parados: parados.value.length,
-    semLocal: semLocal.value.length,
+    nuncaLidos: nuncaLidos.value.length,
     insumos: insumos.value.length,
     saiuDaAuditoria: reincidentes.value.filter(l => l.saiuDaAuditoria).length,
     naoVinculados: naoVinculados.value.length,
@@ -79,7 +80,7 @@ const criarAnalise = () => {
   const carregando = computed(() => !auditorias.itensCarregados)
 
   return {
-    carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, semLocal, insumos, zeradosResolvidos,
+    carregando, indice, total, infoEstoqueTotal, reincidentes, semEstoque, parados, nuncaLidos, insumos, zeradosResolvidos,
     naoVinculados, suspeitos, prioridades, itensEstoque, problemasPorCodigo, resumo, limiarReincidencia, limiarParado
   }
 }
