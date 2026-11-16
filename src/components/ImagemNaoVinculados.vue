@@ -26,7 +26,11 @@ const setores = computed(() => {
   pendentes.value.forEach(i => m.set(i.setor, (m.get(i.setor) || 0) + 1))
   return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
 })
-const maxSetor = computed(() => Math.max(1, ...setores.value.map(s => s[1])))
+// Tabela no padrão da imagem de validades: a altura da linha se ajusta para caber todos.
+const ALTURA_TABELA = 520
+const linha = computed(() => Math.max(24, Math.min(46, Math.floor(ALTURA_TABELA / (setores.value.length + 1)))))
+const fonte = computed(() => Math.max(13, Math.min(21, Math.round(linha.value * 0.46))))
+const nomeSetor = s => String(s || '').replace(/^\s*\d+\s*-\s*/, '')
 
 const salvar = async () => {
   gerando.value = true
@@ -78,12 +82,20 @@ defineExpose({ salvar, gerando })
       <div class="grid min-h-0 flex-1 grid-cols-[380px_1fr] gap-5">
         <section class="flex min-h-0 min-w-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
           <p class="text-[24px] font-bold">Por setor</p>
-          <ul class="mt-4 flex flex-col gap-3">
-            <li v-for="[nome, n] in setores" :key="nome">
-              <div class="flex justify-between text-[16px]"><span class="truncate pr-2 font-semibold">{{ nome }}</span><span class="font-bold">{{ n }}</span></div>
-              <div class="mt-1 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full bg-blue-700" :style="{ width: `${(n / maxSetor) * 100}%` }"></div></div>
-            </li>
-          </ul>
+          <table class="mt-3 w-full table-fixed">
+            <thead>
+              <tr class="text-left text-[14px] font-semibold text-slate-500" :style="{ height: `${linha}px` }">
+                <th>Setor</th>
+                <th class="w-[70px] text-right">Itens</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="[nome, n] in setores" :key="nome" class="border-t border-slate-100" :style="{ height: `${linha}px`, fontSize: `${fonte}px` }">
+                <td class="truncate pr-2 font-semibold">{{ nomeSetor(nome) }}</td>
+                <td class="text-right font-bold text-blue-800">{{ n.toLocaleString('pt-BR') }}</td>
+              </tr>
+            </tbody>
+          </table>
         </section>
         <section class="flex min-h-0 min-w-0 flex-col rounded-[24px] p-6 ring-2 ring-slate-200">
           <p class="text-[24px] font-bold">Maior estoque</p>
