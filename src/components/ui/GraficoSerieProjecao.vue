@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { formatarData } from '../../utils/data'
 
 // Linha de uma série ao longo do tempo (uma foto por data) com a projeção tracejada à frente.
 // Passe o mouse para ver o valor de cada ponto.
@@ -14,7 +15,7 @@ const L = 640
 const A = 220
 const M = { top: 12, right: 16, bottom: 26, left: 56 }
 const dia = iso => Date.parse(`${iso}T00:00:00Z`) / 86400000
-const br = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const br = iso => formatarData(iso)
 
 const todos = computed(() => [...props.pontos, ...props.projecao.slice(1)])
 const dominioX = computed(() => {
@@ -76,7 +77,7 @@ const mover = (e) => {
       class="pointer-events-none absolute top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs shadow-lg"
       :style="{ left: `${Math.min(88, Math.max(12, (x(ativo.data) / L) * 100))}%` }"
     >
-      <p class="text-slate-500">{{ br(ativo.data) }}/{{ ativo.data.slice(0, 4) }} · {{ ativo.tipo === 'foto' ? 'planilha' : 'projeção' }}</p>
+      <p class="text-slate-500">{{ br(ativo.data) }} · {{ ativo.tipo === 'foto' ? 'planilha' : 'projeção' }}</p>
       <p class="font-semibold tabular-nums text-slate-900">{{ formato(ativo.valor) }}</p>
     </div>
     <p class="mt-1 flex flex-wrap gap-4 text-[11px] text-slate-500">

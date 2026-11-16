@@ -1,4 +1,5 @@
 import { normalizarBusca } from './busca'
+import { formatarData } from './data'
 
 // Motor único de filtro, ordenação e paginação das tabelas do sistema (UiTabela).
 // Sem Vue: só funções puras, testadas em filtroTabela.test.js.
@@ -32,7 +33,7 @@ const somarDias = (iso, n) => {
   d.setDate(d.getDate() + n)
   return diaISO(d)
 }
-export const dataBR = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '')
+export const dataBR = iso => formatarData(iso)
 
 // ---------- Números ----------
 // Número de uma célula: número, texto "1.234,5" ou "26,694 KG".

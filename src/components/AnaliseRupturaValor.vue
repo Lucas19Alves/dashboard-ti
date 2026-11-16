@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import UiTabela from './ui/UiTabela.vue'
 import { rupturaEmValor } from '../utils/historicoAuditorias'
 import { rotuloMes } from '../utils/analiseHistorica'
+import { formatarData } from '../utils/data'
 
 // Ruptura em valor: "Custo Ruptura" dos itens sem presença. Cada auditoria é uma foto do quanto estava
 // faltando naquele dia; o histórico mostra as fotos, a média de cada mês e a última, sem somar semanas.
@@ -20,7 +21,7 @@ const r = computed(() => rupturaEmValor(lista.value))
 
 const moeda = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const mil = v => (v >= 1000 ? `${(v / 1000).toFixed(1).replace('.', ',')} mil` : String(Math.round(v)))
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—')
+const br = iso => formatarData(iso, '—')
 const rotuloTendencia = { subindo: ['Subindo', 'text-red-700', 'fa-arrow-trend-up'], caindo: ['Caindo', 'text-emerald-700', 'fa-arrow-trend-down'], estavel: ['Estável', 'text-slate-700', 'fa-minus'], indefinida: ['Poucos meses', 'text-slate-500', 'fa-minus'] }
 
 // Gráfico do mês: média das fotos do mês ou a última foto do mês.

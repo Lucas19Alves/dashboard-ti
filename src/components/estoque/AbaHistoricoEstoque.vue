@@ -11,6 +11,7 @@ import UiEmptyState from '../ui/UiEmptyState.vue'
 import UiMenu from '../ui/UiMenu.vue'
 import UiTabela from '../ui/UiTabela.vue'
 import GraficoSerieProjecao from '../ui/GraficoSerieProjecao.vue'
+import { formatarData, formatarDataHora } from '../../utils/data'
 
 // Histórico do estoque: uma foto por planilha importada (na data da última venda dela),
 // a evolução com projeção para as próximas 4 semanas e o giro estimado de cada item.
@@ -36,7 +37,7 @@ const anterior = computed(() => serie.value.at(-2) || null)
 // --- Formatação ---
 const int = v => Math.round(Number(v) || 0).toLocaleString('pt-BR')
 const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
+const br = iso => formatarData(iso, '—')
 const pct = v => `${Math.round((Number(v) || 0) * 100)}%`
 const sinal = (v, f) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${f(Math.abs(v))}`
 
@@ -64,7 +65,7 @@ const periodo = computed(() => (serie.value.length > 1 ? diasEntre(serie.value[0
 const COLUNAS_FOTOS = [
   { chave: 'data', titulo: 'Estoque em', tipo: 'data' },
   { chave: 'arquivo', titulo: 'Arquivo', tipo: 'texto' },
-  { chave: 'importadoEm', titulo: 'Importada em', tipo: 'data', formato: v => (v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—') },
+  { chave: 'importadoEm', titulo: 'Importada em', tipo: 'data', formato: v => formatarDataHora(v, '—') },
   { chave: 'comEstoque', titulo: 'Com estoque', tipo: 'numero' },
   { chave: 'parados', titulo: 'Parados', tipo: 'numero' },
   { chave: 'semVenda90', titulo: 'Sem venda 90+', tipo: 'numero' },

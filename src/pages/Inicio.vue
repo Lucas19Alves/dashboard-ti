@@ -5,6 +5,7 @@ import { useAuditoriasStore } from '../stores/auditoriasStore'
 import { useVencimentosStore } from '../stores/vencimentosStore'
 import { exportarBackupJson, importarBackupJson } from '../utils/backup'
 import { formatarDataBR } from '../utils/busca'
+import { formatarDataSemana } from '../utils/data'
 import {
   META_PENDENTE_PERCENTUAL,
   dentroDaMeta,
@@ -56,7 +57,7 @@ const totalCriticosPrazo = computed(() => resumoVenc.value.vencidos + resumoVenc
 
 // ---------- Saudação ----------
 const agora = new Date()
-const dataExtenso = (texto => texto.charAt(0).toUpperCase() + texto.slice(1))(agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }))
+const dataExtenso = (texto => texto.charAt(0).toUpperCase() + texto.slice(1))(`${agora.toLocaleDateString('pt-BR', { weekday: 'long' })}, ${formatarDataBR(agora)}`)
 const tiposHoje = computed(() => auditoriasStore.tiposAuditoriaPorDia[agora.getDay()] || [])
 
 // ---------- Agenda ----------
@@ -151,7 +152,7 @@ const ultimasAuditorias = computed(() => [...auditorias.value]
 // Uma lista curta do que fazer agora, juntando auditorias, validades, estoque e backup.
 // tom: urgente (vermelho) · atencao (âmbar) · info (azul)
 const nvStore = useNaoVinculadosStore()
-const curtoBR = iso => `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}`
+const curtoBR = iso => formatarDataBR(iso)
 const plural = (n, um, varios) => `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`
 const prioridades = computed(() => {
   const lista = []
@@ -337,7 +338,7 @@ const acoesCabecalho = computed(() => [
               :class="dia.ehHoje ? 'border-blue-300 bg-blue-50/40 ring-2 ring-blue-100' : 'border-slate-100'"
             >
               <p class="flex items-center justify-between text-xs font-semibold capitalize" :class="dia.ehHoje ? 'text-blue-700' : 'text-slate-500'">
-                {{ dia.dia.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }) }}
+                {{ formatarDataSemana(dia.dia) }}
                 <span v-if="dia.ehHoje" class="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Hoje</span>
               </p>
               <button

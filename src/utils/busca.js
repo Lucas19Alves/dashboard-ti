@@ -13,8 +13,5 @@ export const correspondeBusca = (consulta, campos) => {
   return termos.every(termo => alvo.includes(termo))
 }
 
-export const formatarDataBR = (iso) => {
-  const texto = String(iso || '').slice(0, 10)
-  const partes = texto.split('-')
-  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : texto
-}
+// Mantido por compatibilidade: o formato oficial fica em utils/data.js.
+export { formatarData as formatarDataBR } from './data'

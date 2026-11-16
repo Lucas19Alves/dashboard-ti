@@ -14,6 +14,7 @@ import UiModal from '../ui/UiModal.vue'
 import UiTabs from '../ui/UiTabs.vue'
 import UiTabela from '../ui/UiTabela.vue'
 import ImagemNaoVinculados from '../ImagemNaoVinculados.vue'
+import { formatarData } from '../../utils/data'
 
 const store = useNaoVinculadosStore()
 const auditoriasStore = useAuditoriasStore()
@@ -168,7 +169,7 @@ const relatorioGeral = () => {
   abrirRelatorio({
     id: 'nao-vinculados',
     titulo: 'Relatório de itens não vinculados',
-    subtitulo: `Situação em ${new Date().toLocaleDateString('pt-BR')}`,
+    subtitulo: `Situação em ${formatarData(new Date())}`,
     contexto: [
       { rotulo: 'Última importação', valor: br(store.itens.reduce((m, i) => (i.ultimoVisto > m ? i.ultimoVisto : m), '')) },
       { rotulo: 'Auditorias no histórico', valor: int(auditoriasStore.auditorias.length) }
@@ -210,7 +211,7 @@ const acoes = computed(() => [
 const noCabecalho = usarAcoesDaAba(() => acoes.value)
 
 // --- Formatação ---
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+const br = iso => formatarData(iso, '—')
 const CONFIANCA = { alta: 'Histórico do item', media: 'Itens parecidos', baixa: 'Palpite fraco', nenhuma: 'Sem local sugerido' }
 const corConfianca = c => ({ alta: 'bg-blue-700', media: 'bg-blue-400', baixa: 'bg-slate-300', nenhuma: 'bg-amber-400' })[c] || 'bg-slate-300'
 const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Sem estoque' }

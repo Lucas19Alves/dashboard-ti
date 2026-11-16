@@ -1,6 +1,7 @@
 import { shallowRef } from 'vue'
 import { blocoBarras, blocoTabela, imprimirRelatorio } from '../utils/print'
 import { rotulosAssinatura } from './useConfiguracoes'
+import { formatarData } from '../utils/data'
 
 // Relatórios do sistema: antes de imprimir, o modal deixa escolher seções, colunas, orientação,
 // observações e campos de assinatura. As escolhas ficam lembradas por relatório neste navegador.
@@ -54,6 +55,7 @@ const textoDe = (item, c) => {
   if (bruto === null || bruto === undefined || bruto === '') return '—'
   if (c.format) return c.format(bruto)
   if (c.formato) return c.formato(bruto)
+  if (bruto instanceof Date || (c.tipo === 'data' && /^\d{4}-\d{2}-\d{2}/.test(String(bruto)))) return formatarData(bruto, '—')
   return typeof bruto === 'number' ? bruto.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : String(bruto)
 }
 

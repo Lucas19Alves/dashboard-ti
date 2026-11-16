@@ -375,7 +375,7 @@ const imprimirRelatorio = () => {
   abrirSeletor({
     id: 'vencimentos',
     titulo: 'Relatório de vencimentos',
-    subtitulo: `Situação em ${new Date().toLocaleDateString('pt-BR')}`,
+    subtitulo: `Situação em ${formatarDataBR(new Date())}`,
     contexto: [
       { rotulo: 'Itens monitorados', valor: int(r.total) },
       { rotulo: 'Setores', valor: int(linhasSetores.value.length) },

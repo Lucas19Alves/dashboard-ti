@@ -20,6 +20,7 @@ import AbaEstoqueTotal from '../components/estoque/AbaEstoqueTotal.vue'
 import AbaHistoricoEstoque from '../components/estoque/AbaHistoricoEstoque.vue'
 import { useEstoqueTotalStore } from '../stores/estoqueTotalStore'
 import ImportarEstoqueTotal from '../components/estoque/ImportarEstoqueTotal.vue'
+import { formatarData, formatarDataHora } from '../utils/data'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,10 +88,10 @@ const fichaCodigo = ref('')
 const problemasDoCodigo = codigo => problemasPorCodigo.value.get(codigo) || []
 
 // --- Visão geral ---
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+const br = iso => formatarData(iso, '—')
 const int = v => (Number(v) || 0).toLocaleString('pt-BR')
 const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-const dataHora = iso => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '')
+const dataHora = iso => formatarDataHora(iso)
 const diasPlanilha = computed(() => (infoEstoqueTotal.value?.importadoEm ? Math.floor((Date.now() - Date.parse(infoEstoqueTotal.value.importadoEm)) / 86400000) : null))
 const cartoes = computed(() => [
   { aba: 'reincidencias', rotulo: 'Reincidências', valor: resumo.value.reincidentes, nota: `${limiarReincidencia.value}+ dias com estoque sem leitura${resumo.value.saiuDaAuditoria ? `, ${int(resumo.value.saiuDaAuditoria)} saíram da auditoria` : ''}${resumo.value.custoReincidentes ? `, ${real(resumo.value.custoReincidentes)} em estoque não achado` : ''}`, tom: 'bg-red-600' },
@@ -171,7 +172,7 @@ const imprimirConferencia = () => {
   abrirRelatorio({
     id: `estoque-conferencia-${campoGrupo.value}`,
     titulo: 'Lista de conferência do estoque',
-    subtitulo: `Por ${rotulo} · ${new Date().toLocaleDateString('pt-BR')}`,
+    subtitulo: `Por ${rotulo} · ${formatarData(new Date())}`,
     contexto: [
       { rotulo: 'Itens', valor: `${int(totalItens)} em ${int(lista.length)} ${rotulo === 'local' ? 'locais' : rotulo + 'es'}` },
       { rotulo: 'Problemas', valor: 'reincidências, estoque zerado, parados, nunca lidos, não vinculados e vínculos suspeitos' },
@@ -209,7 +210,7 @@ const linhasRel = (lista, situacao) => lista.map(l => ({ codigo: l.codigo, produ
 const relatorioGeral = () => abrirRelatorio({
   id: 'estoque-geral',
   titulo: 'Relatório de estoque',
-  subtitulo: `Situação em ${new Date().toLocaleDateString('pt-BR')}`,
+  subtitulo: `Situação em ${formatarData(new Date())}`,
   contexto: [
     { rotulo: 'Auditorias de Presença e Ruptura', valor: `${indice.value.auditorias} (${br(indice.value.primeiraData)} a ${br(indice.value.ultimaData)})` },
     ...(total.value ? [{ rotulo: 'Estoque total', valor: `${int(total.value.size)} itens, planilha de ${dataHora(infoEstoqueTotal.value?.importadoEm)}` }] : []),

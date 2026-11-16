@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { LOCAL_NAO_IDENTIFICADO, SEM_LOCAL, TIPOS_PROBLEMA } from '../../utils/estoque'
 import { formatarQuantidade } from '../../utils/estoqueTotal'
 import UiTabela from '../ui/UiTabela.vue'
+import { formatarData } from '../../utils/data'
 
 // Sem local é só o não vinculado; os outros têm local no sistema que não aparece nas planilhas.
 const rotuloSemLocal = l => (l.tipo === 'naoVinculado' ? SEM_LOCAL : LOCAL_NAO_IDENTIFICADO)
@@ -23,7 +24,7 @@ const props = defineProps({
 const emit = defineEmits(['abrir'])
 
 // --- Texto de cada linha ---
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+const br = iso => formatarData(iso, '—')
 const real = v => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const destaque = l => ({
   reincidencia: l.saiuDaAuditoria ? `Saiu da auditoria, ${l.dias} dias sem leitura` : `${l.dias} dias sem leitura`,

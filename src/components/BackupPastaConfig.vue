@@ -1,8 +1,9 @@
 <script setup>
 import { desativarPasta, escolherPasta, estadoPasta, permitirPasta, salvarNaPasta } from '../utils/backupPasta'
+import { formatarDataHora } from '../utils/data'
 
 // Configuração do backup automático em pasta (card "Dados e backup" do Início).
-const quando = d => (d ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'ainda não')
+const quando = d => formatarDataHora(d, 'ainda não')
 </script>
 
 <template>

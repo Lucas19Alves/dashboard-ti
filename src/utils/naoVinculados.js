@@ -1,4 +1,5 @@
 import { codigoDoItem, codigoLocal, numeroBR, setorDoItem } from './itemAuditoria'
+import { formatarData } from './data'
 
 // Tratamento dos itens que chegam na loja sem local vinculado no sistema.
 // Cruza a planilha "não vinculados" com o histórico das auditorias para sugerir o local certo
@@ -71,11 +72,11 @@ export const sugerirLocal = (item, indice) => {
   const reg = indice.porCodigo.get(item.codigo)
   if (reg?.achado.size) {
     const [local, { vezes, ultima }] = maisRecente(reg.achado)
-    return { local, confianca: 'alta', motivo: `Lido em ${local} ${vezes === 1 ? 'na auditoria' : `${vezes} vezes, a última`} de ${ultima.slice(8, 10)}/${ultima.slice(5, 7)}` }
+    return { local, confianca: 'alta', motivo: `Lido em ${local} ${vezes === 1 ? 'na auditoria' : `${vezes} vezes, a última`} de ${formatarData(ultima)}` }
   }
   if (reg?.vinculado.size) {
     const [local, { ultima }] = maisRecente(reg.vinculado)
-    return { local, confianca: 'alta', motivo: `Estava vinculado em ${local} até ${ultima.slice(8, 10)}/${ultima.slice(5, 7)}` }
+    return { local, confianca: 'alta', motivo: `Estava vinculado em ${local} até ${formatarData(ultima)}` }
   }
   const locais = indice.porClasse.get(classeCodigo(item.classe))
   if (locais?.size) {

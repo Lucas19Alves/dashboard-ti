@@ -2,6 +2,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { toPng } from 'html-to-image'
 import { configuracoes } from '../composables/useConfiguracoes'
+import { formatarData } from '../utils/data'
 
 // Imagem quadrada das validades para mandar no WhatsApp (1080×1080 em até 4x),
 // no mesmo formato da imagem do relatório de auditoria: o alerta em destaque,
@@ -18,7 +19,7 @@ const gerando = ref(false)
 const quadro = ref(null)
 
 const hoje = new Date()
-const dataBR = hoje.toLocaleDateString('pt-BR')
+const dataBR = formatarData(hoje)
 const loja = computed(() => [configuracoes.relatorio.empresa, configuracoes.relatorio.unidade].map(v => String(v || '').trim()).filter(Boolean).join(', '))
 
 // Setores com algo crítico primeiro; a altura da linha se ajusta para caber todos.

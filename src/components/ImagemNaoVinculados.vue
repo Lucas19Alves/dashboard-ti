@@ -2,6 +2,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { toPng } from 'html-to-image'
 import { configuracoes } from '../composables/useConfiguracoes'
+import { formatarData } from '../utils/data'
 
 // Imagem quadrada (1080, até 4x) dos itens sem local para mandar no grupo:
 // quantos faltam vincular, quantos chegaram hoje, por setor e os de maior estoque.
@@ -62,7 +63,7 @@ defineExpose({ salvar, gerando })
   <div v-if="gerando" class="pointer-events-none fixed top-0" style="left: -99999px" aria-hidden="true">
     <div ref="quadro" class="flex flex-col gap-5 bg-white p-9 text-slate-900" :style="{ width: `${QUADRADO}px`, height: `${QUADRADO}px`, fontFamily: 'IBM Plex Sans, system-ui, sans-serif' }">
       <div class="flex items-baseline justify-between">
-        <p class="text-[30px] font-bold tracking-tight">Itens sem local, {{ hoje.toLocaleDateString('pt-BR') }}</p>
+        <p class="text-[30px] font-bold tracking-tight">Itens sem local, {{ formatarData(hoje) }}</p>
         <p class="text-[20px] font-semibold text-slate-500">{{ loja }}</p>
       </div>
 

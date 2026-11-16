@@ -1,6 +1,7 @@
 // Relatórios impressos (Salvar como PDF pelo navegador) com o mesmo visual do sistema:
 // cabeçalho, indicadores, gráficos de barras em CSS e tabelas.
 import { configuracoes } from '../composables/useConfiguracoes'
+import { formatarData, formatarDataHora } from './data'
 
 export const escapeHtml = (v) => String(v ?? '')
   .replace(/&/g, '&amp;')
@@ -11,7 +12,11 @@ export const escapeHtml = (v) => String(v ?? '')
 
 const TONS = { bom: '#047857', ruim: '#b91c1c', alerta: '#b45309', neutro: '#1e3a8a', cinza: '#64748b' }
 const cor = tom => TONS[tom] || TONS.neutro
-const numero = v => (typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : v)
+// Valor de célula sem formato próprio: número em pt-BR e data (Date ou ISO) em DD/MM/AAAA.
+const ISO_DATA = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/
+const numero = v => (typeof v === 'number' ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  : v instanceof Date ? formatarData(v, '')
+    : typeof v === 'string' && ISO_DATA.test(v) ? formatarData(v, v) : v)
 const alinhar = col => (col.alinhamento === 'right' ? 'right' : col.alinhamento === 'center' ? 'center' : 'left')
 
 // Visual sóbrio para repassar a líderes: A4, tipografia em pt, cabeçalho com régua,
@@ -95,7 +100,7 @@ const ESTILOS = `
   @media print { .aviso-tela { display: none; } }
 `
 
-const agoraBR = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+const agoraBR = () => formatarDataHora(new Date())
 
 // Empresa, unidade e emissor vêm de Configurações > Relatórios.
 const origem = () => [configuracoes.relatorio.empresa, configuracoes.relatorio.unidade].map(v => String(v || '').trim()).filter(Boolean).join(' · ')

@@ -4,6 +4,7 @@ import { useAuditoriasStore } from '../../stores/auditoriasStore'
 import { useEstoqueTotalStore } from '../../stores/estoqueTotalStore'
 import UiButton from '../ui/UiButton.vue'
 import UiModal from '../ui/UiModal.vue'
+import { formatarData } from '../../utils/data'
 
 // Importação da planilha de estoque total (relatório de produtos com estoque do sistema).
 const emit = defineEmits(['close', 'importado'])
@@ -20,7 +21,7 @@ const importar = async () => {
   carregando.value = true
   try {
     const { total, comEstoque, data, somenteHistorico } = await store.importar(arquivo.value)
-    const dia = `${data.slice(8, 10)}/${data.slice(5, 7)}/${data.slice(0, 4)}`
+    const dia = formatarData(data)
     auditorias.addToast(somenteHistorico
       ? `Planilha de ${dia} é mais antiga que a atual: entrou só no histórico do estoque (${total.toLocaleString('pt-BR')} itens).`
       : `Estoque total de ${dia} importado: ${total.toLocaleString('pt-BR')} itens (${comEstoque.toLocaleString('pt-BR')} com estoque). Foto guardada no histórico.`, 'success')

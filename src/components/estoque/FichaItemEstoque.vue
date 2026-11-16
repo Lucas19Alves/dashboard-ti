@@ -7,6 +7,7 @@ import { formatarQuantidade } from '../../utils/estoqueTotal'
 import { useAnaliseEstoque } from '../../composables/useAnaliseEstoque'
 import UiModal from '../ui/UiModal.vue'
 import UiTabela from '../ui/UiTabela.vue'
+import { formatarData } from '../../utils/data'
 
 // Tudo o que o sistema sabe de um código: estoque total, situação atual, histórico nas auditorias
 // de leitura, validades e não vinculado.
@@ -25,7 +26,7 @@ const naoVinculado = computed(() => useNaoVinculadosStore().itens.find(i => i.co
 const titulo = computed(() => registro.value?.produto || planilha.value?.produto || naoVinculado.value?.produto || validades.value[0]?._produto || props.codigo)
 const historico = computed(() => [...(registro.value?.historico || [])].reverse())
 
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—')
+const br = iso => formatarData(iso, '—')
 const dadosPlanilha = computed(() => {
   const t = planilha.value
   if (!t) return []

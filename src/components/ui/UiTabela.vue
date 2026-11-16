@@ -241,9 +241,10 @@ const imprimir = () => abrirRelatorioTabela({
     estado.ordem.length && { rotulo: 'Ordem', valor: textoOrdem.value },
     { rotulo: 'Listados', valor: `${filtrados.value.length.toLocaleString('pt-BR')} de ${props.itens.length.toLocaleString('pt-BR')}` }
   ].filter(Boolean),
-  colunas: exibidas.value.map(c => ({ ...c, valor: item => { const t = textoDe(item, c); return t instanceof Date ? dataBR(diaISO(t)) : t }, formato: undefined })),
+  // O relatório sai com o mesmo texto da tela (datas em DD/MM/AAAA, Sim/Não, números pt-BR).
+  colunas: exibidas.value.map(c => ({ ...c, valor: item => exibir(item, c), formato: undefined })),
   itens: ordenados.value,
-  agrupamento: colAgrupar.value ? { nome: colAgrupar.value.titulo.toLowerCase(), valor: item => textoDe(item, colAgrupar.value) } : null
+  agrupamento: colAgrupar.value ? { nome: colAgrupar.value.titulo.toLowerCase(), valor: item => exibir(item, colAgrupar.value) } : null
 })
 
 // Menu "Mais" da barra: ações da tela que usa a tabela + exportações da lista filtrada.

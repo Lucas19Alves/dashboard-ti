@@ -1,4 +1,5 @@
 import { codigoDoItem, codigoLocal, custoRupturaDoItem, itemPendente, localDoItem } from './itemAuditoria'
+import { formatarData } from './data'
 
 // Cruzamentos de vencimentos com as auditorias: onde estão os itens perto de vencer (mapa)
 // e quais produtos vencem no estoque enquanto faltam na gôndola (ruptura recorrente).
@@ -75,7 +76,7 @@ const numero = v => {
   return Number.isFinite(n) ? n : null
 }
 const un = n => `${n} un.`
-const diaMes = iso => (iso ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}` : '')
+const diaMes = iso => formatarData(iso)
 
 // O que fazer com o produto, cruzando validade, estoque, ruptura e giro:
 // - sem estoque no sistema: conferir físico (vencido) ou pedido/recebimento (a vencer);

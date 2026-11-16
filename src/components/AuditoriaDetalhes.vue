@@ -14,7 +14,7 @@
       <div class="bg-blue-700 text-white p-6 flex items-center justify-between">
         <div>
           <h2 class="text-3xl font-bold">{{ auditoria.tipo }}</h2>
-          <p class="text-blue-100 mt-1">Data: {{ auditoria.data }} | SKU: {{ auditoria.sku }}</p>
+          <p class="text-blue-100 mt-1">Data: {{ formatarData(auditoria.data) }} | SKU: {{ auditoria.sku }}</p>
         </div>
         <button
           @click="fechar"
@@ -201,6 +201,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import UploadAnaliseAuditoria from './UploadAnaliseAuditoria.vue'
+import { formatarData } from '../utils/data'
 
 const props = defineProps({
   auditoria: Object,

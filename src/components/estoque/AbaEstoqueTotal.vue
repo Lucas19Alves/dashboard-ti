@@ -10,6 +10,7 @@ import UiAcoes from '../ui/UiAcoes.vue'
 import { GRUPOS, temCabecalhoDeAba, usarAcoesDaAba } from '../../composables/useAcoes'
 import UiEmptyState from '../ui/UiEmptyState.vue'
 import UiTabela from '../ui/UiTabela.vue'
+import { formatarData, formatarDataHora } from '../../utils/data'
 
 // Todos os itens da planilha de estoque total, cada um com o que o sistema sabe dele:
 // local e leitura (auditorias), validade (validades) e os problemas das outras abas.
@@ -18,9 +19,9 @@ const store = useEstoqueTotalStore()
 const toast = (m, t) => useAuditoriasStore().addToast(m, t)
 const { itensEstoque, problemasPorCodigo, infoEstoqueTotal, indice } = useAnaliseEstoque()
 
-const br = iso => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
+const br = iso => formatarData(iso, '—')
 const int = v => (Number(v) || 0).toLocaleString('pt-BR')
-const dataHora = iso => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '')
+const dataHora = iso => formatarDataHora(iso)
 const diasDesde = iso => (iso ? Math.floor((Date.now() - Date.parse(iso)) / 86400000) : null)
 const antiga = computed(() => (diasDesde(infoEstoqueTotal.value?.importadoEm) ?? 0) >= 2)
 

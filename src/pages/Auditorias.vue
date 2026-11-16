@@ -16,6 +16,7 @@ import UiTabela from '../components/ui/UiTabela.vue'
 import UiAcoes from '../components/ui/UiAcoes.vue'
 import UiMenu from '../components/ui/UiMenu.vue'
 import { GRUPOS } from '../composables/useAcoes'
+import { formatarData, formatarDataSemana } from '../utils/data'
 
 const store = useAuditoriasStore()
 const router = useRouter()
@@ -457,7 +458,7 @@ const semanaAtual = computed(() => {
     if (d.getDay() >= 1 && d.getDay() <= 4) {
       dias.push({
         data: formatISO(d),
-        label: d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        label: formatarDataSemana(d),
         dia: d,
         dayIndex: d.getDay()
       })
@@ -473,13 +474,7 @@ const labelSemanaSelecionada = computed(() => {
   const prim = dias[0].dia
   const ult = dias[dias.length - 1].dia
   
-  const f = (d) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  const fAno = (d) => d.getFullYear()
-  
-  if (prim.getFullYear() !== ult.getFullYear()) {
-    return `${f(prim)}/${prim.getFullYear()} a ${f(ult)}/${ult.getFullYear()}`
-  }
-  return `${f(prim)} a ${f(ult)} de ${fAno(ult)}`
+  return `${formatarData(prim)} a ${formatarData(ult)}`
 })
 
 const navegarSemana = (direcao) => {
@@ -579,7 +574,7 @@ const abrirCriacaoPelaRota = () => {
   const { data, tipo } = route.query
   if (typeof data !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return
   const [ano, mes, dia] = data.split('-').map(Number)
-  const label = new Date(ano, mes - 1, dia).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+  const label = formatarDataSemana(new Date(ano, mes - 1, dia))
   const tipoValido = ['Etiqueta', 'Presença', 'Ruptura'].includes(tipo) ? tipo : formulario.value.tipo
   abaAtiva.value = 'calendario'
   criarAPartirCalendario(data, tipoValido, label)
@@ -592,7 +587,7 @@ const novaAuditoriaHoje = () => {
   const iso = formatISO(hoje)
   const tipo = (store.tiposAuditoriaPorDia[hoje.getDay()] || [])[0] || formulario.value.tipo
   abaAtiva.value = 'calendario'
-  criarAPartirCalendario(iso, tipo, hoje.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }))
+  criarAPartirCalendario(iso, tipo, formatarDataSemana(hoje))
   requestAnimationFrame(() => document.getElementById('fileInputNovaAuditoria')?.closest('.ui-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 

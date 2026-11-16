@@ -30,6 +30,7 @@ import { analisarSinaisAuditoria } from '../utils/sinaisAuditoria'
 import { baixarCsv } from '../utils/csv'
 import { atualizarOrdenacaoDados, extrairEstoque, filtrarBuscaDados, getSetorItem, isPlaceholder, paginasVisiveisFn, sortDados, temPresencaConfirmada } from '../utils/detalheAuditoria'
 import { rotuloUsuario, separarUsuario } from '../utils/usuario'
+import { formatarData } from '../utils/data'
 
 const normalizar = (valor) => {
   if (valor == null) return ''
@@ -1206,7 +1207,7 @@ const acoesCabecalho = computed(() => [
                 <p v-for="(linha, contextoIndice) in sinal.contextoHistorico" :key="contextoIndice" class="mt-1 first:mt-0">{{ linha }}</p>
                 <details v-if="sinal.referencias?.length" class="mt-2">
                   <summary class="cursor-pointer font-semibold">Ver auditorias usadas na comparação</summary>
-                  <div class="mt-2 overflow-x-auto"><table class="min-w-full text-left"><thead><tr><th class="px-2 py-1">Data</th><th class="px-2 py-1">Auditoria</th><th class="px-2 py-1">Máximo em 30 min</th><th class="px-2 py-1">Classes em 30 min</th></tr></thead><tbody><tr v-for="ref in sinal.referencias" :key="`${ref.id}-${ref.data}`"><td class="px-2 py-1">{{ ref.data }}</td><td class="px-2 py-1">#{{ ref.id }}</td><td class="px-2 py-1">{{ ref.maximo30 }}</td><td class="px-2 py-1">{{ ref.classes30 }}</td></tr></tbody></table></div>
+                  <div class="mt-2 overflow-x-auto"><table class="min-w-full text-left"><thead><tr><th class="px-2 py-1">Data</th><th class="px-2 py-1">Auditoria</th><th class="px-2 py-1">Máximo em 30 min</th><th class="px-2 py-1">Classes em 30 min</th></tr></thead><tbody><tr v-for="ref in sinal.referencias" :key="`${ref.id}-${ref.data}`"><td class="px-2 py-1">{{ formatarData(ref.data) }}</td><td class="px-2 py-1">#{{ ref.id }}</td><td class="px-2 py-1">{{ ref.maximo30 }}</td><td class="px-2 py-1">{{ ref.classes30 }}</td></tr></tbody></table></div>
                 </details>
               </div>
               <details class="mt-4">
