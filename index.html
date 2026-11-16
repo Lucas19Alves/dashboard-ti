@@ -3,24 +3,52 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Dashboard Loja para acompanhamento de auditorias de loja e vencimentos." />
+    <title>Dashboard Loja · Auditorias, vencimentos e estoque</title>
+    <meta name="description" content="Painel da loja para auditorias de etiqueta, presença e ruptura, controle de vencimentos e estoque. Importa as planilhas do ERP, gera relatórios para o WhatsApp e funciona offline." />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="Dashboard Loja" />
+    <meta name="apple-mobile-web-app-title" content="Dashboard Loja" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#1d4ed8" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
     <link rel="canonical" href="https://dashboard-ti-five.vercel.app/" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Prévia ao compartilhar o link (WhatsApp, Facebook, LinkedIn, X, Telegram) -->
     <meta property="og:locale" content="pt_BR" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Dashboard Loja" />
-    <meta property="og:description" content="Dashboard Loja para acompanhamento de auditorias de loja e vencimentos." />
+    <meta property="og:site_name" content="Dashboard Loja" />
+    <meta property="og:title" content="Dashboard Loja · Auditorias, vencimentos e estoque" />
+    <meta property="og:description" content="Auditorias, vencimentos e estoque da loja em um só painel, com relatórios prontos para o WhatsApp." />
     <meta property="og:url" content="https://dashboard-ti-five.vercel.app/" />
-    <meta property="og:image" content="https://dashboard-ti-five.vercel.app/favicon.png" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Dashboard Loja" />
-    <meta name="twitter:description" content="Dashboard Loja para acompanhamento de auditorias de loja e vencimentos." />
-    <meta name="twitter:image" content="https://dashboard-ti-five.vercel.app/favicon.png" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <title>Dashboard Loja</title>
+    <meta property="og:image" content="https://dashboard-ti-five.vercel.app/og-image.png" />
+    <meta property="og:image:secure_url" content="https://dashboard-ti-five.vercel.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Dashboard Loja: painel com auditoria do dia, vencimentos e rupturas por setor." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Dashboard Loja · Auditorias, vencimentos e estoque" />
+    <meta name="twitter:description" content="Auditorias, vencimentos e estoque da loja em um só painel, com relatórios prontos para o WhatsApp." />
+    <meta name="twitter:image" content="https://dashboard-ti-five.vercel.app/og-image.png" />
+    <meta name="twitter:image:alt" content="Dashboard Loja: painel com auditoria do dia, vencimentos e rupturas por setor." />
+
+    <!-- Dados estruturados para buscadores -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Dashboard Loja",
+        "url": "https://dashboard-ti-five.vercel.app/",
+        "description": "Painel da loja para auditorias de etiqueta, presença e ruptura, controle de vencimentos e estoque, com relatórios para o WhatsApp e uso offline.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "inLanguage": "pt-BR",
+        "image": "https://dashboard-ti-five.vercel.app/og-image.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" }
+      }
+    </script>
     <script>
       // Aplica tema e acessibilidade salvos antes do app montar (evita piscar o tema claro).
       (function () {
@@ -46,7 +74,11 @@
       </div>
       <style>html.dark,html.dark body,html.dark #carregando{background:#0b1220!important;color:#97a3b6!important}@keyframes dti-pulse{from{transform:scale(.85);opacity:.6}to{transform:scale(1);opacity:1}}</style>
     </div>
-    <noscript>Este painel requer JavaScript habilitado para funcionar corretamente.</noscript>
+    <noscript>
+      <h1>Dashboard Loja</h1>
+      <p>Painel da loja para auditorias de etiqueta, presença e ruptura, controle de vencimentos e estoque. Importa as planilhas do ERP, gera relatórios para o WhatsApp e funciona offline.</p>
+      <p>Este painel precisa do JavaScript habilitado para funcionar.</p>
+    </noscript>
     <script type="module" src="/src/main.js"></script>
     <!-- Vercel Analytics -->
     <script> window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); }; </script>

@@ -1,7 +1,7 @@
 {
   "name": "Dashboard Loja",
   "short_name": "Dashboard Loja",
-  "description": "Auditorias de loja e controle de vencimentos.",
+  "description": "Auditorias de loja, controle de vencimentos e estoque em um só painel.",
   "lang": "pt-BR",
   "start_url": "/",
   "display": "standalone",
@@ -12,7 +12,23 @@
       "src": "/favicon.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     }
+  ],
+  "id": "/",
+  "categories": [
+    "business",
+    "productivity"
   ]
 }
