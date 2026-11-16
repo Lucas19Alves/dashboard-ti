@@ -179,7 +179,7 @@ const indicadores = computed(() => {
         <div v-for="k in indicadores" :key="k.rotulo" class="rounded-xl bg-slate-50 p-3">
           <p class="text-xs font-semibold text-slate-500">{{ k.rotulo }}</p>
           <p class="mt-0.5 text-xl font-black text-slate-900">{{ k.valor }}</p>
-          <p v-if="k.detalhe" class="truncate text-[11px] text-slate-500" :title="k.detalhe">{{ k.detalhe }}</p>
+          <p v-if="k.detalhe" class="truncate text-[0.6875rem] text-slate-500" :title="k.detalhe">{{ k.detalhe }}</p>
         </div>
       </div>
 
@@ -208,15 +208,15 @@ const indicadores = computed(() => {
           <button v-for="s in faixa" :key="s.i" type="button" class="absolute top-0.5 bottom-0.5 rounded-sm transition" :class="s.i === cursor ? 'ring-2 ring-slate-900 z-10' : s.i > cursor ? 'opacity-30' : ''"
             :style="{ left: `${s.esquerda}%`, width: `${s.largura}%`, background: s.cor }" :title="s.titulo" @click="parar(); cursor = s.i"></button>
         </div>
-        <div class="relative mt-1 h-4 text-[10px] font-semibold text-slate-400">
+        <div class="relative mt-1 h-4 text-[0.625rem] font-semibold text-slate-400">
           <span v-for="m in marcasHora" :key="m.t" class="absolute -translate-x-1/2" :style="{ left: `${m.pos}%` }">{{ m.rotulo }}</span>
         </div>
       </div>
 
-      <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22.5rem]">
         <!-- Mapa com o caminho -->
         <div class="overflow-x-auto rounded-xl bg-slate-50 p-3">
-          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="min-w-[640px] w-full" role="img" :aria-label="`Trajeto de ${rotuloUsuario(usuario)}`">
+          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="min-w-[40rem] w-full" role="img" :aria-label="`Trajeto de ${rotuloUsuario(usuario)}`">
             <g v-for="p in posicoes" :key="p.id">
               <rect :x="p.x + 0.08" :y="p.y + 0.08" :width="p.w - 0.16" :height="p.h - 0.16" rx="0.35"
                 :fill="corArea(p.id)" :stroke="atual?.bloco === p.id ? '#0f172a' : '#cbd5e1'" :stroke-width="atual?.bloco === p.id ? 0.18 : 0.06" />
@@ -239,7 +239,7 @@ const indicadores = computed(() => {
               <circle :cx="pontos[cursor].x" :cy="pontos[cursor].y" r="0.6" fill="#f97316" stroke="#fff" stroke-width="0.14" />
             </g>
           </svg>
-          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-600">
+          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6875rem] text-slate-600">
             <span><i class="mr-1 inline-block size-2.5 rounded-full bg-emerald-500"></i>Início</span>
             <span><i class="mr-1 inline-block size-2.5 rounded-full bg-orange-500"></i>Posição no momento</span>
             <span class="inline-flex items-center gap-1">Caminho<i class="inline-block h-1.5 w-10 rounded-full" style="background: linear-gradient(90deg, rgb(125,211,252), rgb(30,58,138))"></i>mais tarde</span>
@@ -251,16 +251,16 @@ const indicadores = computed(() => {
         </div>
 
         <!-- Paradas -->
-        <div class="flex max-h-[560px] flex-col rounded-xl ring-1 ring-slate-200">
+        <div class="flex max-h-[35rem] flex-col rounded-xl ring-1 ring-slate-200">
           <p class="border-b border-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">Paradas na ordem</p>
           <ol ref="listaParadas" class="flex-1 overflow-y-auto">
             <li v-for="(p, i) in paradas" :key="i" :data-parada="i">
-              <p v-if="p.aposPausa" class="bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700"><i class="fas fa-mug-hot mr-1"></i>Pausa de {{ formatarDuracao(p.pausaAntes) }}</p>
+              <p v-if="p.aposPausa" class="bg-amber-50 px-3 py-1 text-[0.6875rem] font-semibold text-amber-700"><i class="fas fa-mug-hot mr-1"></i>Pausa de {{ formatarDuracao(p.pausaAntes) }}</p>
               <button type="button" class="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2 text-left text-sm transition hover:bg-blue-50/60"
                 :class="i === cursor ? 'bg-orange-50' : i > cursor ? 'opacity-50' : ''" @click="parar(); cursor = i">
-                <span class="w-7 shrink-0 text-[11px] font-bold text-slate-400">{{ i + 1 }}</span>
-                <span class="w-[86px] shrink-0 tabular-nums text-xs font-semibold text-slate-600">{{ horaDe(p.inicio) }}<template v-if="p.fim > p.inicio">–{{ horaDe(p.fim) }}</template></span>
-                <span class="min-w-0 flex-1 truncate font-bold text-slate-900">{{ p.local }}<span class="ml-1 text-[11px] font-medium text-slate-400">{{ p.area !== p.local ? p.area : '' }}</span></span>
+                <span class="w-7 shrink-0 text-[0.6875rem] font-bold text-slate-400">{{ i + 1 }}</span>
+                <span class="w-[5.375rem] shrink-0 tabular-nums text-xs font-semibold text-slate-600">{{ horaDe(p.inicio) }}<template v-if="p.fim > p.inicio">–{{ horaDe(p.fim) }}</template></span>
+                <span class="min-w-0 flex-1 truncate font-bold text-slate-900">{{ p.local }}<span class="ml-1 text-[0.6875rem] font-medium text-slate-400">{{ p.area !== p.local ? p.area : '' }}</span></span>
                 <span class="shrink-0 rounded-full bg-slate-100 px-2 text-xs font-bold text-slate-700">{{ p.leituras }}</span>
               </button>
             </li>

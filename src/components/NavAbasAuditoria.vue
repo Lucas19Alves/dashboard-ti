@@ -16,7 +16,9 @@ const lista = ref(null)
 let observador
 
 onMounted(() => {
-  observador = new IntersectionObserver(([e]) => { fixa.value = !e.isIntersecting }, { rootMargin: '-64px 0px 0px 0px' })
+  // A navbar tem 4rem (top-16); a margem acompanha a escala da raiz.
+  const navbar = 4 * parseFloat(getComputedStyle(document.documentElement).fontSize || '16')
+  observador = new IntersectionObserver(([e]) => { fixa.value = !e.isIntersecting }, { rootMargin: `-${Math.round(navbar)}px 0px 0px 0px` })
   if (sentinela.value) observador.observe(sentinela.value)
 })
 onBeforeUnmount(() => observador?.disconnect())
@@ -60,7 +62,7 @@ const aoTeclar = async (evento, itens) => {
           {{ item.label }}
           <span
             v-if="item.badge !== undefined && item.badge !== null && item.badge !== ''"
-            class="rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none"
+            class="rounded-full px-1.5 py-0.5 text-[0.625rem] font-bold leading-none"
             :class="item.tom === 'alerta' ? 'bg-amber-100 text-amber-800' : model === item.value ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'"
           >{{ item.badge }}</span>
           <span class="absolute inset-x-2 bottom-0 h-0.5 rounded-full transition" :class="model === item.value ? 'bg-blue-600' : 'bg-transparent group-hover:bg-slate-200'"></span>

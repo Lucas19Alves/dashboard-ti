@@ -28,7 +28,7 @@
         <select v-model="ordem" class="ui-input w-auto py-2 text-sm" aria-label="Ordenar">
           <option v-for="o in ordens" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
         </select>
-        <div class="flex items-center gap-3 text-[11px] text-slate-500">
+        <div class="flex items-center gap-3 text-[0.6875rem] text-slate-500">
           <span><i class="mr-1 inline-block size-2 rounded-full bg-emerald-500"></i>Lidos</span>
           <span><i class="mr-1 inline-block size-2 rounded-full bg-red-500"></i>Problema</span>
           <span><i class="mr-1 inline-block size-2 rounded-full bg-amber-400"></i>Pendentes</span>
@@ -58,7 +58,7 @@
               {{ percentualPendenteDe(item).toFixed(1) }}%
             </span>
             <span class="hidden shrink-0 text-xs font-semibold text-blue-600 sm:inline">
-              {{ tipo === 'setor' ? 'Ver locais' : 'Ver itens' }} <i class="fas fa-chevron-right text-[10px]"></i>
+              {{ tipo === 'setor' ? 'Ver locais' : 'Ver itens' }} <i class="fas fa-chevron-right text-[0.625rem]"></i>
             </span>
           </button>
         </li>

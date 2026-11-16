@@ -1283,7 +1283,7 @@ const acoesCabecalho = computed(() => [
                 class="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
               />
             </div>
-            <p class="text-[11px] text-slate-400 mt-1.5">Deixe vazio para manter o SKU atual</p>
+            <p class="text-[0.6875rem] text-slate-400 mt-1.5">Deixe vazio para manter o SKU atual</p>
           </div>
           <UploadAnaliseAuditoria
             :auditoria="auditoria"
@@ -1379,7 +1379,7 @@ const acoesCabecalho = computed(() => [
           <div class="rounded-xl bg-slate-50 p-3">
             <p class="text-xs font-semibold text-slate-500">Pico</p>
             <p class="text-xl font-bold text-slate-900">{{ usuarioDetalhes.picoHora || '—' }}</p>
-            <p v-if="usuarioDetalhes.picoHora" class="text-[11px] text-slate-500">{{ usuarioDetalhes.picoQtd }} leituras</p>
+            <p v-if="usuarioDetalhes.picoHora" class="text-[0.6875rem] text-slate-500">{{ usuarioDetalhes.picoQtd }} leituras</p>
           </div>
           <div class="rounded-xl bg-slate-50 p-3">
             <p class="text-xs font-semibold text-slate-500">Locais lidos</p>
@@ -1392,11 +1392,11 @@ const acoesCabecalho = computed(() => [
             <p class="text-xs font-bold text-slate-700">Leituras por hora</p>
             <div class="mt-3 flex h-28 items-end gap-1">
               <div v-for="(v, i) in usuarioDetalhes.horas" :key="i" class="group relative flex h-full flex-1 flex-col justify-end">
-                <span class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white group-hover:block">{{ usuarioDetalhes.rotulosHoras[i] }}: {{ v }}</span>
+                <span class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-1.5 py-0.5 text-[0.625rem] text-white group-hover:block">{{ usuarioDetalhes.rotulosHoras[i] }}: {{ v }}</span>
                 <span class="w-full rounded-t bg-blue-500 group-hover:bg-blue-700" :style="{ height: `${(v / usuarioDetalhes.maxHora) * 100}%`, minHeight: v ? '2px' : '0' }"></span>
               </div>
             </div>
-            <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>{{ usuarioDetalhes.rotulosHoras[0] }}</span><span>{{ usuarioDetalhes.rotulosHoras.at(-1) }}</span></div>
+            <div class="mt-1 flex justify-between text-[0.625rem] text-slate-400"><span>{{ usuarioDetalhes.rotulosHoras[0] }}</span><span>{{ usuarioDetalhes.rotulosHoras.at(-1) }}</span></div>
           </section>
           <section class="rounded-xl bg-slate-50 p-4">
             <p class="text-xs font-bold text-slate-700">Locais mais lidos</p>

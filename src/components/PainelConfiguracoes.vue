@@ -127,7 +127,7 @@ const TEXTOS = [
           <label class="block"><span class="text-xs text-slate-500">Início</span><input v-model="configuracoes.auditoria.inicio" type="time" class="ui-input"></label>
           <label class="block"><span class="text-xs text-slate-500">Fim</span><input v-model="configuracoes.auditoria.fim" type="time" class="ui-input"></label>
         </div>
-        <p class="mt-1 text-[11px] text-slate-500">Usado na previsão de fechamento e na escala sugerida.</p>
+        <p class="mt-1 text-[0.6875rem] text-slate-500">Usado na previsão de fechamento e na escala sugerida.</p>
       </fieldset>
       <fieldset>
         <legend class="ui-label">Meta de % pendente</legend>
@@ -135,7 +135,7 @@ const TEXTOS = [
           <input v-model.number="configuracoes.auditoria.meta" type="number" min="0.5" max="50" step="0.5" class="ui-input w-28">
           <span class="text-sm text-slate-600">% de itens pendentes por auditoria</span>
         </div>
-        <p class="mt-1 text-[11px] text-slate-500">Padrão {{ CONFIG_PADRAO.auditoria.meta }}%. Define “dentro/fora da meta”, cores, plano de ação e reincidência. Vale para as telas abertas depois da mudança.</p>
+        <p class="mt-1 text-[0.6875rem] text-slate-500">Padrão {{ CONFIG_PADRAO.auditoria.meta }}%. Define “dentro/fora da meta”, cores, plano de ação e reincidência. Vale para as telas abertas depois da mudança.</p>
       </fieldset>
     </div>
 
@@ -150,7 +150,7 @@ const TEXTOS = [
             <i :class="[icone, 'text-lg']" aria-hidden="true"></i>{{ r }}
           </button>
         </div>
-        <p class="mt-1 text-[11px] text-slate-500">Pode ser trocada em cada relatório antes de gerar.</p>
+        <p class="mt-1 text-[0.6875rem] text-slate-500">Pode ser trocada em cada relatório antes de gerar.</p>
       </fieldset>
       <fieldset>
         <legend class="ui-label">Identificação no cabeçalho</legend>
@@ -163,7 +163,7 @@ const TEXTOS = [
       <fieldset>
         <legend class="ui-label">Campos de assinatura</legend>
         <input v-model="configuracoes.relatorio.assinaturas" type="text" maxlength="120" class="ui-input" placeholder="Responsável, Liderança, Data">
-        <p class="mt-1 text-[11px] text-slate-500">Separados por vírgula (até 4). Relatórios com assinatura própria (ficha, escala) mantêm os seus.</p>
+        <p class="mt-1 text-[0.6875rem] text-slate-500">Separados por vírgula (até 4). Relatórios com assinatura própria (ficha, escala) mantêm os seus.</p>
       </fieldset>
       <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
         <div>

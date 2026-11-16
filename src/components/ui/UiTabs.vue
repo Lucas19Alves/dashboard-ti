@@ -56,8 +56,8 @@ onMounted(mostrarAtiva)
       >
         <i v-if="item.icon" :class="[item.icon, 'text-xs', ativo === item ? 'text-blue-700' : 'opacity-70']"></i>
         {{ item.label }}
-        <span v-if="item.badge !== undefined && item.badge !== null && item.badge !== ''" class="rounded-full px-1.5 text-[11px] font-semibold tabular-nums" :class="ativo === item ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'">{{ fmt(item.badge) }}</span>
-        <i v-if="item.itens?.length" class="fas fa-chevron-down text-[9px] opacity-50"></i>
+        <span v-if="item.badge !== undefined && item.badge !== null && item.badge !== ''" class="rounded-full px-1.5 text-[0.6875rem] font-semibold tabular-nums" :class="ativo === item ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'">{{ fmt(item.badge) }}</span>
+        <i v-if="item.itens?.length" class="fas fa-chevron-down text-[0.5625rem] opacity-50"></i>
       </button>
     </nav>
     <nav v-if="ativo?.itens?.length" class="abas-rolagem flex max-w-full gap-1.5 overflow-x-auto overflow-y-hidden border-b border-slate-100 py-2" :aria-label="ativo.label">
@@ -65,12 +65,12 @@ onMounted(mostrarAtiva)
         v-for="sub in ativo.itens"
         :key="sub.value"
         type="button"
-        class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition"
+        class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[0.8125rem] font-medium transition"
         :class="model === sub.value ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'"
         :aria-current="model === sub.value ? 'page' : undefined"
         @click="escolherSub(ativo, sub)"
       >
-        <i v-if="sub.icon" :class="[sub.icon, 'text-[11px]', model === sub.value ? '' : 'opacity-60']"></i>
+        <i v-if="sub.icon" :class="[sub.icon, 'text-[0.6875rem]', model === sub.value ? '' : 'opacity-60']"></i>
         {{ sub.label }}
         <span v-if="sub.badge !== undefined && sub.badge !== null && sub.badge !== ''" class="tabular-nums" :class="model === sub.value ? 'text-blue-100' : 'text-slate-400'">{{ fmt(sub.badge) }}</span>
       </button>

@@ -258,13 +258,13 @@ const relatorioGeral = () => abrirRelatorio({
       <template v-else>
         <section class="grid grid-cols-2 gap-3" :class="cartoes.length > 4 ? 'md:grid-cols-3 xl:grid-cols-5' : 'xl:grid-cols-4'" aria-label="Resumo">
           <button v-for="c in cartoes" :key="c.rotulo" type="button" class="ui-card ui-card-hover p-4 text-left" @click="abrirCartao(c)">
-            <span class="flex items-center gap-2"><span class="size-2 rounded-full" :class="c.tom"></span><span class="text-[13px] font-semibold text-slate-600">{{ c.rotulo }}</span></span>
+            <span class="flex items-center gap-2"><span class="size-2 rounded-full" :class="c.tom"></span><span class="text-[0.8125rem] font-semibold text-slate-600">{{ c.rotulo }}</span></span>
             <span class="mt-2 block text-[2rem] font-semibold leading-none tabular-nums text-slate-900">{{ int(c.valor) }}</span>
             <span class="mt-2 block text-xs leading-relaxed text-slate-500">{{ c.nota }}</span>
           </button>
         </section>
 
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
           <section class="space-y-3">
             <div class="flex items-end justify-between gap-2">
               <div>
@@ -293,7 +293,7 @@ const relatorioGeral = () => abrirRelatorio({
                   </button>
                 </li>
               </ul>
-              <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+              <p class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem] text-slate-500">
                 <span v-for="c in COLUNAS_GRUPO" :key="c.chave" class="inline-flex items-center gap-1"><span class="size-2 rounded-full" :class="c.cor"></span>{{ c.rotulo }}</span>
               </p>
             </section>
@@ -368,7 +368,7 @@ const relatorioGeral = () => abrirRelatorio({
       </div>
       <UiTabela :id="`estoque-onde-agir-${campoGrupo}`" :key="campoGrupo" :titulo="`Problemas por ${CAMPOS.find(c => c.valor === campoGrupo).rotulo.toLowerCase()}`" :itens="grupos" :colunas="colunasGrupo" :ordem-inicial="{ chave: 'total', direcao: 'desc' }" chave-item="chave" :agrupavel="false" vazio="Nenhum problema encontrado.">
         <template #celula-chave="{ item: g }">
-          <span v-if="GRUPOS_ESPECIAIS[g.chave]" class="italic text-slate-500" :title="GRUPOS_ESPECIAIS[g.chave]"><i class="fas fa-circle-question mr-1 text-[11px] text-slate-400"></i>{{ g.chave }}</span>
+          <span v-if="GRUPOS_ESPECIAIS[g.chave]" class="italic text-slate-500" :title="GRUPOS_ESPECIAIS[g.chave]"><i class="fas fa-circle-question mr-1 text-[0.6875rem] text-slate-400"></i>{{ g.chave }}</span>
           <span v-else>{{ g.chave }}</span>
         </template>
         <template v-for="c in COLUNAS_GRUPO" :key="c.chave" #[`celula-${c.chave}`]="{ item: g }">
@@ -388,7 +388,7 @@ const relatorioGeral = () => abrirRelatorio({
           <button type="button" class="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-50" @click="fichaCodigo = r.codigo">
             <span class="min-w-0"><span class="block truncate font-semibold text-slate-900">{{ r.produto }}</span><span class="text-xs text-slate-500">{{ r.codigo }}, {{ r.local || (codigosNaoVinculados.has(r.codigo) ? 'sem local (não vinculado)' : 'local não identificado') }}, {{ r.setor }}</span></span>
             <span class="flex flex-wrap gap-1.5">
-              <span v-for="p in problemasDoCodigo(r.codigo)" :key="p.tipo" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800">{{ TIPOS_PROBLEMA[p.tipo].curto }}</span>
+              <span v-for="p in problemasDoCodigo(r.codigo)" :key="p.tipo" class="ui-badge border-amber-200 bg-amber-50 text-[0.6875rem] text-amber-800">{{ TIPOS_PROBLEMA[p.tipo].curto }}</span>
               <span class="text-xs text-slate-500">{{ formatarQuantidade(r.estoque, r.unidade) }} em estoque<template v-if="total && !r.noEstoqueTotal"> (na última auditoria; fora da planilha)</template> · última leitura {{ r.ultimaLeitura ? br(r.ultimaLeitura) : 'nunca' }}</span>
             </span>
           </button>

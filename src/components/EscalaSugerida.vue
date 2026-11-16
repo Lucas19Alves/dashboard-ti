@@ -315,7 +315,7 @@ const imprimirEscala = () => {
         </label>
       </div>
     </div>
-    <p class="mt-1 text-[11px] text-slate-500">
+    <p class="mt-1 text-[0.6875rem] text-slate-500">
       Base: {{ historicoAuditorias.length }} auditoria(s) {{ baseMesmoTipo ? `de ${auditoria.tipo}` : 'de todos os tipos (poucas do mesmo tipo)' }}.
     </p>
 
@@ -324,13 +324,13 @@ const imprimirEscala = () => {
       <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2">
         <p class="text-xs font-bold text-slate-700">Na escala: <span class="text-blue-700">{{ selecionados.size }}</span> <span class="font-medium text-slate-500">de {{ colaboradores.length }}</span></p>
         <div class="flex flex-wrap gap-1">
-          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('auditoria')">Quem leu nesta auditoria ({{ colaboradores.filter(c => leramNestaAuditoria.has(c.usuario)).length }})</button>
-          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('todos')">Todos</button>
-          <button type="button" class="rounded-md px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('nenhum')">Nenhum</button>
+          <button type="button" class="rounded-md px-2 py-1 text-[0.6875rem] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('auditoria')">Quem leu nesta auditoria ({{ colaboradores.filter(c => leramNestaAuditoria.has(c.usuario)).length }})</button>
+          <button type="button" class="rounded-md px-2 py-1 text-[0.6875rem] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('todos')">Todos</button>
+          <button type="button" class="rounded-md px-2 py-1 text-[0.6875rem] font-semibold text-slate-600 hover:bg-white hover:text-slate-900" @click="selecionarAtalho('nenhum')">Nenhum</button>
         </div>
         <label class="relative ml-auto w-full sm:w-56">
           <span class="sr-only">Buscar colaborador</span>
-          <i class="fas fa-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400" aria-hidden="true"></i>
+          <i class="fas fa-search pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[0.625rem] text-slate-400" aria-hidden="true"></i>
           <input v-model="buscaColab" type="search" class="ui-input w-full py-1.5 pl-7 text-xs" placeholder="Nome, matrícula ou perfil...">
         </label>
       </div>
@@ -340,15 +340,15 @@ const imprimirEscala = () => {
         <section v-for="grupo in gruposColab" :key="grupo.perfil" class="px-3 py-2">
           <div class="mb-1 flex items-center gap-2">
             <p class="text-xs font-semibold text-slate-500">{{ grupo.perfil }}</p>
-            <span class="text-[11px] text-slate-400">{{ grupo.escalados }}/{{ grupo.lista.length }}</span>
-            <button type="button" class="ml-auto text-[11px] font-semibold text-blue-700 hover:underline" @click="definirGrupo(grupo.lista, grupo.escalados < grupo.lista.length)">{{ grupo.escalados < grupo.lista.length ? 'Marcar grupo' : 'Desmarcar grupo' }}</button>
+            <span class="text-[0.6875rem] text-slate-400">{{ grupo.escalados }}/{{ grupo.lista.length }}</span>
+            <button type="button" class="ml-auto text-[0.6875rem] font-semibold text-blue-700 hover:underline" @click="definirGrupo(grupo.lista, grupo.escalados < grupo.lista.length)">{{ grupo.escalados < grupo.lista.length ? 'Marcar grupo' : 'Desmarcar grupo' }}</button>
           </div>
           <div class="grid grid-cols-1 gap-x-3 sm:grid-cols-2 xl:grid-cols-3">
             <label v-for="c in grupo.lista" :key="c.usuario" class="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition hover:bg-slate-50" :class="selecionados.has(c.usuario) ? 'text-slate-900' : 'text-slate-500'">
               <input type="checkbox" class="size-3.5 shrink-0 accent-blue-600" :checked="selecionados.has(c.usuario)" @change="alternar(c.usuario)">
               <span class="min-w-0 flex-1 truncate text-xs" :class="selecionados.has(c.usuario) ? 'font-semibold' : ''">{{ nomeDe(c.usuario) }}<span v-if="matriculaDe(c.usuario)" class="ml-1 font-normal text-slate-400">{{ matriculaDe(c.usuario) }}</span></span>
-              <i v-if="leramNestaAuditoria.has(c.usuario)" class="fas fa-circle text-[5px] text-emerald-500" title="Leu nesta auditoria"></i>
-              <span class="shrink-0 text-[10px] tabular-nums text-slate-400">{{ c.ritmo ? `${Math.round(c.ritmo)}/h` : '—' }}</span>
+              <i v-if="leramNestaAuditoria.has(c.usuario)" class="fas fa-circle text-[0.3125rem] text-emerald-500" title="Leu nesta auditoria"></i>
+              <span class="shrink-0 text-[0.625rem] tabular-nums text-slate-400">{{ c.ritmo ? `${Math.round(c.ritmo)}/h` : '—' }}</span>
             </label>
           </div>
         </section>
@@ -360,24 +360,24 @@ const imprimirEscala = () => {
       <label class="block"><span class="ui-label">Fim</span><input v-model="horaFim" type="time" class="ui-input"></label>
       <label class="block"><span class="ui-label">Ritmo padrão (/h)</span><input v-model.number="ritmoPadrao" type="number" min="1" class="ui-input"></label>
     </div>
-    <p class="mt-1 text-[11px] text-slate-500">O ritmo padrão vale só para quem não tem histórico com horário e para o cálculo de pessoas necessárias.</p>
+    <p class="mt-1 text-[0.6875rem] text-slate-500">O ritmo padrão vale só para quem não tem histórico com horário e para o cálculo de pessoas necessárias.</p>
 
     <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-      <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">{{ areas.length }} locais</p></div>
+      <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Itens a auditar</p><p class="text-xl font-black text-slate-900">{{ escala.totalItens.toLocaleString('pt-BR') }}</p><p class="text-[0.6875rem] text-slate-500">{{ areas.length }} locais</p></div>
       <div class="rounded-xl bg-slate-50 p-3">
         <p class="text-xs font-semibold text-slate-500">Pessoas necessárias</p>
         <p class="text-xl font-black" :class="escala.pessoasNecessarias > selecionados.size ? 'text-red-700' : 'text-slate-900'">{{ escala.pessoasNecessarias }} <span class="text-sm font-semibold text-slate-500">/ {{ selecionados.size }} escaladas</span></p>
-        <p class="text-[11px] text-slate-500">{{ horas.toFixed(1).replace('.', ',') }}h a {{ ritmoPadrao }}/h</p>
+        <p class="text-[0.6875rem] text-slate-500">{{ horas.toFixed(1).replace('.', ',') }}h a {{ ritmoPadrao }}/h</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3">
         <p class="text-xs font-semibold text-slate-500">Término previsto</p>
         <p class="text-xl font-black" :class="escala.cabeNoHorario ? 'text-slate-900' : 'text-red-700'">{{ escala.grupos.length && escala.termino ? textoHora(escala.termino) : '—' }}</p>
-        <p class="text-[11px] text-slate-500">{{ escala.cabeNoHorario ? `dentro do horário (${horaFim})` : `passa de ${horaFim}` }}</p>
+        <p class="text-[0.6875rem] text-slate-500">{{ escala.cabeNoHorario ? `dentro do horário (${horaFim})` : `passa de ${horaFim}` }}</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3">
         <p class="text-xs font-semibold text-slate-500">No perfil</p>
         <p class="text-xl font-black" :class="escala.aderencia >= 95 ? 'text-slate-900' : 'text-amber-700'">{{ escala.aderencia.toFixed(0) }}%</p>
-        <p class="text-[11px] text-slate-500">dos itens com quem já lê ali</p>
+        <p class="text-[0.6875rem] text-slate-500">dos itens com quem já lê ali</p>
       </div>
     </div>
 
@@ -392,10 +392,10 @@ const imprimirEscala = () => {
 
     <p v-if="!areas.length" class="mt-4 rounded-xl bg-slate-50 py-8 text-center text-sm text-slate-500">Sem contagem por local nesta auditoria.</p>
     <p v-else-if="!escala.grupos.length" class="mt-4 rounded-xl bg-slate-50 py-8 text-center text-sm text-slate-500">Escolha ao menos um colaborador.</p>
-    <div v-else class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
+    <div v-else class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_27.5rem]">
       <div class="min-w-0">
         <div class="overflow-x-auto rounded-xl bg-slate-50 p-3">
-          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="w-full min-w-[600px]" role="img" aria-label="Divisão dos locais por colaborador">
+          <svg :viewBox="`-0.5 -0.5 ${layout.colunas + 1} ${layout.linhas + 1}`" class="w-full min-w-[37.5rem]" role="img" aria-label="Divisão dos locais por colaborador">
             <g v-for="p in posicoes" :key="p.id">
               <!-- Corredor: número no meio e as 4 faces (locais) em volta, cada uma com a sua pessoa. -->
               <template v-if="ehCorredor(p)">
@@ -429,19 +429,19 @@ const imprimirEscala = () => {
               <p class="text-sm font-bold text-slate-900">{{ infoArea.nome }} <span class="text-xs font-medium text-slate-500">· {{ infoArea.familia }} · {{ infoArea.itens.toLocaleString('pt-BR') }} itens{{ infoArea.setor ? ` · ${infoArea.setor}` : '' }}</span></p>
               <button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-800" @click="areaEscolhida = null"><i class="fas fa-xmark mr-1"></i>Fechar</button>
             </div>
-            <p v-if="infoArea.atual?.foraDoPerfil" class="mt-1 text-[11px] text-red-700"><i class="fas fa-triangle-exclamation mr-1"></i>Ninguém escalado tem {{ infoArea.familia }} no perfil.</p>
-            <p class="mt-2 text-[11px] text-slate-500">Passar para:</p>
+            <p v-if="infoArea.atual?.foraDoPerfil" class="mt-1 text-[0.6875rem] text-red-700"><i class="fas fa-triangle-exclamation mr-1"></i>Ninguém escalado tem {{ infoArea.familia }} no perfil.</p>
+            <p class="mt-2 text-[0.6875rem] text-slate-500">Passar para:</p>
             <div class="mt-1.5 flex flex-wrap gap-1.5">
               <button v-for="g in infoArea.opcoes" :key="g.usuario" type="button" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition"
                 :class="infoArea.grupo?.usuario === g.usuario ? 'bg-slate-900 text-white ring-slate-900' : g.noPerfil ? 'bg-white text-slate-700 ring-slate-200 hover:ring-slate-400' : 'bg-white text-slate-400 ring-slate-100 hover:ring-slate-300'"
                 :title="g.noPerfil ? `${Math.round(g.parcela * 100)}% das leituras em ${infoArea.familia}` : `Não costuma ler ${infoArea.familia}`" @click="fixar(infoArea.id, g.usuario)">
                 <span class="size-2.5 rounded-full" :style="{ background: cor(g.pessoa) }"></span>{{ rotuloUsuario(g.usuario) }}
-                <i v-if="!g.noPerfil" class="fas fa-ban text-[10px]" aria-label="fora do perfil"></i>
+                <i v-if="!g.noPerfil" class="fas fa-ban text-[0.625rem]" aria-label="fora do perfil"></i>
               </button>
               <button v-if="infoArea.fixa" type="button" class="rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50" @click="fixar(infoArea.id, null)"><i class="fas fa-list-check mr-1"></i>Automático</button>
             </div>
           </div>
-          <p v-else class="mt-2 text-[11px] text-slate-500">Cada face de corredor é um local. Clique num local para passá-lo a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver os locais dela · borda vermelha tracejada = fora do perfil.</p>
+          <p v-else class="mt-2 text-[0.6875rem] text-slate-500">Cada face de corredor é um local. Clique num local para passá-lo a outra pessoa (● = ajuste manual) · passe o mouse num nome para ver os locais dela · borda vermelha tracejada = fora do perfil.</p>
         </transition>
       </div>
 
@@ -450,18 +450,18 @@ const imprimirEscala = () => {
         <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-500">
           <span>Divisão por pessoa</span><span>{{ horaInicio }} – {{ textoHora(fimEscala) }}</span>
         </div>
-        <ol class="max-h-[600px] divide-y divide-slate-100 overflow-y-auto">
+        <ol class="max-h-[37.5rem] divide-y divide-slate-100 overflow-y-auto">
           <li v-for="g in escala.grupos" :key="g.usuario" class="px-4 py-3 transition-colors"
             :class="destaque === g.usuario || infoArea?.grupo?.usuario === g.usuario ? 'bg-slate-50' : ''"
             @mouseenter="destaque = g.usuario" @mouseleave="destaque = null">
             <div class="flex items-start gap-3">
-              <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black text-white" :style="{ background: cor(g.pessoa) }">{{ iniciais(g.usuario) }}</span>
+              <span class="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-black text-white" :style="{ background: cor(g.pessoa) }">{{ iniciais(g.usuario) }}</span>
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline justify-between gap-2">
                   <p class="truncate text-sm font-bold text-slate-900">{{ rotuloUsuario(g.usuario) }}</p>
                   <p class="shrink-0 text-xs font-bold tabular-nums" :class="g.passa ? 'text-red-700' : 'text-slate-700'">{{ textoHora(g.disponivel.inicio) }}–{{ textoHora(g.termino) }}</p>
                 </div>
-                <p class="truncate text-[11px] text-slate-500">{{ perfilTexto(g) }}</p>
+                <p class="truncate text-[0.6875rem] text-slate-500">{{ perfilTexto(g) }}</p>
 
                 <div class="relative mt-2 h-1.5 rounded-full bg-slate-100" :title="`Carga ${g.carga.toFixed(0)}% da capacidade`">
                   <div class="absolute inset-y-0 rounded-full transition-all duration-500" :style="{ left: posicao(g.disponivel.inicio), width: largura(g.disponivel.inicio, g.termino), background: g.passa ? '#dc2626' : cor(g.pessoa) }"></div>
@@ -469,14 +469,14 @@ const imprimirEscala = () => {
                 </div>
 
                 <div class="mt-2 flex flex-wrap gap-1">
-                  <span v-for="c in chipsDe(g)" :key="c.chave" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+                  <span v-for="c in chipsDe(g)" :key="c.chave" class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold"
                     :class="c.foraDoPerfil ? 'bg-red-50 text-red-700' : c.parcial ? 'bg-white text-slate-600 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-700'"
                     :title="`${c.itens} itens · ${c.minutos} min${c.parcial ? ' · parte do corredor' : ''}${c.foraDoPerfil ? ' · fora do perfil' : ''}`">
-                    <i v-if="c.fixa" class="fas fa-thumbtack text-[9px] text-slate-400" aria-label="ajuste manual"></i>{{ c.texto }}
+                    <i v-if="c.fixa" class="fas fa-thumbtack text-[0.5625rem] text-slate-400" aria-label="ajuste manual"></i>{{ c.texto }}
                   </span>
-                  <span v-if="!g.areas.length" class="text-[11px] text-slate-400">Sem áreas</span>
+                  <span v-if="!g.areas.length" class="text-[0.6875rem] text-slate-400">Sem áreas</span>
                 </div>
-                <p class="mt-1.5 text-[11px] text-slate-500">
+                <p class="mt-1.5 text-[0.6875rem] text-slate-500">
                   {{ g.itens.toLocaleString('pt-BR') }} itens · {{ g.areas.length }} local(is) em {{ new Set(g.areas.map(a => a.bloco)).size }} área(s) · carga {{ g.carga.toFixed(0) }}%
                 </p>
               </div>

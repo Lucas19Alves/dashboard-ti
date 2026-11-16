@@ -3,7 +3,7 @@ import { reactive, watch } from 'vue'
 // Aparência e acessibilidade, salvas neste navegador e aplicadas na tag <html>.
 // O index.html aplica as mesmas classes antes do app montar, para não piscar o tema claro.
 const CHAVE = 'dashboard_ti_aparencia'
-export const TAMANHOS_TEXTO = { normal: '100%', grande: '112.5%', maior: '125%' }
+export const TAMANHOS_TEXTO = { normal: '1', grande: '1.125', maior: '1.25' }
 const PADRAO = { tema: 'sistema', texto: 'normal', contraste: false, menosMovimento: false }
 
 const ler = () => {
@@ -28,7 +28,7 @@ const aplicar = () => {
   html.classList.toggle('dark', escuro)
   html.classList.toggle('alto-contraste', Boolean(estado.contraste))
   html.classList.toggle('menos-movimento', Boolean(estado.menosMovimento))
-  html.style.fontSize = TAMANHOS_TEXTO[estado.texto] || '100%'
+  html.style.setProperty('--ui-escala-texto', TAMANHOS_TEXTO[estado.texto] || '1')
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', escuro ? '#0f1d3d' : '#1d4ed8')
 }
 

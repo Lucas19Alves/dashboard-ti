@@ -726,15 +726,15 @@ const acoesDaAuditoria = a => [
               class="h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-xs"
               title="Semana Anterior"
             >
-              <i class="fas fa-chevron-left text-[10px]"></i>
+              <i class="fas fa-chevron-left text-[0.625rem]"></i>
             </button>
             
-            <div class="px-4 py-1 text-center min-w-[180px]">
+            <div class="px-4 py-1 text-center min-w-[11.25rem]">
               <span class="text-sm font-bold text-slate-700 block leading-tight">{{ labelSemanaSelecionada }}</span>
-              <span v-if="semanaOffset !== 0" class="text-[9px] text-blue-600 font-semibold">
+              <span v-if="semanaOffset !== 0" class="text-[0.5625rem] text-blue-600 font-semibold">
                 {{ semanaOffset > 0 ? 'Semana Futura' : 'Semana Passada' }}
               </span>
-              <span v-else class="text-[9px] text-emerald-600 font-semibold">
+              <span v-else class="text-[0.5625rem] text-emerald-600 font-semibold">
                 Semana atual
               </span>
             </div>
@@ -744,7 +744,7 @@ const acoesDaAuditoria = a => [
               class="h-9 w-9 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-xs"
               title="Próxima Semana"
             >
-              <i class="fas fa-chevron-right text-[10px]"></i>
+              <i class="fas fa-chevron-right text-[0.625rem]"></i>
             </button>
             
             <div class="w-px h-5 bg-slate-200 mx-1"></div>
@@ -777,7 +777,7 @@ const acoesDaAuditoria = a => [
                 </span>
               </div>
               <div class="flex flex-col items-end text-right">
-                <span class="text-[10px] font-medium text-gray-400">Janela</span>
+                <span class="text-[0.625rem] font-medium text-gray-400">Janela</span>
                 <span class="text-xs text-gray-600">08:00 - {{ obterHorarioMaximoDia(d.data) }}</span>
               </div>
             </div>
@@ -787,7 +787,7 @@ const acoesDaAuditoria = a => [
                   v-if="auditoriasPorDiaTipo[d.data] && auditoriasPorDiaTipo[d.data][tipo] && auditoriasPorDiaTipo[d.data][tipo].length > 0"
                   :to="`/auditoria/${auditoriasPorDiaTipo[d.data][tipo][0].id}`"
                   @click.stop
-                  class="px-3 py-1 rounded-full text-[11px] font-semibold no-underline shadow-sm ring-1 ring-black/5 flex items-center gap-1"
+                  class="px-3 py-1 rounded-full text-[0.6875rem] font-semibold no-underline shadow-sm ring-1 ring-black/5 flex items-center gap-1"
                   :class="[
                     auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada'
                       ? (dentroDaMeta(auditoriasPorDiaTipo[d.data][tipo][0]) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')
@@ -795,32 +795,32 @@ const acoesDaAuditoria = a => [
                   ]"
                   :title="auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada' ? 'Fechada' : 'Em andamento'"
                 >
-                  <i class="fas fa-check-circle text-[10px]" v-if="auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada'"></i>
-                  <i class="fas fa-play text-[10px]" v-else></i>
+                  <i class="fas fa-check-circle text-[0.625rem]" v-if="auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada'"></i>
+                  <i class="fas fa-play text-[0.625rem]" v-else></i>
                   {{ tipo }} • {{ auditoriasPorDiaTipo[d.data][tipo][0].status === 'fechada' ? 'Fechada' : 'Aberta' }}
                 </router-link>
                 <button
                   v-else-if="!auditoriasPorDiaTipo[d.data] && (tiposPlanejados[d.dayIndex] || []).includes(tipo)"
                   @click.stop="criarAPartirCalendario(d.data, tipo, d.label)"
-                  class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
+                  class="px-3 py-1 rounded-full text-[0.6875rem] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
                   title="Criar auditoria e iniciar acompanhamento"
                 >
-                  <i class="fas fa-plus text-[10px]"></i>
+                  <i class="fas fa-plus text-[0.625rem]"></i>
                   {{ tipo }} • Criar
                 </button>
               </template>
               <button
                 v-if="!auditoriasPorDiaTipo[d.data] && !(tiposPlanejados[d.dayIndex] || []).length"
                 @click.stop="criarAPartirCalendario(d.data, formulario.tipo, d.label)"
-                class="px-3 py-1 rounded-full text-[11px] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
+                class="px-3 py-1 rounded-full text-[0.6875rem] font-semibold bg-white border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition shadow-sm flex items-center gap-1"
               >
-                <i class="fas fa-plus text-[10px]"></i>
+                <i class="fas fa-plus text-[0.625rem]"></i>
                 Criar Auditoria
               </button>
             </div>
             <div
               v-if="auditoriasPorDiaTipo[d.data]"
-              class="mt-2 text-[11px] text-gray-700 space-y-1"
+              class="mt-2 text-[0.6875rem] text-gray-700 space-y-1"
             >
               <template v-for="tipo in ['Etiqueta', 'Presença', 'Ruptura']" :key="tipo + d.data">
                 <div v-if="auditoriasPorDiaTipo[d.data][tipo]?.length" class="flex items-center gap-1">
@@ -829,14 +829,14 @@ const acoesDaAuditoria = a => [
                 </div>
               </template>
             </div>
-            <div class="mt-3 flex items-center justify-between text-[11px] text-gray-500">
+            <div class="mt-3 flex items-center justify-between text-[0.6875rem] text-gray-500">
               <span v-if="auditoriasPorDiaTipo[d.data]">Dia com auditoria</span>
               <span v-else class="italic text-gray-400">Sem auditoria cadastrada</span>
               <span
                 v-if="diaSelecionado && diaSelecionado.data === d.data"
                 class="inline-flex items-center gap-1 text-blue-700 font-semibold"
               >
-                <i class="fas fa-play text-[10px]"></i>
+                <i class="fas fa-play text-[0.625rem]"></i>
                 Selecionado
               </span>
             </div>
@@ -901,10 +901,10 @@ const acoesDaAuditoria = a => [
                 <span class="text-xs font-medium text-slate-500">{{ previaArquivo.totalLinhas }} linhas · {{ previaArquivo.totalColunas }} colunas</span>
               </div>
               <div class="mt-2 flex flex-wrap gap-1.5">
-                <span v-for="coluna in previaArquivo.colunas.slice(0, 8)" :key="coluna" class="rounded-md bg-white px-2 py-1 text-[11px] text-slate-600 shadow-sm">
+                <span v-for="coluna in previaArquivo.colunas.slice(0, 8)" :key="coluna" class="rounded-md bg-white px-2 py-1 text-[0.6875rem] text-slate-600 shadow-sm">
                   {{ coluna }}
                 </span>
-                <span v-if="previaArquivo.colunas.length > 8" class="px-2 py-1 text-[11px] text-slate-500">+{{ previaArquivo.colunas.length - 8 }}</span>
+                <span v-if="previaArquivo.colunas.length > 8" class="px-2 py-1 text-[0.6875rem] text-slate-500">+{{ previaArquivo.colunas.length - 8 }}</span>
               </div>
             </div>
             <p class="text-xs text-gray-500 mt-1">Selecione o arquivo Excel com os dados da auditoria</p>
@@ -1011,7 +1011,7 @@ const acoesDaAuditoria = a => [
             >
               <i class="fas fa-calendar-alt text-xs"></i>
               {{ filtroDataTipo !== 'todas' ? 'Data filtrada' : 'Data' }}
-              <i class="fas fa-chevron-down text-[10px] opacity-60"></i>
+              <i class="fas fa-chevron-down text-[0.625rem] opacity-60"></i>
             </button>
             <div v-if="mostrarFiltroData" class="fixed inset-0 z-40" @click="mostrarFiltroData = false"></div>
             <div v-if="mostrarFiltroData" class="ui-pop-in absolute right-0 top-full z-50 mt-2 w-72 rounded-xl bg-white p-4 shadow-2xl ring-1 ring-slate-900/5">
@@ -1062,8 +1062,8 @@ const acoesDaAuditoria = a => [
             <router-link :to="`/auditoria/${auditoria.id}`" class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold" :class="corTipo(auditoria.tipo).chip">
-                    <i :class="[corTipo(auditoria.tipo).icone, 'text-[9px]']"></i>{{ auditoria.tipo }}
+                  <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[0.6875rem] font-bold" :class="corTipo(auditoria.tipo).chip">
+                    <i :class="[corTipo(auditoria.tipo).icone, 'text-[0.5625rem]']"></i>{{ auditoria.tipo }}
                   </span>
                   <p class="mt-2 text-lg font-bold text-slate-900">{{ formatarDataISO(String(auditoria.data).slice(0, 10)) }}</p>
                   <p class="text-xs text-slate-500">#{{ auditoria.id }} · SKU {{ Number(auditoria.sku || 0).toLocaleString('pt-BR') }}</p>
@@ -1146,27 +1146,27 @@ const acoesDaAuditoria = a => [
                 </span>
                 <div class="w-28 shrink-0">
                   <p class="text-sm font-bold text-slate-900">{{ formatarDataISO(l.data) }}</p>
-                  <p class="text-[11px] text-slate-500">#{{ l.id }} · {{ l.status }}</p>
+                  <p class="text-[0.6875rem] text-slate-500">#{{ l.id }} · {{ l.status }}</p>
                 </div>
                 <!-- % pendente com barra relativa à meta (escala até 3x a meta) -->
                 <div class="hidden min-w-0 flex-1 md:block">
                   <div class="relative h-2 max-w-2xl rounded-full bg-slate-100">
                     <span class="absolute inset-y-0 left-0 rounded-full" :class="l.pendente <= META ? 'bg-emerald-500' : 'bg-red-500'" :style="{ width: `${Math.min(100, (l.pendente / (META * 3)) * 100)}%` }"></span>
-                    <span class="absolute -top-1 bottom-[-4px] w-px bg-slate-400" style="left: 33.33%" title="Meta"></span>
+                    <span class="absolute -top-1 bottom-[-0.25rem] w-px bg-slate-400" style="left: 33.33%" title="Meta"></span>
                   </div>
                 </div>
                 <div class="w-20 shrink-0 text-right">
                   <p class="text-sm font-bold" :class="l.pendente <= META ? 'text-emerald-700' : 'text-red-700'">{{ l.pendente.toFixed(2) }}%</p>
-                  <p class="text-[11px] text-slate-500">pendente</p>
+                  <p class="text-[0.6875rem] text-slate-500">pendente</p>
                 </div>
                 <div class="hidden w-28 shrink-0 text-right lg:block">
                   <p class="text-sm font-semibold text-slate-700">{{ l.pendentes.toLocaleString('pt-BR') }} / {{ l.total.toLocaleString('pt-BR') }}</p>
-                  <p class="text-[11px] text-slate-500">pendentes / SKU</p>
+                  <p class="text-[0.6875rem] text-slate-500">pendentes / SKU</p>
                 </div>
               </router-link>
               <div class="flex w-32 shrink-0 items-center justify-end gap-1">
-                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.meta === 'Na meta' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
-                  <i :class="l.meta === 'Na meta' ? 'fas fa-check' : 'fas fa-times'" class="text-[9px]"></i>{{ l.meta === 'Na meta' ? 'Meta' : 'Fora' }}
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold" :class="l.meta === 'Na meta' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                  <i :class="l.meta === 'Na meta' ? 'fas fa-check' : 'fas fa-times'" class="text-[0.5625rem]"></i>{{ l.meta === 'Na meta' ? 'Meta' : 'Fora' }}
                 </span>
                 <UiMenu :acoes="acoesDaAuditoria(l.auditoria)" rotulo="" estilo="ferramenta" titulo="Ações da auditoria" />
               </div>

@@ -65,7 +65,7 @@ const aoMover = (evento) => {
     ></span>
     <div
       v-if="pontoAtivo"
-      class="pointer-events-none absolute -top-9 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg"
+      class="pointer-events-none absolute -top-9 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2 py-1 text-[0.6875rem] font-medium text-white shadow-lg"
       :style="{ left: `${Math.min(85, Math.max(15, (x(ativo) / L) * 100))}%` }"
     >
       {{ formatarDataBR(pontoAtivo.data) }} · <span class="font-bold">{{ pontoAtivo.valor.toFixed(1) }}%</span> {{ rotulo.toLowerCase() }}

@@ -286,7 +286,7 @@ const corClassificacao = c => ({ Excelente: 'bg-emerald-50 text-emerald-700', Bo
     </div>
     <!-- Imagem quadrada (renderizada fora da tela só durante a geração) -->
     <div v-if="gerandoImagem" class="pointer-events-none fixed top-0" style="left: -99999px" aria-hidden="true">
-      <div ref="imagemQuadrada" class="flex flex-col gap-5 bg-white p-9 text-slate-900" :style="{ width: `${QUADRADO}px`, height: `${QUADRADO}px` }">
+      <div ref="imagemQuadrada" class="ui-escala-fixa flex flex-col gap-5 bg-white p-9 text-slate-900" :style="{ width: `${QUADRADO}px`, height: `${QUADRADO}px` }">
         <div class="flex items-baseline justify-between">
           <p class="text-[30px] font-black">Auditoria de {{ auditoria.tipo }} · {{ dataBR }}</p>
           <p class="text-[20px] font-semibold text-slate-500">{{ auditoria.status === 'fechada' ? 'Fechada' : 'Em andamento' }} · #{{ auditoria.id }}</p>

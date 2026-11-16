@@ -124,9 +124,9 @@ const visao = ref('fornecedor')
         <p v-if="!r.meses.length" class="py-8 text-center text-sm text-slate-500">Sem valores no período.</p>
         <div v-else class="flex h-56 items-end gap-2">
           <div v-for="m in r.meses" :key="m.chave" class="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-            <span class="text-[11px] font-bold text-slate-700">{{ mil(m[metricaMes]) }}</span>
+            <span class="text-[0.6875rem] font-bold text-slate-700">{{ mil(m[metricaMes]) }}</span>
             <span class="w-full max-w-16 rounded-t-lg bg-red-400 transition group-hover:bg-red-500" :style="{ height: `${(m[metricaMes] / maiorMes) * 80}%`, minHeight: m[metricaMes] ? '3px' : '0' }" :title="`${rotuloMes(m.chave)}: média ${moeda(m.valor)} em ${m.auditorias} auditoria(s) · última ${moeda(m.ultima)} (${br(m.ultimaData)}) · pior ${moeda(m.pico)}`"></span>
-            <span class="truncate text-[11px] font-semibold text-slate-500">{{ rotuloMes(m.chave) }}</span>
+            <span class="truncate text-[0.6875rem] font-semibold text-slate-500">{{ rotuloMes(m.chave) }}</span>
           </div>
         </div>
         <UiTabela id="ruptura-meses" titulo="Ruptura por mês" :itens="r.meses" :colunas="COLUNAS_MESES" :ordem-inicial="{ chave: 'chave', direcao: 'desc' }" chave-item="chave" :tamanho-pagina="10" :agrupavel="false" />

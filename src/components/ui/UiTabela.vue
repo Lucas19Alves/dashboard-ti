@@ -303,7 +303,7 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
 
     <!-- Filtros rápidos e atalhos -->
     <div v-if="rapidos.length || atalhos.length" class="flex flex-wrap items-center gap-2">
-      <button v-for="a in atalhos" :key="a.rotulo" type="button" class="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold transition" :class="atalhoAtivo(a) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'" @click="aplicarAtalho(a)">
+      <button v-for="a in atalhos" :key="a.rotulo" type="button" class="inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[0.8125rem] font-semibold transition" :class="atalhoAtivo(a) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300'" @click="aplicarAtalho(a)">
         <i v-if="a.icone" :class="a.icone"></i>{{ a.rotulo }}
       </button>
       <span v-if="atalhos.length && rapidos.length" class="mx-1 hidden h-5 w-px bg-slate-200 sm:block"></span>
@@ -392,7 +392,7 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
     <!-- Filtros ativos -->
     <div v-if="temFiltro" class="flex flex-wrap items-center gap-1.5">
       <button v-for="c in chips" :key="c.id" type="button" class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800 hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Remover filtro" @click="removerChip(c.id)">
-        <span class="truncate">{{ c.texto }}</span><i class="fas fa-xmark text-[10px]"></i>
+        <span class="truncate">{{ c.texto }}</span><i class="fas fa-xmark text-[0.625rem]"></i>
       </button>
       <button type="button" class="px-1.5 text-xs font-semibold text-slate-500 hover:text-red-600" @click="limparTudo">Limpar tudo</button>
     </div>
@@ -437,7 +437,7 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
             <tr>
               <th v-for="c in exibidas" :key="c.chave" scope="col" class="whitespace-nowrap px-3 py-2.5 font-semibold" :class="[alinhar(c), c.ordenavel !== false ? 'cursor-pointer select-none hover:text-blue-700' : '']" :aria-sort="estado.ordem[0]?.chave === c.chave ? (estado.ordem[0].direcao === 'asc' ? 'ascending' : 'descending') : undefined" @click="clicarCabecalho(c, $event)">
                 {{ c.titulo }}
-                <template v-if="c.ordenavel !== false"><i class="fas ml-0.5 text-[10px]" :class="iconeOrdem(c.chave)"></i><sup v-if="estado.ordem.length > 1 && posicaoOrdem(c.chave) >= 0" class="ml-0.5 text-[9px] text-blue-600">{{ posicaoOrdem(c.chave) + 1 }}</sup></template>
+                <template v-if="c.ordenavel !== false"><i class="fas ml-0.5 text-[0.625rem]" :class="iconeOrdem(c.chave)"></i><sup v-if="estado.ordem.length > 1 && posicaoOrdem(c.chave) >= 0" class="ml-0.5 text-[0.5625rem] text-blue-600">{{ posicaoOrdem(c.chave) + 1 }}</sup></template>
               </th>
             </tr>
           </thead>
@@ -445,14 +445,14 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
             <template v-for="g in grupos" :key="g.chave || 'todos'">
               <tr v-if="g.chave" class="cursor-pointer bg-slate-50/60 hover:bg-slate-100/70" @click="alternarGrupo(g.chave)">
                 <td :colspan="exibidas.length" class="border-t border-slate-200 px-3 py-2">
-                  <span class="flex items-center gap-2"><i class="fas fa-chevron-down text-[10px] text-slate-400 transition" :class="recolhidos.has(g.chave) ? '-rotate-90' : ''"></i><b class="text-slate-800">{{ g.chave }}</b><span class="ml-auto text-xs font-semibold text-slate-500">{{ int(g.total) }}</span></span>
+                  <span class="flex items-center gap-2"><i class="fas fa-chevron-down text-[0.625rem] text-slate-400 transition" :class="recolhidos.has(g.chave) ? '-rotate-90' : ''"></i><b class="text-slate-800">{{ g.chave }}</b><span class="ml-auto text-xs font-semibold text-slate-500">{{ int(g.total) }}</span></span>
                 </td>
               </tr>
               <template v-if="!recolhidos.has(g.chave)">
                 <tr v-for="(item, i) in g.itens" :key="chaveDe(item, i)" class="border-t border-slate-100" :class="[clicavel ? 'cursor-pointer hover:bg-blue-50/50' : 'hover:bg-slate-50/70', destacar?.(item) ? '!bg-blue-50' : '']" @click="clicavel && emit('linha', item)">
                   <td v-for="(c, ci) in exibidas" :key="c.chave" class="px-3 py-2" :class="[alinhar(c), ci === 0 ? 'font-semibold text-slate-800' : 'text-slate-600', c.largura || '']">
                     <slot :name="`celula-${c.chave}`" :item="item" :valor="valorDe(item, c)" :texto="exibir(item, c)">
-                      <span v-if="c.badge" class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="c.badge(valorDe(item, c), item)">{{ exibir(item, c) }}</span>
+                      <span v-if="c.badge" class="inline-flex rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold" :class="c.badge(valorDe(item, c), item)">{{ exibir(item, c) }}</span>
                       <span v-else class="block max-w-[28rem] truncate" :title="String(exibir(item, c))">{{ exibir(item, c) }}</span>
                     </slot>
                   </td>
@@ -478,7 +478,7 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
   border: 1px solid color-mix(in oklab, var(--color-slate-300) 80%, transparent);
   background: var(--color-white);
   padding: 0 0.75rem;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-slate-700);
   white-space: nowrap;
@@ -495,7 +495,7 @@ defineExpose({ filtrados, ordenados, limparTudo, definirRapido, aplicarCondicoes
   border-radius: 9999px;
   background: var(--color-blue-600);
   padding: 0 0.3rem;
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--color-white);
 }
 </style>

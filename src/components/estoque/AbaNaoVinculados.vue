@@ -255,7 +255,7 @@ const PRIORIDADE = { alta: 'Vende toda semana', media: 'Com estoque', baixa: 'Se
 
         <section class="grid grid-cols-2 gap-3 md:grid-cols-5" aria-label="Resumo">
           <div v-for="(r, i) in resumo" :key="r.rotulo" class="ui-card p-4" :class="i === 0 ? 'col-span-2 md:col-span-1 border-blue-200 bg-blue-50/60' : ''">
-            <p class="text-[13px] font-semibold text-slate-600">{{ r.rotulo }}</p>
+            <p class="text-[0.8125rem] font-semibold text-slate-600">{{ r.rotulo }}</p>
             <p class="mt-2 text-[2rem] font-semibold leading-none tabular-nums" :class="i === 0 ? 'text-blue-800' : 'text-slate-900'">{{ r.valor.toLocaleString('pt-BR') }}</p>
             <p class="mt-2 text-xs text-slate-500">{{ r.nota }}</p>
           </div>

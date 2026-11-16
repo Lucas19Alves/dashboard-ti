@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
   <nav class="sticky top-0 z-40 bg-blue-700 text-white print:hidden">
     <div class="ui-container">
       <div class="flex h-16 items-center justify-between gap-3">
-        <router-link to="/" class="flex shrink-0 items-center gap-2 text-[17px] font-semibold tracking-tight">
+        <router-link to="/" class="flex shrink-0 items-center gap-2 text-[1.0625rem] font-semibold tracking-tight">
           <i class="fas fa-chart-pie text-blue-200" aria-hidden="true"></i>
           <span>Dashboard Loja</span>
         </router-link>
@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
             class="hidden items-center gap-1.5 rounded-full bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100 ring-1 ring-amber-300/40 sm:inline-flex"
             title="Sem conexão. Os dados continuam salvos neste navegador."
           >
-            <i class="fas fa-wifi text-[10px]"></i>Offline
+            <i class="fas fa-wifi text-[0.625rem]"></i>Offline
           </span>
 
           <button
@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
           >
             <i class="fas fa-search text-xs"></i>
             <span class="hidden xl:mr-4 xl:inline">Buscar...</span>
-            <kbd class="rounded-md bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd>
+            <kbd class="rounded-md bg-white/15 px-1.5 py-0.5 text-[0.625rem] font-semibold">{{ ehMac ? '⌘' : 'Ctrl' }} K</kbd>
           </button>
           <button
             type="button"

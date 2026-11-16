@@ -2,7 +2,7 @@
   <UiModal v-if="aberto" :title="titulo" :subtitle="subtitulo" width="max-w-6xl" @close="fechar">
     <div class="space-y-5">
       <!-- Resumo -->
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-[13.75rem_minmax(0,1fr)]">
         <div class="flex items-center gap-4 rounded-xl bg-slate-50 p-4">
           <span class="inline-flex size-12 items-center justify-center rounded-xl bg-white shadow-sm" :class="classeValor"><i :class="[icone, 'text-lg']"></i></span>
           <div>

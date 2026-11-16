@@ -28,9 +28,9 @@ const TITULO = { ok: 'Tudo certo com a planilha', aviso: 'Planilha com pontos pa
       </div>
 
       <div class="grid grid-cols-3 gap-2 text-center">
-        <div class="rounded-xl bg-slate-50 py-2"><p class="text-xl font-black text-slate-900">{{ r.total.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-slate-500">linhas</p></div>
-        <div class="rounded-xl bg-emerald-50 py-2"><p class="text-xl font-black text-emerald-700">{{ r.lidos.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-emerald-700">lidas</p></div>
-        <div class="rounded-xl bg-amber-50 py-2"><p class="text-xl font-black text-amber-700">{{ r.pendentes.toLocaleString('pt-BR') }}</p><p class="text-[11px] text-amber-700">não lidas</p></div>
+        <div class="rounded-xl bg-slate-50 py-2"><p class="text-xl font-black text-slate-900">{{ r.total.toLocaleString('pt-BR') }}</p><p class="text-[0.6875rem] text-slate-500">linhas</p></div>
+        <div class="rounded-xl bg-emerald-50 py-2"><p class="text-xl font-black text-emerald-700">{{ r.lidos.toLocaleString('pt-BR') }}</p><p class="text-[0.6875rem] text-emerald-700">lidas</p></div>
+        <div class="rounded-xl bg-amber-50 py-2"><p class="text-xl font-black text-amber-700">{{ r.pendentes.toLocaleString('pt-BR') }}</p><p class="text-[0.6875rem] text-amber-700">não lidas</p></div>
       </div>
 
       <ul class="divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
@@ -40,12 +40,12 @@ const TITULO = { ok: 'Tudo certo com a planilha', aviso: 'Planilha com pontos pa
             <span class="min-w-0 flex-1">
               <span class="block text-sm font-semibold text-slate-800">{{ v.titulo }}</span>
               <span class="block text-xs text-slate-600">{{ v.resumo }}</span>
-              <span v-if="v.detalhe" class="block text-[11px] text-slate-500">{{ v.detalhe }}</span>
+              <span v-if="v.detalhe" class="block text-[0.6875rem] text-slate-500">{{ v.detalhe }}</span>
             </span>
             <i v-if="v.exemplos?.length" :class="['fas text-xs text-slate-400 mt-1', aberto === v.chave ? 'fa-chevron-up' : 'fa-chevron-down']" aria-hidden="true"></i>
           </button>
           <div v-if="aberto === v.chave" class="flex flex-wrap gap-1.5 px-3 pb-3 pl-9">
-            <span v-for="e in v.exemplos" :key="e" class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{{ e }}</span>
+            <span v-for="e in v.exemplos" :key="e" class="rounded-md bg-slate-100 px-2 py-0.5 text-[0.6875rem] font-semibold text-slate-700">{{ e }}</span>
           </div>
         </li>
       </ul>

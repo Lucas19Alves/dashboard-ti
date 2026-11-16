@@ -82,7 +82,7 @@ const passoRotulo = computed(() => Math.max(1, Math.ceil(serie.value.length / 10
     </div>
   </div>
   </div>
-  <div class="mt-1 flex flex-wrap gap-x-4 text-[11px] text-slate-600">
+  <div class="mt-1 flex flex-wrap gap-x-4 text-[0.6875rem] text-slate-600">
     <span><i class="mr-1 inline-block h-1 w-5 rounded bg-blue-600 align-middle"></i>Ritmo (leituras/h)</span>
     <span><i class="mr-1 inline-block size-2.5 rounded-sm bg-red-300 align-middle"></i>% com problema</span>
     <span v-if="serie.some(s => s.ritmo === null)">Sem ponto = auditoria sem horário suficiente</span>

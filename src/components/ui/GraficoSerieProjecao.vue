@@ -80,7 +80,7 @@ const mover = (e) => {
       <p class="text-slate-500">{{ br(ativo.data) }} · {{ ativo.tipo === 'foto' ? 'planilha' : 'projeção' }}</p>
       <p class="font-semibold tabular-nums text-slate-900">{{ formato(ativo.valor) }}</p>
     </div>
-    <p class="mt-1 flex flex-wrap gap-4 text-[11px] text-slate-500">
+    <p class="mt-1 flex flex-wrap gap-4 text-[0.6875rem] text-slate-500">
       <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-5 rounded bg-blue-600"></span>{{ rotulo || 'Planilhas importadas' }}</span>
       <span v-if="projecao.length > 1" class="inline-flex items-center gap-1.5"><span class="w-5 border-t-2 border-dashed border-blue-600 opacity-60"></span>Projeção (tendência das últimas fotos)</span>
     </p>

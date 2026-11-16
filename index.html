@@ -31,8 +31,8 @@
           if (escuro) h.classList.add('dark')
           if (a.contraste) h.classList.add('alto-contraste')
           if (a.menosMovimento) h.classList.add('menos-movimento')
-          var t = { grande: '112.5%', maior: '125%' }[a.texto]
-          if (t) h.style.fontSize = t
+          var t = { grande: '1.125', maior: '1.25' }[a.texto]
+          if (t) h.style.setProperty('--ui-escala-texto', t)
         } catch (e) {}
       })()
     </script>

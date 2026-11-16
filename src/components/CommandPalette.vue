@@ -187,7 +187,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', atalhoGlobal))
             autocomplete="off"
             @keydown="aoTeclarCampo"
           >
-          <kbd class="hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 sm:inline">Esc</kbd>
+          <kbd class="hidden rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[0.625rem] font-semibold text-slate-500 sm:inline">Esc</kbd>
         </div>
 
         <div ref="lista" class="max-h-[55vh] overflow-y-auto p-2">
@@ -218,7 +218,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', atalhoGlobal))
           </div>
         </div>
 
-        <footer class="flex items-center gap-4 border-t border-slate-100 bg-slate-50 px-4 py-2 text-[11px] text-slate-500">
+        <footer class="flex items-center gap-4 border-t border-slate-100 bg-slate-50 px-4 py-2 text-[0.6875rem] text-slate-500">
           <span><kbd class="font-semibold">↑↓</kbd> navegar</span>
           <span><kbd class="font-semibold">Enter</kbd> abrir</span>
           <span class="ml-auto"><kbd class="font-semibold">Ctrl K</kbd> ou <kbd class="font-semibold">/</kbd> abre a busca</span>

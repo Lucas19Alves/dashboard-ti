@@ -219,7 +219,7 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
               @click="emit('detalhes', u.nome)"
             >
               <span class="line-clamp-2 w-full text-sm font-bold leading-tight text-slate-900" :title="u.exibicao">{{ u.exibicao }}</span>
-              <span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span>
+              <span v-if="u.matricula" class="text-[0.6875rem] text-slate-500">Matrícula: {{ u.matricula }}</span>
               <span class="text-xs text-slate-500">{{ u.leituras.toLocaleString('pt-BR') }} leituras</span>
               <span
                 class="mt-2 flex w-full items-start justify-center rounded-t-xl pt-2 text-lg font-black text-white"
@@ -235,12 +235,12 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
           <p class="text-xs text-slate-500">Soma de todos os usuários, das 08h às 20h.</p>
           <div class="mt-4 flex h-40 items-end gap-1.5">
             <div v-for="(v, i) in resumo.porHora" :key="i" class="group relative flex h-full flex-1 flex-col justify-end">
-              <span class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] text-white group-hover:block">{{ formatarHora(HORAS[i]) }}: {{ v.toLocaleString('pt-BR') }}</span>
+              <span class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[0.6875rem] text-white group-hover:block">{{ formatarHora(HORAS[i]) }}: {{ v.toLocaleString('pt-BR') }}</span>
               <span class="w-full rounded-t transition-all duration-500" :class="HORAS[i] === resumo.picoHora ? 'bg-blue-700' : 'bg-blue-400 group-hover:bg-blue-500'" :style="{ height: `${(v / maiorHoraTime) * 100}%`, minHeight: v ? '3px' : '0' }"></span>
             </div>
           </div>
           <div class="mt-1.5 flex gap-1.5">
-            <span v-for="h in HORAS" :key="h" class="flex-1 text-center text-[10px] text-slate-400">{{ h }}</span>
+            <span v-for="h in HORAS" :key="h" class="flex-1 text-center text-[0.625rem] text-slate-400">{{ h }}</span>
           </div>
         </section>
       </div>
@@ -284,14 +284,14 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
             </div>
             <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" :style="{ width: `${u.participacao}%` }"></div></div>
             <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ Math.round(u.ritmo) }}/h</p><p class="text-[10px] text-slate-500">ritmo</p></div>
-              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ u.pico === null ? '—' : formatarHora(u.pico) }}</p><p class="text-[10px] text-slate-500">pico</p></div>
-              <div class="rounded-xl py-2" :class="classeProblema(u.percProblema)"><p class="text-sm font-bold">{{ u.percProblema.toFixed(1) }}%</p><p class="text-[10px] opacity-80">problemas</p></div>
+              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ Math.round(u.ritmo) }}/h</p><p class="text-[0.625rem] text-slate-500">ritmo</p></div>
+              <div class="rounded-xl bg-slate-50 py-2"><p class="text-sm font-bold text-slate-900">{{ u.pico === null ? '—' : formatarHora(u.pico) }}</p><p class="text-[0.625rem] text-slate-500">pico</p></div>
+              <div class="rounded-xl py-2" :class="classeProblema(u.percProblema)"><p class="text-sm font-bold">{{ u.percProblema.toFixed(1) }}%</p><p class="text-[0.625rem] opacity-80">problemas</p></div>
             </div>
             <div class="mt-4 flex gap-0.5" :aria-label="`Leituras por hora de ${u.exibicao}`">
               <span v-for="(v, i) in u.horas" :key="i" class="h-3 flex-1 rounded-sm" :class="corCalor(v)" :title="`${formatarHora(HORAS[i])}: ${v}`"></span>
             </div>
-            <div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>08h</span><span>14h</span><span>20h</span></div>
+            <div class="mt-1 flex justify-between text-[0.625rem] text-slate-400"><span>08h</span><span>14h</span><span>20h</span></div>
             <p v-if="u.estoqueZero || u.naoPertence" class="mt-3 text-xs text-slate-500"><i class="fas fa-triangle-exclamation mr-1 text-amber-500"></i>{{ u.estoqueZero }} sem estoque · {{ u.naoPertence }} fora do local</p>
           </button>
         </template>
@@ -310,13 +310,13 @@ const setoresDependentes = computed(() => cobertura.value.filter(s => s.pessoas.
         <UiTabela id="auditoria-usuarios" titulo="Leituras por hora" :itens="usuarios" :colunas="COLUNAS_CALOR" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="nome" clicavel :agrupavel="false" placeholder="Nome, matrícula ou setor..." @linha="emit('detalhes', $event.nome)">
           <template #celula-exibicao="{ item: u }">
             <p class="max-w-52 truncate text-sm font-medium text-slate-800" :title="u.exibicao">{{ u.exibicao }}</p>
-            <p v-if="u.matricula" class="text-[10px] font-normal text-slate-500">Matrícula: {{ u.matricula }}</p>
+            <p v-if="u.matricula" class="text-[0.625rem] font-normal text-slate-500">Matrícula: {{ u.matricula }}</p>
           </template>
           <template v-for="(h, i) in HORAS" :key="h" #[`celula-h${h}`]="{ item: u }">
-            <span class="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-1 text-[10px] font-semibold" :class="[corCalor(u.horas[i]), u.horas[i] / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.exibicao} · ${formatarHora(h)}: ${u.horas[i]} leituras`">{{ u.horas[i] || '' }}</span>
+            <span class="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-1 text-[0.625rem] font-semibold" :class="[corCalor(u.horas[i]), u.horas[i] / maiorHora > 0.55 ? 'text-white' : 'text-slate-700']" :title="`${u.exibicao} · ${formatarHora(h)}: ${u.horas[i]} leituras`">{{ u.horas[i] || '' }}</span>
           </template>
         </UiTabela>
-        <div class="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
+        <div class="mt-3 flex items-center justify-end gap-1.5 text-[0.625rem] text-slate-500">
           Menos <span v-for="t in tonsCalor" :key="t" class="size-3 rounded-sm" :class="t"></span> Mais
         </div>
       </div>

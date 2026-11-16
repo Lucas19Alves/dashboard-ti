@@ -273,13 +273,13 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
       </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-4" :class="laterais || areaSelecionada ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''">
+    <div class="grid grid-cols-1 gap-4" :class="laterais || areaSelecionada ? 'xl:grid-cols-[minmax(0,1fr)_21.25rem]' : ''">
       <!-- Mapa -->
       <section class="overflow-hidden rounded-xl bg-white p-4 shadow-sm">
         <div v-if="editando" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-900">
           <span class="font-bold"><i class="fas fa-expand mr-1"></i>Tamanho do mapa <span class="font-normal text-blue-700">{{ layout.colunas }} × {{ layout.linhas }}</span></span>
           <span v-for="[lado, rotulo, icone] in LADOS" :key="lado" class="inline-flex items-center gap-1">
-            <i :class="['fas', icone, 'text-[10px] text-blue-500']"></i>{{ rotulo }}
+            <i :class="['fas', icone, 'text-[0.625rem] text-blue-500']"></i>{{ rotulo }}
             <button type="button" class="inline-flex size-6 items-center justify-center rounded-md bg-white font-bold shadow-sm hover:bg-blue-100 disabled:opacity-40" :disabled="!podeDiminuir(lado)" :aria-label="`Diminuir ${rotulo.toLowerCase()}`" :title="podeDiminuir(lado) ? 'Diminuir' : 'Há áreas encostadas nesta borda'" @click="redimensionar(lado, -1)">−</button>
             <button type="button" class="inline-flex size-6 items-center justify-center rounded-md bg-white font-bold shadow-sm hover:bg-blue-100" :aria-label="`Aumentar ${rotulo.toLowerCase()}`" title="Aumentar" @click="redimensionar(lado, 1)">+</button>
           </span>
@@ -291,7 +291,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
         <div class="overflow-x-auto">
           <div
             ref="palco"
-            class="relative min-w-[640px] rounded-xl bg-slate-50"
+            class="relative min-w-[40rem] rounded-xl bg-slate-50"
             :class="editando ? 'ring-2 ring-blue-200' : ''"
             :style="{
               height: `${linhasVisiveis * celula}px`,
@@ -365,7 +365,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </p>
           <div class="mt-2 flex flex-wrap gap-1.5">
             <button v-for="o in outros" :key="o.bloco" type="button" class="rounded-lg bg-white px-2 py-1 text-xs font-semibold shadow-sm hover:ring-2 hover:ring-blue-300" :title="editando ? 'Adicionar ao mapa' : ''" @click="editando ? adicionarAoMapa(o.bloco) : (selecionado = o.bloco)">
-              <i v-if="editando" class="fas fa-plus mr-1 text-[10px] text-blue-600"></i>{{ o.bloco }} <span :class="percentualPendente(o) > META ? 'text-red-700' : 'text-slate-500'">{{ percentualPendente(o).toFixed(1) }}%</span>
+              <i v-if="editando" class="fas fa-plus mr-1 text-[0.625rem] text-blue-600"></i>{{ o.bloco }} <span :class="percentualPendente(o) > META ? 'text-red-700' : 'text-slate-500'">{{ percentualPendente(o).toFixed(1) }}%</span>
             </button>
           </div>
         </div>
@@ -384,14 +384,14 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           </div>
 
           <div v-if="pinturaAtiva?.resumo" class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div v-for="b in pinturaAtiva.resumo(areaSelecionada)" :key="b.rotulo" class="rounded-xl py-2" :class="b.classe"><p class="text-lg font-black">{{ b.valor }}</p><p class="text-[10px]">{{ b.rotulo }}</p></div>
+            <div v-for="b in pinturaAtiva.resumo(areaSelecionada)" :key="b.rotulo" class="rounded-xl py-2" :class="b.classe"><p class="text-lg font-black">{{ b.valor }}</p><p class="text-[0.625rem]">{{ b.rotulo }}</p></div>
           </div>
           <div v-else class="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[10px] text-slate-500">{{ textos.lidos }}</p></div>
-            <div class="rounded-xl bg-amber-50 py-2"><p class="text-lg font-black text-amber-800">{{ areaSelecionada.pendentes }}</p><p class="text-[10px] text-amber-700">{{ textos.pendentes }}</p></div>
+            <div class="rounded-xl bg-slate-50 py-2"><p class="text-lg font-black">{{ areaSelecionada.lidos }}</p><p class="text-[0.625rem] text-slate-500">{{ textos.lidos }}</p></div>
+            <div class="rounded-xl bg-amber-50 py-2"><p class="text-lg font-black text-amber-800">{{ areaSelecionada.pendentes }}</p><p class="text-[0.625rem] text-amber-700">{{ textos.pendentes }}</p></div>
             <div class="rounded-xl py-2" :class="percentualPendente(areaSelecionada) > META ? 'bg-red-50' : 'bg-emerald-50'">
               <p class="text-lg font-black" :class="percentualPendente(areaSelecionada) > META ? 'text-red-700' : 'text-emerald-700'">{{ percentualPendente(areaSelecionada).toFixed(1) }}%</p>
-              <p class="text-[10px] text-slate-500">{{ textos.curto }}</p>
+              <p class="text-[0.625rem] text-slate-500">{{ textos.curto }}</p>
             </div>
           </div>
 
@@ -477,7 +477,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
           <ul class="mt-2 space-y-1">
             <li v-for="u in usuariosPagina" :key="u.nome">
               <button type="button" class="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50" :class="modo === 'usuario' && usuarioFoco === u.nome ? 'bg-blue-50 text-blue-800' : ''" @click="modo = 'usuario'; usuarioFoco = u.nome">
-                <span class="min-w-0"><span class="block truncate font-semibold">{{ u.exibicao }}</span><span v-if="u.matricula" class="text-[11px] text-slate-500">Matrícula: {{ u.matricula }}</span></span>
+                <span class="min-w-0"><span class="block truncate font-semibold">{{ u.exibicao }}</span><span v-if="u.matricula" class="text-[0.6875rem] text-slate-500">Matrícula: {{ u.matricula }}</span></span>
                 <span class="shrink-0 font-bold">{{ u.leituras }}</span>
               </button>
             </li>
@@ -496,7 +496,7 @@ const tamanhoFonte = computed(() => Math.max(9, Math.min(15, celula.value * 0.6)
     <Teleport to="body">
       <div
         v-if="areaDica"
-        class="pointer-events-none fixed z-[100] w-max max-w-56 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] leading-snug text-white shadow-lg"
+        class="pointer-events-none fixed z-[100] w-max max-w-56 rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[0.6875rem] leading-snug text-white shadow-lg"
         :style="{ left: `${dica.left}px`, top: `${dica.top}px`, transform: dica.abaixo ? 'translateX(-50%)' : 'translate(-50%, -100%)' }"
       >
         <b>{{ titulo(areaDica) }}</b><br>

@@ -65,18 +65,18 @@ const teclar = (e) => {
   <div ref="raiz" class="relative" :class="bloco ? 'w-full' : ''" @keydown="teclar">
     <button
       type="button"
-      class="inline-flex h-9 max-w-full items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium transition"
+      class="inline-flex h-9 max-w-full items-center gap-1.5 rounded-lg border px-3 text-[0.8125rem] font-medium transition"
       :class="[modelValue.length ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-300/80 bg-white text-slate-700 hover:border-slate-400', bloco ? 'w-full' : '']"
       :aria-expanded="aberto"
       @click="abrir"
     >
       <span v-if="rotulo" class="shrink-0" :class="modelValue.length ? 'font-semibold' : ''">{{ rotulo }}<template v-if="modelValue.length">{{ negado ? ' não é' : ':' }}</template></span>
       <span class="min-w-0 truncate" :class="!modelValue.length && !rotulo ? 'text-slate-400' : ''">{{ resumo }}</span>
-      <i class="fas fa-chevron-down ml-auto shrink-0 text-[10px] opacity-60"></i>
+      <i class="fas fa-chevron-down ml-auto shrink-0 text-[0.625rem] opacity-60"></i>
     </button>
     <div v-if="aberto" class="absolute z-40 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-2 shadow-xl" :class="paraEsquerda ? 'right-0' : 'left-0'">
       <input ref="campo" v-model="termo" type="search" class="ui-input py-1.5 text-sm" placeholder="Procurar..." />
-      <div class="mt-1.5 flex items-center justify-between px-1 text-[11px]">
+      <div class="mt-1.5 flex items-center justify-between px-1 text-[0.6875rem]">
         <button type="button" class="font-semibold text-blue-700 hover:underline" @click="marcarVisiveis">Marcar {{ termo ? 'encontrados' : 'todos' }}</button>
         <button type="button" class="font-semibold text-slate-500 hover:text-red-600" :disabled="!modelValue.length" @click="limpar">Limpar</button>
       </div>

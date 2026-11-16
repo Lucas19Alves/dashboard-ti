@@ -60,7 +60,7 @@ defineExpose({ salvar, gerando })
 
 <template>
   <div v-if="gerando" class="pointer-events-none fixed top-0" style="left: -99999px" aria-hidden="true">
-    <div ref="quadro" class="flex flex-col gap-5 bg-white p-9 text-slate-900" :style="{ width: `${QUADRADO}px`, height: `${QUADRADO}px`, fontFamily: 'IBM Plex Sans, system-ui, sans-serif' }">
+    <div ref="quadro" class="ui-escala-fixa flex flex-col gap-5 bg-white p-9 text-slate-900" :style="{ width: `${QUADRADO}px`, height: `${QUADRADO}px`, fontFamily: 'IBM Plex Sans, system-ui, sans-serif' }">
       <div class="flex items-baseline justify-between">
         <p class="text-[30px] font-bold tracking-tight">Validades, {{ dataBR }}</p>
         <p class="text-[20px] font-semibold text-slate-500">{{ loja || `${resumo.total.toLocaleString('pt-BR')} itens monitorados` }}</p>

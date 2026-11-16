@@ -63,7 +63,7 @@ watch(ativo, id => {
       </template>
     </UiPageHeader>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[16.25rem_minmax(0,1fr)] xl:grid-cols-[17.5rem_minmax(0,1fr)]">
       <aside class="print:hidden lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:self-start">
         <nav class="ui-card flex max-h-[inherit] flex-col p-3" aria-label="Sumário">
           <div class="relative">

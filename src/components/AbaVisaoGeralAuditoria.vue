@@ -328,7 +328,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-clipboard-list text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.totalItens }}</p>
-          <p class="text-[11px] text-slate-400">Itens para auditar</p>
+          <p class="text-[0.6875rem] text-slate-400">Itens para auditar</p>
         </div>
         <div
           @click="abrirModalMetrica('lidos')"
@@ -339,7 +339,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-check-circle text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.totalLidos }}</p>
-          <p class="text-[11px] text-slate-400">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído  |  Meta: {{ metricasGerais?.metaConclusao }}%</p>
+          <p class="text-[0.6875rem] text-slate-400">{{ metricasGerais?.percentualConclusao?.toFixed(2) }}% concluído  |  Meta: {{ metricasGerais?.metaConclusao }}%</p>
         </div>
         <div
           @click="abrirModalMetrica('pendentes')"
@@ -350,7 +350,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-hourglass-half text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-amber-700">{{ metricasGerais?.pendentes }}</p>
-          <p class="text-[11px]" :class="metricasGerais?.percentualPendente <= 3 ? 'text-emerald-500' : 'text-red-500'">
+          <p class="text-[0.6875rem]" :class="metricasGerais?.percentualPendente <= 3 ? 'text-emerald-500' : 'text-red-500'">
             {{ metricasGerais?.percentualPendente?.toFixed(2) }}% pendente  |  Meta: {{ metricasGerais?.metaPendente }}%
             <span v-if="metricasGerais?.faltaParaMeta > 0"> (+{{ metricasGerais?.faltaParaMeta.toFixed(2) }}%)</span>
           </p>
@@ -364,7 +364,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-exclamation-triangle text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-red-700">{{ metricasGerais?.comProblema }}</p>
-          <p class="text-[11px] text-slate-400">Requer atenção</p>
+          <p class="text-[0.6875rem] text-slate-400">Requer atenção</p>
         </div>
       </div>
 
@@ -377,7 +377,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-sync-alt text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-slate-900">{{ metricasGerais?.atualizados || 0 }}</p>
-          <p class="text-[11px] text-slate-400">Lidos e corretos</p>
+          <p class="text-[0.6875rem] text-slate-400">Lidos e corretos</p>
         </div>
         <div
           @click="abrirModalMetrica('desatualizado')"
@@ -388,7 +388,7 @@ const graficoAndamento = computed(() => {
             <i class="fas fa-history text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
           </div>
           <p class="text-3xl font-bold text-yellow-600">{{ metricasGerais?.desatualizados || 0 }}</p>
-          <p class="text-[11px] text-slate-400">Lidos mas desatualizados</p>
+          <p class="text-[0.6875rem] text-slate-400">Lidos mas desatualizados</p>
         </div>
       </div>
 
@@ -422,7 +422,7 @@ const graficoAndamento = computed(() => {
         </div>
 
         <div v-if="graficoAndamento" class="overflow-x-auto">
-          <div class="min-w-[720px]">
+          <div class="min-w-[45rem]">
             <svg
               class="w-full h-auto"
               :viewBox="`0 0 ${graficoAndamento.largura} ${graficoAndamento.altura}`"
@@ -449,7 +449,7 @@ const graficoAndamento = computed(() => {
                   :x="graficoAndamento.margem.esquerda - 10"
                   :y="graficoAndamento.y(nivel) + 4"
                   text-anchor="end"
-                  class="fill-slate-400 text-[11px]"
+                  class="fill-slate-400 text-[0.6875rem]"
                 >{{ nivel }}%</text>
               </g>
 
@@ -483,7 +483,7 @@ const graficoAndamento = computed(() => {
               </g>
             </svg>
 
-            <div v-if="andamentoAuditoriaPorHora?.semHorario > 0" class="mt-1 text-right text-[11px] text-slate-400">
+            <div v-if="andamentoAuditoriaPorHora?.semHorario > 0" class="mt-1 text-right text-[0.6875rem] text-slate-400">
               <template v-if="andamentoAuditoriaPorHora.baseInicial">{{ andamentoAuditoriaPorHora.semHorario.toLocaleString('pt-BR') }} item(ns) com presença confirmada sem leitura contam desde o início; a curva mostra o avanço das leituras.</template>
               <template v-else>{{ andamentoAuditoriaPorHora.semHorario.toLocaleString('pt-BR') }} item(ns) sem horário foram incorporados no ponto “Atual”.</template>
             </div>
@@ -576,7 +576,7 @@ const graficoAndamento = computed(() => {
               <div class="rounded-xl bg-emerald-50/70 p-3 text-center">
                 <p class="text-xs font-semibold text-emerald-500">Horário de Pico</p>
                 <p class="text-2xl font-bold text-slate-900 mt-1">{{ leituraPorHoraFiltrada.pico?.hora || '--' }}</p>
-                <p class="text-[10px] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
+                <p class="text-[0.625rem] text-emerald-500">{{ leituraPorHoraFiltrada.pico?.valor || 0 }} leituras</p>
               </div>
               <div class="rounded-xl bg-slate-50 p-3 text-center">
                 <p class="text-xs font-semibold text-slate-500">Média/Hora</p>
@@ -585,7 +585,7 @@ const graficoAndamento = computed(() => {
               <div class="rounded-xl bg-amber-50/70 p-3 text-center">
                 <p class="text-xs font-semibold text-amber-500">Horário de Baixa</p>
                 <p class="text-2xl font-bold text-amber-700 mt-1">{{ leituraPorHoraFiltrada.baixa?.hora || '--' }}</p>
-                <p class="text-[10px] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
+                <p class="text-[0.625rem] text-amber-500">{{ leituraPorHoraFiltrada.baixa?.valor || 0 }} leituras</p>
               </div>
             </div>
 
@@ -593,11 +593,11 @@ const graficoAndamento = computed(() => {
             <div class="rounded-xl border border-slate-100 bg-white p-4">
                 <div class="mb-3">
                   <p class="text-sm font-semibold text-slate-800">Leituras por horário</p>
-                  <p class="text-[11px] text-slate-400">Quantidade registrada em cada faixa horária</p>
+                  <p class="text-[0.6875rem] text-slate-400">Quantidade registrada em cada faixa horária</p>
                 </div>
                 <div class="space-y-1.5">
                   <div v-for="(p, idx) in leituraPorHoraFiltrada.serie" :key="`leituras-${p.hora}`" class="flex items-center gap-2">
-                    <div class="w-12 text-[11px] font-medium text-gray-600 text-right">{{ p.hora }}</div>
+                    <div class="w-12 text-[0.6875rem] font-medium text-gray-600 text-right">{{ p.hora }}</div>
                     <div class="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden relative">
                       <div
                         class="h-5 rounded-md transition-all duration-300"
@@ -608,14 +608,14 @@ const graficoAndamento = computed(() => {
                         ]"
                         :style="{ width: leituraPorHoraFiltrada.max > 0 ? ((p.valor / leituraPorHoraFiltrada.max) * 100) + '%' : '0%' }"
                       />
-                      <span v-if="p.valor > 0" class="absolute inset-y-0 left-2 flex items-center text-[10px] font-bold text-white drop-shadow">
+                      <span v-if="p.valor > 0" class="absolute inset-y-0 left-2 flex items-center text-[0.625rem] font-bold text-white drop-shadow">
                         {{ p.valor }}
                       </span>
                     </div>
                     <div class="w-14 text-right">
                       <span
                         v-if="idx > 0 && p.variacao !== 0 && p.valor > 0"
-                        class="text-[10px] font-semibold px-1 py-0.5 rounded"
+                        class="text-[0.625rem] font-semibold px-1 py-0.5 rounded"
                         :class="p.variacao > 0 ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'"
                       >
                         {{ p.variacao > 0 ? '+' : '' }}{{ p.variacao }}%

@@ -140,7 +140,7 @@ const id = computed(() => auditoria.value?.id ?? 'atual')
         >
           <!-- Nome e seta -->
           <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-800 text-[15px] truncate mr-2">{{ setor.nome }}</h3>
+            <h3 class="font-semibold text-gray-800 text-[0.9375rem] truncate mr-2">{{ setor.nome }}</h3>
             <i class="fas fa-chevron-right text-xs text-gray-300 group-hover:text-blue-700" aria-hidden="true"></i>
           </div>
 

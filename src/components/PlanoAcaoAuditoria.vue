@@ -355,7 +355,7 @@ const imprimir = () => {
     <div v-if="novas.length" class="mt-4 overflow-hidden rounded-xl ring-1 ring-slate-200">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2 bg-slate-50 px-4 py-2.5">
         <button type="button" class="flex items-center gap-2 text-left" :aria-expanded="sugestoesAbertas" @click="sugestoesAbertas = !sugestoesAbertas">
-          <i class="fas fa-chevron-down text-[10px] text-slate-400 transition-transform" :class="sugestoesAbertas ? '' : '-rotate-90'" aria-hidden="true"></i>
+          <i class="fas fa-chevron-down text-[0.625rem] text-slate-400 transition-transform" :class="sugestoesAbertas ? '' : '-rotate-90'" aria-hidden="true"></i>
           <span class="text-sm font-bold text-slate-900">Sugestões</span>
           <span class="text-xs text-slate-500">{{ novas.length }} local(is) com pendentes fora do plano</span>
         </button>
@@ -392,12 +392,12 @@ const imprimir = () => {
                 <td class="px-4 py-2"><input type="checkbox" class="size-3.5 accent-blue-600" :checked="marcadas.has(s.local)" :aria-label="`Marcar ${s.local}`" @click.stop @change="alternarMarcada(s.local)"></td>
                 <td class="px-2 py-2">
                   <div class="flex items-center gap-2">
-                    <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase" :class="CLASSE_PRIORIDADE[s.prioridade]">{{ ROTULO_PRIORIDADE[s.prioridade] }}</span>
+                    <span class="rounded-full px-1.5 py-0.5 text-[0.625rem] font-bold uppercase" :class="CLASSE_PRIORIDADE[s.prioridade]">{{ ROTULO_PRIORIDADE[s.prioridade] }}</span>
                     <span class="font-bold" :class="marcadas.has(s.local) ? 'text-slate-900' : ''">{{ s.local }}</span>
                     <span class="truncate text-xs">{{ s.setor }}</span>
                   </div>
                 </td>
-                <td class="px-2 py-2 text-right tabular-nums"><b :class="marcadas.has(s.local) ? 'text-amber-700' : ''">{{ s.pendentes }}</b> <span class="text-[11px]">{{ s.perc.toFixed(0) }}%</span></td>
+                <td class="px-2 py-2 text-right tabular-nums"><b :class="marcadas.has(s.local) ? 'text-amber-700' : ''">{{ s.pendentes }}</b> <span class="text-[0.6875rem]">{{ s.perc.toFixed(0) }}%</span></td>
                 <td class="hidden px-2 py-2 text-xs md:table-cell">{{ s.motivos.slice(s.semLeitura ? 0 : 1).join(' · ') || '—' }}</td>
                 <td class="hidden max-w-48 truncate px-2 py-2 text-xs lg:table-cell">{{ s.responsavelSugerido ? rotuloUsuario(s.responsavelSugerido) : '—' }}</td>
                 <td class="px-4 py-2 text-right text-xs tabular-nums">{{ s.estimativaMin ? `≈ ${textoMin(s.estimativaMin)}` : '—' }}</td>
@@ -427,7 +427,7 @@ const imprimir = () => {
           <div class="h-full bg-emerald-500 transition-all duration-500" :style="{ width: `${resumo.progresso}%` }"></div>
           <div class="h-full bg-blue-400 transition-all duration-500" :style="{ width: `${resumo.total ? (resumo.andamento / resumo.total) * 100 : 0}%` }"></div>
         </div>
-        <p class="mt-1 text-[10px] text-slate-500"><span class="mr-1 inline-block size-2 rounded-full bg-emerald-500"></span>resolvidas <span class="ml-2 mr-1 inline-block size-2 rounded-full bg-blue-400"></span>em andamento</p>
+        <p class="mt-1 text-[0.625rem] text-slate-500"><span class="mr-1 inline-block size-2 rounded-full bg-emerald-500"></span>resolvidas <span class="ml-2 mr-1 inline-block size-2 rounded-full bg-blue-400"></span>em andamento</p>
       </div>
       <div class="rounded-xl bg-slate-50 p-3"><p class="text-xs font-semibold text-slate-500">Em andamento</p><p class="text-xl font-black text-slate-900">{{ resumo.andamento }}</p></div>
       <div class="rounded-xl p-3" :class="resumo.atrasadas ? 'bg-red-50' : 'bg-slate-50'"><p class="text-xs font-semibold text-slate-500">Atrasadas</p><p class="text-xl font-black" :class="resumo.atrasadas ? 'text-red-700' : 'text-slate-900'">{{ resumo.atrasadas }}</p></div>
@@ -437,8 +437,8 @@ const imprimir = () => {
     <div v-if="cargaResponsaveis.length > 1 || (cargaResponsaveis.length === 1 && cargaResponsaveis[0].responsavel)" class="mt-4 rounded-xl ring-1 ring-slate-200">
       <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2">
         <p class="text-xs font-semibold text-slate-500">Em aberto por responsável</p>
-        <button v-if="filtroResponsavel" type="button" class="text-[11px] font-semibold text-blue-700 hover:underline" @click="filtroResponsavel = ''">Mostrar todos</button>
-        <span v-else class="text-[11px] text-slate-400">clique para filtrar</span>
+        <button v-if="filtroResponsavel" type="button" class="text-[0.6875rem] font-semibold text-blue-700 hover:underline" @click="filtroResponsavel = ''">Mostrar todos</button>
+        <span v-else class="text-[0.6875rem] text-slate-400">clique para filtrar</span>
       </div>
       <div class="grid grid-cols-1 gap-x-4 px-3 py-1 sm:grid-cols-2 xl:grid-cols-3">
         <button v-for="r in cargaResponsaveis" :key="r.responsavel || '—'" type="button" :aria-pressed="filtroResponsavel === (r.responsavel || '—')"
@@ -446,7 +446,7 @@ const imprimir = () => {
           :class="filtroResponsavel === (r.responsavel || '—') ? 'bg-blue-50' : filtroResponsavel ? 'opacity-50 hover:opacity-100' : 'hover:bg-slate-50'"
           @click="filtroResponsavel = filtroResponsavel === (r.responsavel || '—') ? '' : (r.responsavel || '—')">
           <span class="truncate text-xs font-semibold" :class="r.responsavel ? 'text-slate-800' : 'italic text-slate-500'">{{ r.responsavel ? rotuloUsuario(r.responsavel) : 'Sem responsável' }}</span>
-          <span class="text-right text-[11px] tabular-nums text-slate-500"><b class="text-slate-800">{{ r.acoes }}</b>{{ r.minutos ? ` · ≈ ${textoMin(r.minutos)}` : '' }}<b v-if="r.atrasadas" class="text-red-600"> · {{ r.atrasadas }} atras.</b></span>
+          <span class="text-right text-[0.6875rem] tabular-nums text-slate-500"><b class="text-slate-800">{{ r.acoes }}</b>{{ r.minutos ? ` · ≈ ${textoMin(r.minutos)}` : '' }}<b v-if="r.atrasadas" class="text-red-600"> · {{ r.atrasadas }} atras.</b></span>
           <span class="col-span-2 mt-1 h-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full" :class="r.atrasadas ? 'bg-red-400' : 'bg-blue-500'" :style="{ width: `${(r.acoes / maiorCarga) * 100}%` }"></span></span>
         </button>
       </div>
@@ -456,7 +456,7 @@ const imprimir = () => {
       <button v-for="r in RAPIDOS" :key="r.valor" type="button" :aria-pressed="rapido === r.valor"
         class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition"
         :class="rapido === r.valor ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-400'" @click="rapido = r.valor">
-        {{ r.rotulo }}<span class="rounded-full px-1.5 text-[10px]" :class="rapido === r.valor ? 'bg-white/20' : r.valor === 'atrasadas' && contagemRapidos[r.valor] ? 'bg-red-100 text-red-700' : 'bg-slate-100'">{{ contagemRapidos[r.valor] }}</span>
+        {{ r.rotulo }}<span class="rounded-full px-1.5 text-[0.625rem]" :class="rapido === r.valor ? 'bg-white/20' : r.valor === 'atrasadas' && contagemRapidos[r.valor] ? 'bg-red-100 text-red-700' : 'bg-slate-100'">{{ contagemRapidos[r.valor] }}</span>
       </button>
       <div class="ml-auto inline-flex rounded-lg bg-slate-100 p-0.5" role="radiogroup" aria-label="Visualização">
         <button v-for="[v, r, i] in [['quadro', 'Quadro', 'fas fa-table-columns'], ['lista', 'Lista', 'fas fa-list']]" :key="v" type="button" role="radio" :aria-checked="visao === v"
@@ -493,35 +493,35 @@ const imprimir = () => {
           <span class="size-2.5 rounded-full" :class="COR_COLUNA[c.valor]"></span>
           <h4 class="text-sm font-bold text-slate-800">{{ c.rotulo }}</h4>
           <span class="rounded-full bg-white px-2 text-xs font-bold text-slate-600 ring-1 ring-slate-200">{{ c.acoes.length }}</span>
-          <span v-if="c.valor !== 'feita'" class="ml-auto text-[11px] text-slate-500">{{ c.acoes.reduce((s, a) => s + (a.pendentes || 0), 0).toLocaleString('pt-BR') }} itens</span>
+          <span v-if="c.valor !== 'feita'" class="ml-auto text-[0.6875rem] text-slate-500">{{ c.acoes.reduce((s, a) => s + (a.pendentes || 0), 0).toLocaleString('pt-BR') }} itens</span>
         </header>
-        <TransitionGroup tag="ul" name="cartao" class="relative flex max-h-[620px] flex-1 flex-col gap-2 overflow-y-auto p-0.5">
+        <TransitionGroup tag="ul" name="cartao" class="relative flex max-h-[38.75rem] flex-1 flex-col gap-2 overflow-y-auto p-0.5">
           <li v-for="a in c.acoes" :key="a.id" draggable="true"
             class="group cursor-grab rounded-xl bg-white p-3 shadow-sm ring-1 ring-slate-200 transition active:cursor-grabbing"
             :class="[arrastando === a.id ? 'opacity-40' : '', atrasada(a) ? 'ring-red-200' : '']"
             @dragstart="arrastando = a.id" @dragend="arrastando = null; colunaAlvo = null">
             <div class="flex items-start gap-2">
-              <button type="button" class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase transition hover:brightness-95" :class="CLASSE_PRIORIDADE[a.prioridade]" :title="'Clique para trocar a prioridade'" @click="atualizar(a, { prioridade: proximaPrioridade[a.prioridade] })">{{ ROTULO_PRIORIDADE[a.prioridade] }}</button>
+              <button type="button" class="shrink-0 rounded-full px-2 py-0.5 text-[0.625rem] font-bold uppercase transition hover:brightness-95" :class="CLASSE_PRIORIDADE[a.prioridade]" :title="'Clique para trocar a prioridade'" @click="atualizar(a, { prioridade: proximaPrioridade[a.prioridade] })">{{ ROTULO_PRIORIDADE[a.prioridade] }}</button>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-bold text-slate-900">{{ a.local }}<span v-if="a.setor" class="font-medium text-slate-500"> · {{ a.setor }}</span></p>
                 <p class="text-xs text-slate-600" :class="a.status === 'feita' ? 'line-through' : ''">{{ a.descricao }}</p>
                 <p v-if="a.motivos?.length" class="mt-1 flex flex-wrap gap-1">
-                  <span v-for="m in a.motivos" :key="m" class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold" :class="m.startsWith('Fora da meta') ? 'bg-red-50 text-red-700' : m.includes('R$') ? 'bg-amber-50 text-amber-800' : 'text-slate-600'">{{ m }}</span>
+                  <span v-for="m in a.motivos" :key="m" class="rounded bg-slate-100 px-1.5 py-0.5 text-[0.625rem] font-semibold" :class="m.startsWith('Fora da meta') ? 'bg-red-50 text-red-700' : m.includes('R$') ? 'bg-amber-50 text-amber-800' : 'text-slate-600'">{{ m }}</span>
                 </p>
               </div>
-              <span v-if="a.pendentes" class="shrink-0 text-right"><b class="block text-sm text-amber-700">{{ a.pendentes }}</b><span class="text-[10px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</span></span>
+              <span v-if="a.pendentes" class="shrink-0 text-right"><b class="block text-sm text-amber-700">{{ a.pendentes }}</b><span class="text-[0.625rem] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</span></span>
             </div>
-            <div class="mt-2 flex items-center gap-2 text-[11px]">
-              <span v-if="a.responsavel" class="inline-flex min-w-0 items-center gap-1 text-slate-600" :title="rotuloUsuario(a.responsavel)"><span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-black text-blue-700">{{ iniciais(a.responsavel) }}</span><span class="truncate">{{ rotuloUsuario(a.responsavel) }}</span></span>
+            <div class="mt-2 flex items-center gap-2 text-[0.6875rem]">
+              <span v-if="a.responsavel" class="inline-flex min-w-0 items-center gap-1 text-slate-600" :title="rotuloUsuario(a.responsavel)"><span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[0.5625rem] font-black text-blue-700">{{ iniciais(a.responsavel) }}</span><span class="truncate">{{ rotuloUsuario(a.responsavel) }}</span></span>
               <span v-else class="text-slate-400">Sem responsável</span>
               <span class="ml-auto shrink-0 rounded-full px-2 py-0.5 font-semibold" :class="atrasada(a) ? 'bg-red-100 text-red-700' : venceHoje(a) ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"><i class="far fa-calendar mr-1"></i>{{ textoPrazo(a) }}</span>
               <span v-if="a.estimativaMin && a.status !== 'feita'" class="shrink-0 text-slate-500" title="Tempo estimado pelo ritmo do responsável">≈ {{ textoMin(a.estimativaMin) }}</span>
               <i v-if="a.observacao" class="fas fa-note-sticky text-slate-400" :title="a.observacao"></i>
             </div>
             <div class="mt-2 flex items-center gap-1 border-t border-slate-100 pt-2">
-              <button v-if="a.status !== 'aberta'" type="button" class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100" :aria-label="`Voltar ${a.local}`" @click="mover(a, -1)"><i class="fas fa-arrow-left"></i></button>
-              <button type="button" class="rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100" :aria-expanded="editando === a.id" @click="editando = editando === a.id ? null : a.id"><i class="fas fa-pen mr-1"></i>Editar</button>
-              <button v-if="a.status !== 'feita'" type="button" class="ml-auto rounded-lg px-2.5 py-1 text-[11px] font-bold transition" :class="a.status === 'aberta' ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'" @click="mover(a, 1)">
+              <button v-if="a.status !== 'aberta'" type="button" class="rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 hover:bg-slate-100" :aria-label="`Voltar ${a.local}`" @click="mover(a, -1)"><i class="fas fa-arrow-left"></i></button>
+              <button type="button" class="rounded-lg px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 hover:bg-slate-100" :aria-expanded="editando === a.id" @click="editando = editando === a.id ? null : a.id"><i class="fas fa-pen mr-1"></i>Editar</button>
+              <button v-if="a.status !== 'feita'" type="button" class="ml-auto rounded-lg px-2.5 py-1 text-[0.6875rem] font-bold transition" :class="a.status === 'aberta' ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'" @click="mover(a, 1)">
                 {{ a.status === 'aberta' ? 'Iniciar' : 'Concluir' }}<i class="fas ml-1" :class="a.status === 'aberta' ? 'fa-play' : 'fa-check'"></i>
               </button>
             </div>
@@ -551,7 +551,7 @@ const imprimir = () => {
         </template>
         <template #celula-pendentes="{ item: a }">
           <span v-if="a.pendentes" class="font-bold text-amber-700">{{ a.pendentes }}</span><span v-else class="text-slate-400">—</span>
-          <p v-if="a.pendentes" class="text-[11px] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</p>
+          <p v-if="a.pendentes" class="text-[0.6875rem] text-slate-500">{{ Number(a.perc || 0).toFixed(1) }}%</p>
         </template>
         <template #celula-responsavel="{ item: a }">
           <input :value="a.responsavel" list="usuarios-plano" class="ui-input w-48 py-1.5 text-xs" placeholder="Responsável" :aria-label="`Responsável por ${a.local}`" @change="atualizar(a, { responsavel: $event.target.value.trim() })">

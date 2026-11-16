@@ -29,12 +29,12 @@ const formatar = v => `${v.toFixed(1)}${props.sufixo}`
       <!-- Grade e eixo Y: cada linha tem altura 0 para ficar exatamente na altura do valor. -->
       <div class="pointer-events-none absolute inset-y-0 left-0 right-0">
         <div v-for="g in grade" :key="g" class="absolute left-0 right-0 flex h-0 items-center" :style="{ bottom: altura(g) }">
-          <span class="w-8 pr-1 text-right text-[10px] leading-none text-slate-400">{{ g }}{{ sufixo }}</span>
+          <span class="w-8 pr-1 text-right text-[0.625rem] leading-none text-slate-400">{{ g }}{{ sufixo }}</span>
           <span class="h-px flex-1 bg-slate-100"></span>
         </div>
         <div class="absolute left-9 right-0 flex h-0 items-center" :style="{ bottom: altura(meta) }">
           <span class="h-0 flex-1 border-t border-dashed border-slate-400"></span>
-          <span class="ml-1 rounded bg-white px-1 text-[10px] font-semibold leading-none text-slate-500">meta {{ meta }}{{ sufixo }}</span>
+          <span class="ml-1 rounded bg-white px-1 text-[0.625rem] font-semibold leading-none text-slate-500">meta {{ meta }}{{ sufixo }}</span>
         </div>
       </div>
 
@@ -61,12 +61,12 @@ const formatar = v => `${v.toFixed(1)}${props.sufixo}`
         ></span>
         <span
           v-if="i === ultimoIndice && ativo === null && Number.isFinite(p.valor)"
-          class="absolute left-1/2 -translate-x-1/2 -translate-y-5 whitespace-nowrap text-[11px] font-bold text-slate-700"
+          class="absolute left-1/2 -translate-x-1/2 -translate-y-5 whitespace-nowrap text-[0.6875rem] font-bold text-slate-700"
           :style="{ bottom: altura(p.valor) }"
         >{{ formatar(p.valor) }}</span>
         <span
           v-if="ativo === i"
-          class="absolute left-1/2 z-10 -translate-x-1/2 -translate-y-2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[11px] text-white shadow-lg"
+          class="absolute left-1/2 z-10 -translate-x-1/2 -translate-y-2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-left text-[0.6875rem] text-white shadow-lg"
           :style="{ bottom: Number.isFinite(p.valor) ? altura(p.valor) : '0%' }"
         >
           <span class="block font-semibold">{{ p.rotulo }}</span>
@@ -76,7 +76,7 @@ const formatar = v => `${v.toFixed(1)}${props.sufixo}`
       </button>
     </div>
     <div class="mt-1.5 flex gap-2 pl-9">
-      <span v-for="p in pontos" :key="p.chave" class="min-w-0 flex-1 truncate text-center text-[10px] text-slate-500">{{ p.rotulo }}</span>
+      <span v-for="p in pontos" :key="p.chave" class="min-w-0 flex-1 truncate text-center text-[0.625rem] text-slate-500">{{ p.rotulo }}</span>
     </div>
   </div>
 </template>

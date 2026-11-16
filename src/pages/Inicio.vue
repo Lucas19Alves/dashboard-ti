@@ -288,7 +288,7 @@ const acoesCabecalho = computed(() => [
               <span class="block text-sm font-semibold text-slate-900 group-hover:text-blue-700">{{ p.titulo }}</span>
               <span class="block text-xs text-slate-500">{{ p.detalhe }}</span>
             </span>
-            <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-300 group-hover:text-blue-600" aria-hidden="true"></i>
+            <i class="fas fa-chevron-right mt-1 text-[0.625rem] text-slate-300 group-hover:text-blue-600" aria-hidden="true"></i>
           </component>
         </li>
       </ul>
@@ -319,7 +319,7 @@ const acoesCabecalho = computed(() => [
       </RouterLink>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3 2xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-3 2xl:grid-cols-[minmax(0,1fr)_26.25rem]">
       <div class="space-y-6 xl:col-span-2 2xl:col-span-1">
         <!-- Agenda da semana -->
         <section class="ui-card p-5 md:p-6">
@@ -339,7 +339,7 @@ const acoesCabecalho = computed(() => [
             >
               <p class="flex items-center justify-between text-xs font-semibold capitalize" :class="dia.ehHoje ? 'text-blue-700' : 'text-slate-500'">
                 {{ formatarDataSemana(dia.dia) }}
-                <span v-if="dia.ehHoje" class="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">Hoje</span>
+                <span v-if="dia.ehHoje" class="rounded-full bg-blue-600 px-1.5 py-0.5 text-[0.625rem] font-bold text-white">Hoje</span>
               </p>
               <button
                 v-for="item in dia.itens"
@@ -352,7 +352,7 @@ const acoesCabecalho = computed(() => [
                 <i :class="[estadosAgenda[item.estado].icone, 'text-xs']"></i>
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-bold">{{ item.tipo }}</span>
-                  <span class="block text-[11px] font-medium opacity-80">
+                  <span class="block text-[0.6875rem] font-medium opacity-80">
                     {{ estadosAgenda[item.estado].rotulo }}<template v-if="item.auditoria"> · {{ metricasAuditoria(item.auditoria).percentualPendente.toFixed(1) }}%</template>
                   </span>
                 </span>
@@ -373,7 +373,7 @@ const acoesCabecalho = computed(() => [
                 <p class="text-xs font-semibold text-slate-500">{{ serie.tipo }}</p>
                 <span
                   v-if="serie.naMeta !== null"
-                  class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+                  class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.625rem] font-bold"
                   :class="serie.naMeta ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'"
                 >
                   <i :class="serie.naMeta ? 'fas fa-check' : 'fas fa-xmark'"></i>{{ serie.naMeta ? 'Na meta' : 'Fora' }}
@@ -447,7 +447,7 @@ const acoesCabecalho = computed(() => [
                 <i :class="[faixa.icone, 'text-xs opacity-70']"></i>
               </div>
               <p class="mt-2 text-3xl font-bold">{{ faixa.valor }}</p>
-              <p class="mt-1 flex items-center justify-between text-[11px] opacity-80">
+              <p class="mt-1 flex items-center justify-between text-[0.6875rem] opacity-80">
                 {{ faixa.dica }}
               </p>
             </RouterLink>
@@ -487,11 +487,11 @@ const acoesCabecalho = computed(() => [
                 <li v-for="i in itensCriticos" :key="i._codigo + '-' + i._validadeISO" class="flex items-center justify-between gap-3 py-2">
                   <div class="min-w-0">
                     <p class="truncate text-xs font-semibold text-slate-900">{{ i._produto || i['Produto'] || '-' }}</p>
-                    <p class="truncate text-[11px] text-slate-500">{{ i._codigo || '-' }} · {{ i._setor || '-' }}</p>
+                    <p class="truncate text-[0.6875rem] text-slate-500">{{ i._codigo || '-' }} · {{ i._setor || '-' }}</p>
                   </div>
                   <div class="shrink-0 text-right">
-                    <span class="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold" :class="classePrazo[i._prazo]">{{ rotuloPrazo[i._prazo] }}</span>
-                    <p class="mt-0.5 text-[11px] text-slate-500">{{ formatarDataBR(i._validadeISO) }} · {{ descreverDias(i._diasParaVencer) }}</p>
+                    <span class="inline-flex rounded-full border px-2 py-0.5 text-[0.625rem] font-bold" :class="classePrazo[i._prazo]">{{ rotuloPrazo[i._prazo] }}</span>
+                    <p class="mt-0.5 text-[0.6875rem] text-slate-500">{{ formatarDataBR(i._validadeISO) }} · {{ descreverDias(i._diasParaVencer) }}</p>
                   </div>
                 </li>
               </ul>
@@ -506,7 +506,7 @@ const acoesCabecalho = computed(() => [
           <div class="flex items-center justify-between border-b border-slate-100 p-4">
             <div>
               <h2 class="text-sm font-bold text-slate-900 md:text-base">Últimas auditorias</h2>
-              <p class="text-[11px] text-slate-500">{{ auditoriasAbertas }} em andamento · {{ auditoriasFechadas.length }} fechadas</p>
+              <p class="text-[0.6875rem] text-slate-500">{{ auditoriasAbertas }} em andamento · {{ auditoriasFechadas.length }} fechadas</p>
             </div>
             <RouterLink to="/auditorias" class="text-xs font-medium text-blue-600 hover:underline">Ver todas</RouterLink>
           </div>
@@ -522,13 +522,13 @@ const acoesCabecalho = computed(() => [
                 </span>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm font-semibold text-slate-900">{{ a.tipo || '-' }}</p>
-                  <p class="text-[11px] text-slate-500">{{ formatarDataBR(a.data) }} · {{ a.status === 'fechada' ? 'Fechada' : 'Em andamento' }}</p>
+                  <p class="text-[0.6875rem] text-slate-500">{{ formatarDataBR(a.data) }} · {{ a.status === 'fechada' ? 'Fechada' : 'Em andamento' }}</p>
                 </div>
                 <div class="text-right">
                   <p class="text-sm font-bold" :class="a.metricas.percentualPendente <= META_PENDENTE_PERCENTUAL ? 'text-emerald-700' : 'text-red-700'">
                     {{ a.metricas.percentualPendente.toFixed(1) }}%
                   </p>
-                  <p class="text-[10px] text-slate-400">pendente</p>
+                  <p class="text-[0.625rem] text-slate-400">pendente</p>
                 </div>
               </RouterLink>
             </li>
@@ -539,7 +539,7 @@ const acoesCabecalho = computed(() => [
         <section class="ui-card space-y-4 p-5">
           <div>
             <h2 class="text-sm font-bold text-slate-900 md:text-base">Dados e backup</h2>
-            <p class="text-[11px] text-slate-500">Tudo fica salvo apenas neste navegador.</p>
+            <p class="text-[0.6875rem] text-slate-500">Tudo fica salvo apenas neste navegador.</p>
           </div>
 
           <div class="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
@@ -555,7 +555,7 @@ const acoesCabecalho = computed(() => [
             <div class="h-2 overflow-hidden rounded-full bg-slate-100">
               <div class="h-full rounded-full" :class="percentualUso > 80 ? 'bg-red-500' : 'bg-blue-600'" :style="{ width: `${Math.max(1, percentualUso)}%` }"></div>
             </div>
-            <p class="flex items-center gap-1.5 text-[11px]" :class="armazenamento.persistente ? 'text-emerald-700' : 'text-slate-500'">
+            <p class="flex items-center gap-1.5 text-[0.6875rem]" :class="armazenamento.persistente ? 'text-emerald-700' : 'text-slate-500'">
               <i :class="armazenamento.persistente ? 'fas fa-lock' : 'fas fa-lock-open'"></i>
               {{ armazenamento.persistente ? 'Armazenamento protegido contra limpeza automática' : 'O navegador pode apagar os dados se faltar espaço' }}
             </p>

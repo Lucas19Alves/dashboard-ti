@@ -21,7 +21,27 @@
   text-rendering: optimizeLegibility;
 }
 
-html { scroll-behavior: smooth; }
+/* Escala do sistema: em telas de computador tudo fica a 80% (equivale ao zoom de 80% do navegador).
+   Como o Tailwind trabalha em rem, reduzir a fonte da raiz reduz textos, espaços e larguras juntos.
+   Celular e tablet ficam em 100%. --ui-escala-texto vem da preferência "Tamanho do texto". */
+html {
+  scroll-behavior: smooth;
+  font-size: calc(100% * var(--ui-escala-texto, 1));
+}
+@media (min-width: 1024px) {
+  html { font-size: calc(80% * var(--ui-escala-texto, 1)); }
+}
+
+/* Imagens exportadas (WhatsApp) têm tamanho fixo em px: aqui dentro as medidas do Tailwind
+   voltam a valer em px, independentes da escala da tela. */
+.ui-escala-fixa {
+  font-size: 16px;
+  --spacing: 4px;
+  --text-xs: 12px; --text-sm: 14px; --text-base: 16px; --text-lg: 18px; --text-xl: 20px;
+  --text-2xl: 24px; --text-3xl: 30px; --text-4xl: 36px; --text-5xl: 48px; --text-6xl: 60px;
+  --radius-xs: 2px; --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px;
+  --radius-2xl: 16px; --radius-3xl: 24px;
+}
 
 body {
   margin: 0;
@@ -57,18 +77,18 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 @layer components {
   /* Largura única do sistema: aproveita telas grandes sem esticar demais em ultrawide. */
-  .ui-container { @apply mx-auto w-full max-w-[1760px] px-4 sm:px-6 lg:px-8 2xl:px-10; }
-  .ui-page { @apply mx-auto w-full max-w-[1760px] space-y-6 px-4 py-6 sm:px-6 md:py-8 lg:px-8 2xl:px-10; }
+  .ui-container { @apply mx-auto w-full max-w-[110rem] px-4 sm:px-6 lg:px-8 2xl:px-10; }
+  .ui-page { @apply mx-auto w-full max-w-[110rem] space-y-6 px-4 py-6 sm:px-6 md:py-8 lg:px-8 2xl:px-10; }
   .ui-card { @apply rounded-[var(--ui-radius)] border bg-white; border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
   .ui-card-hover { @apply transition-colors duration-150 hover:border-blue-300; }
   .ui-title { @apply text-2xl font-bold tracking-tight text-slate-950 md:text-3xl; }
   .ui-subtitle { @apply mt-1 text-sm leading-relaxed text-slate-500; }
-  .ui-label { @apply mb-1.5 block text-[13px] font-semibold text-slate-700; }
-  .ui-input { @apply w-full rounded-[10px] border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 focus:outline-none; }
-  .ui-btn { @apply inline-flex items-center justify-center gap-2 rounded-[10px] px-4 py-2.5 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50; }
-  .ui-btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-[10px] bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-blue-800 active:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50; }
-  .ui-btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-[10px] border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors duration-150 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50; }
-  .ui-btn-danger { @apply inline-flex items-center justify-center gap-2 rounded-[10px] bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50; }
+  .ui-label { @apply mb-1.5 block text-[0.8125rem] font-semibold text-slate-700; }
+  .ui-input { @apply w-full rounded-[0.625rem] border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm text-slate-800 transition-colors placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-600 focus:ring-[3px] focus:ring-blue-600/15 focus:outline-none; }
+  .ui-btn { @apply inline-flex items-center justify-center gap-2 rounded-[0.625rem] px-4 py-2.5 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50; }
+  .ui-btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-[0.625rem] bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-blue-800 active:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50; }
+  .ui-btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-[0.625rem] border border-slate-300/80 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors duration-150 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50; }
+  .ui-btn-danger { @apply inline-flex items-center justify-center gap-2 rounded-[0.625rem] bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50; }
   .ui-badge { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold; }
   .ui-modal-backdrop { @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4; }
   .ui-modal { @apply w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl; }

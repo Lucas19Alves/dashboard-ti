@@ -77,7 +77,7 @@ const teclar = (e) => {
       type="button"
       class="inline-flex items-center justify-center gap-2 border font-semibold transition"
       :class="[
-        estilo === 'ferramenta' ? 'h-9 rounded-lg px-3 text-[13px]' : 'min-h-10 rounded-xl px-4 py-2 text-sm shadow-sm',
+        estilo === 'ferramenta' ? 'h-9 rounded-lg px-3 text-[0.8125rem]' : 'min-h-10 rounded-xl px-4 py-2 text-sm shadow-sm',
         aberto ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
       ]"
       :title="titulo"
@@ -98,7 +98,7 @@ const teclar = (e) => {
       @keydown="teclar"
     >
       <div v-for="(s, i) in secoes" :key="s.nome || 'perigo'" :class="i ? 'mt-1 border-t border-slate-100 pt-1' : ''">
-        <p v-if="s.nome && secoes.length > 1" class="px-3 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ s.nome }}</p>
+        <p v-if="s.nome && secoes.length > 1" class="px-3 pb-0.5 pt-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400">{{ s.nome }}</p>
         <button
           v-for="a in s.acoes"
           :key="a.id || a.rotulo"

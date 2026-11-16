@@ -68,7 +68,7 @@ const ticksY = computed(() => [0, 0.5, 1].map(r => Math.round((yMax.value / 1.08
       <div v-for="k in indicadores" :key="k.rotulo" class="rounded-xl p-3" :class="k.alerta ? 'bg-red-50' : 'bg-slate-50'">
         <p class="text-xs font-semibold text-slate-500">{{ k.rotulo }}</p>
         <p class="mt-0.5 text-xl font-black" :class="k.alerta ? 'text-red-700' : 'text-slate-900'">{{ k.valor }}</p>
-        <p class="text-[11px] text-slate-500">{{ k.detalhe }}</p>
+        <p class="text-[0.6875rem] text-slate-500">{{ k.detalhe }}</p>
       </div>
     </div>
 
@@ -85,7 +85,7 @@ const ticksY = computed(() => [0, 0.5, 1].map(r => Math.round((yMax.value / 1.08
       <path v-if="p.projecao.length" :d="linha(p.projecao)" fill="none" stroke="#f97316" stroke-width="2.5" stroke-dasharray="7 6" />
       <circle :cx="x(p.ultima)" :cy="y(p.pendentes)" r="5" fill="#2563eb" stroke="#fff" stroke-width="2" />
     </svg>
-    <div class="mt-1 flex flex-wrap gap-x-4 text-[11px] text-slate-600">
+    <div class="mt-1 flex flex-wrap gap-x-4 text-[0.6875rem] text-slate-600">
       <span><i class="mr-1 inline-block h-1 w-5 rounded bg-blue-600 align-middle"></i>Pendentes (real)</span>
       <span><i class="mr-1 inline-block h-1 w-5 rounded bg-orange-500 align-middle"></i>Projeção</span>
       <span><i class="mr-1 inline-block h-1 w-5 rounded bg-emerald-600 align-middle"></i>Limite da meta</span>

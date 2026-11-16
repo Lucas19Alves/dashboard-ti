@@ -76,13 +76,13 @@ const atual = computed(() => usuarios.value.find(u => u.usuario === selecionado.
       <UiTabela id="evolucao-usuarios" titulo="Evolução dos usuários" :itens="usuarios" :colunas="COLUNAS" :atalhos="ATALHOS" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="usuario" :tamanho-pagina="10" :agrupavel="false" clicavel :destacar="u => u.usuario === selecionado" placeholder="Nome ou matrícula..." @linha="selecionado = $event.usuario" @filtrados="aoFiltrar">
         <template #celula-usuario="{ item: u }">
           <p class="font-semibold text-slate-800">{{ separarUsuario(u.usuario).nome || u.usuario }}</p>
-          <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] font-normal text-slate-500">{{ separarUsuario(u.usuario).matricula }}</p>
+          <p v-if="separarUsuario(u.usuario).matricula" class="text-[0.625rem] font-normal text-slate-500">{{ separarUsuario(u.usuario).matricula }}</p>
         </template>
         <template #celula-ritmoRecente="{ item: u, texto }">
-          <span class="font-semibold" :class="corRitmo(u.tendenciaRitmo)">{{ texto }} <i :class="['fas', SETAS[u.tendenciaRitmo].icone, 'ml-0.5 text-[10px]']" :title="`Ritmo ${SETAS[u.tendenciaRitmo].texto}`"></i></span>
+          <span class="font-semibold" :class="corRitmo(u.tendenciaRitmo)">{{ texto }} <i :class="['fas', SETAS[u.tendenciaRitmo].icone, 'ml-0.5 text-[0.625rem]']" :title="`Ritmo ${SETAS[u.tendenciaRitmo].texto}`"></i></span>
         </template>
         <template #celula-percProblemaMedio="{ item: u, texto }">
-          <span :class="corProblema(u.tendenciaProblema)">{{ texto }} <i :class="['fas', SETAS[u.tendenciaProblema].icone, 'ml-0.5 text-[10px]']" :title="`Problema ${SETAS[u.tendenciaProblema].texto}`"></i></span>
+          <span :class="corProblema(u.tendenciaProblema)">{{ texto }} <i :class="['fas', SETAS[u.tendenciaProblema].icone, 'ml-0.5 text-[0.625rem]']" :title="`Problema ${SETAS[u.tendenciaProblema].texto}`"></i></span>
         </template>
       </UiTabela>
 

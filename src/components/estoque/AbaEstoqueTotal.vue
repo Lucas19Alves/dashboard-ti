@@ -135,7 +135,7 @@ usarAcoesDaAba(() => acoes.value)
 
       <section class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Cobertura">
         <button v-for="c in cartoes" :key="c.rotulo" type="button" class="ui-card ui-card-hover p-4 text-left" :title="c.chave ? 'Filtrar a lista' : 'Mostrar todos'" @click="filtrarCartao(c)">
-          <span class="block text-[13px] font-semibold text-slate-600">{{ c.rotulo }}</span>
+          <span class="block text-[0.8125rem] font-semibold text-slate-600">{{ c.rotulo }}</span>
           <span class="mt-2 block text-[1.75rem] font-semibold leading-none tabular-nums text-slate-900">{{ int(c.valor) }}</span>
           <span class="mt-2 block text-xs leading-relaxed text-slate-500">{{ c.nota }}</span>
         </button>
@@ -157,7 +157,7 @@ usarAcoesDaAba(() => acoes.value)
               <p class="text-xs text-slate-500">{{ i.ultimaLeitura ? `lido em ${br(i.ultimaLeitura)}` : i.ultimaData ? 'nunca lido' : i.situacao === 'insumo' ? 'insumo, não entra na auditoria' : i.situacao === 'aguardando' ? `comprado em ${br(i.ultimaCompra)}, ainda sem auditoria` : 'nunca auditado' }}<template v-if="textoValidade(i)">, <span :class="i.venceEm !== null && i.venceEm <= 3 ? 'font-semibold text-red-700' : ''">{{ textoValidade(i) }}</span></template></p>
             </div>
             <div class="flex flex-wrap gap-1.5">
-              <button v-for="p in problemas(i)" :key="p.tipo" type="button" class="ui-badge border-amber-200 bg-amber-50 text-[11px] text-amber-800 hover:bg-amber-100" :title="p.diagnostico" @click="emit('abrir', i.codigo)"><i :class="[TIPOS_PROBLEMA[p.tipo].icone, 'mr-1']"></i>{{ TIPOS_PROBLEMA[p.tipo].curto }}</button>
+              <button v-for="p in problemas(i)" :key="p.tipo" type="button" class="ui-badge border-amber-200 bg-amber-50 text-[0.6875rem] text-amber-800 hover:bg-amber-100" :title="p.diagnostico" @click="emit('abrir', i.codigo)"><i :class="[TIPOS_PROBLEMA[p.tipo].icone, 'mr-1']"></i>{{ TIPOS_PROBLEMA[p.tipo].curto }}</button>
               <span v-if="!problemas(i).length" class="text-xs text-slate-400">Sem problemas</span>
             </div>
           </div>

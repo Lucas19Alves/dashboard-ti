@@ -77,7 +77,7 @@ const gerar = () => {
             <button v-for="[v, r] in [['paisagem', 'Paisagem'], ['retrato', 'Retrato'], ['auto', 'Automática']]" :key="v" type="button" role="radio" :aria-checked="escolhas.orientacao === v"
               class="flex-1 rounded-lg px-2 py-1.5 font-semibold" :class="escolhas.orientacao === v ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600'" @click="escolhas.orientacao = v">{{ r }}</button>
           </div>
-          <p class="mt-1 text-[11px] text-slate-500">Padrão em Configurações › Relatórios. Automática usa paisagem só quando há tabela larga.</p>
+          <p class="mt-1 text-[0.6875rem] text-slate-500">Padrão em Configurações › Relatórios. Automática usa paisagem só quando há tabela larga.</p>
         </fieldset>
         <label class="flex cursor-pointer items-start gap-3 self-end rounded-xl border border-slate-200 px-3 py-2">
           <input v-model="escolhas.assinaturas" type="checkbox" class="mt-0.5 size-4 accent-blue-600">

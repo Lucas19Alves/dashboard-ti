@@ -545,7 +545,7 @@ const acoesCabecalho = computed(() => [
             <i class="fas fa-rotate-left mr-1"></i>Limpar
           </button>
           <span class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-            <i class="fas fa-filter text-[10px]"></i>{{ auditoriasFiltradas.length }} auditoria(s)
+            <i class="fas fa-filter text-[0.625rem]"></i>{{ auditoriasFiltradas.length }} auditoria(s)
           </span>
         </div>
       </div>
@@ -560,8 +560,8 @@ const acoesCabecalho = computed(() => [
         </div>
         <p class="mt-2 text-2xl font-semibold tracking-tight tabular-nums md:text-3xl" :class="k.alerta ? 'text-amber-700' : 'text-slate-900'">{{ k.valor }}</p>
         <p class="mt-1 text-xs text-slate-500">{{ k.detalhe }}</p>
-        <p v-if="k.delta !== null && resumoAnterior" class="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="classeDelta(k)" :title="`Período anterior: ${formatarDataBR(intervaloComparacao.inicio)} a ${formatarDataBR(intervaloComparacao.fim)}`">
-          <i :class="k.delta > 0 ? 'fas fa-arrow-up' : k.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="text-[9px]"></i>
+        <p v-if="k.delta !== null && resumoAnterior" class="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold" :class="classeDelta(k)" :title="`Período anterior: ${formatarDataBR(intervaloComparacao.inicio)} a ${formatarDataBR(intervaloComparacao.fim)}`">
+          <i :class="k.delta > 0 ? 'fas fa-arrow-up' : k.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="text-[0.5625rem]"></i>
           {{ k.delta === 0 ? 'igual' : k.formatoDelta(k.delta) }} vs anterior
         </p>
       </article>
@@ -605,7 +605,7 @@ const acoesCabecalho = computed(() => [
         <article v-for="t in tipos" :key="t.tipo" class="ui-card p-5">
           <div class="flex items-center justify-between">
             <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-bold" :class="getTipoConfig(t.tipo).cor">
-              <i class="fas text-[10px]" :class="getTipoConfig(t.tipo).icone"></i>{{ t.tipo }}
+              <i class="fas text-[0.625rem]" :class="getTipoConfig(t.tipo).icone"></i>{{ t.tipo }}
             </span>
             <span class="inline-flex items-center gap-1 text-xs font-semibold" :class="iconeTendencia[t.tendencia].classe">
               <i :class="iconeTendencia[t.tendencia].icone"></i>{{ iconeTendencia[t.tendencia].rotulo }}
@@ -614,15 +614,15 @@ const acoesCabecalho = computed(() => [
           <div class="mt-3 grid grid-cols-3 gap-2 text-center">
             <div class="rounded-xl bg-slate-50 p-2">
               <p class="text-lg font-bold text-slate-900">{{ t.total }}</p>
-              <p class="text-[10px] text-slate-500">auditorias</p>
+              <p class="text-[0.625rem] text-slate-500">auditorias</p>
             </div>
             <div class="rounded-xl bg-slate-50 p-2">
               <p class="text-lg font-bold" :class="(t.mediaPendente ?? 0) > META ? 'text-red-700' : 'text-emerald-700'">{{ t.mediaPendente === null ? '—' : t.mediaPendente.toFixed(1) + '%' }}</p>
-              <p class="text-[10px] text-slate-500">pendente médio</p>
+              <p class="text-[0.625rem] text-slate-500">pendente médio</p>
             </div>
             <div class="rounded-xl bg-slate-50 p-2">
               <p class="text-lg font-bold text-slate-900">{{ t.taxaMeta === null ? '—' : t.taxaMeta.toFixed(0) + '%' }}</p>
-              <p class="text-[10px] text-slate-500">na meta</p>
+              <p class="text-[0.625rem] text-slate-500">na meta</p>
             </div>
           </div>
           <SparklineMeta v-if="t.serie.length > 1" class="mt-4" :pontos="t.serie" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
@@ -650,12 +650,12 @@ const acoesCabecalho = computed(() => [
           <template #celula-percPendente="{ item: s, texto }"><span class="font-semibold" :class="s.percPendente > META ? 'text-red-700' : 'text-emerald-700'">{{ texto }}</span></template>
           <template #celula-reincidencia="{ item: s }">
             <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold" :class="s.reincidencia >= 50 && s.auditorias >= 2 ? 'bg-red-50 text-red-700' : s.acimaDaMeta ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'">
-              <i v-if="s.reincidencia >= 50 && s.auditorias >= 2" class="fas fa-repeat text-[9px]"></i>{{ s.acimaDaMeta }}/{{ s.auditorias }}
+              <i v-if="s.reincidencia >= 50 && s.auditorias >= 2" class="fas fa-repeat text-[0.5625rem]"></i>{{ s.acimaDaMeta }}/{{ s.auditorias }}
             </span>
           </template>
           <template #celula-ultimo="{ item: s, texto }">
             <span class="font-semibold" :class="(s.ultimo ?? 0) > META ? 'text-red-700' : 'text-slate-700'">{{ texto }}</span>
-            <i class="ml-1 text-[10px]" :class="[iconeTendencia[s.tendencia].icone, iconeTendencia[s.tendencia].classe]" :title="iconeTendencia[s.tendencia].rotulo"></i>
+            <i class="ml-1 text-[0.625rem]" :class="[iconeTendencia[s.tendencia].icone, iconeTendencia[s.tendencia].classe]" :title="iconeTendencia[s.tendencia].rotulo"></i>
           </template>
           <template #celula-historico="{ item: s }">
             <SparklineMeta v-if="s.historico.length > 1" class="w-32" altura-classe="h-7" :pontos="s.historico.slice(-12)" :meta="META" @selecionar="p => abrirAuditoria(p.id)" />
@@ -676,11 +676,11 @@ const acoesCabecalho = computed(() => [
       <div class="mt-4">
         <UiTabela id="analise-usuarios" titulo="Produtividade por usuário" :itens="usuarios" :colunas="colunasUsuarios" :ordem-inicial="{ chave: 'leituras', direcao: 'desc' }" chave-item="usuario" :agrupavel="false" vazio="Nenhum usuário encontrado. Auditorias importadas de backups regionais podem não ter dados por usuário.">
           <template #celula-posicao="{ item: u }">
-            <span class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
+            <span class="inline-flex size-6 items-center justify-center rounded-full text-[0.625rem] font-bold" :class="rankingLeituras.get(u.usuario) <= 3 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">{{ rankingLeituras.get(u.usuario) }}</span>
           </template>
           <template #celula-usuario="{ item: u }">
             <router-link :to="`/colaborador/${encodeURIComponent(u.usuario)}`" class="font-medium text-slate-800 hover:text-blue-600 hover:underline">{{ separarUsuario(u.usuario).nome || u.usuario }}</router-link>
-            <p v-if="separarUsuario(u.usuario).matricula" class="text-[10px] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
+            <p v-if="separarUsuario(u.usuario).matricula" class="text-[0.625rem] text-slate-500">Matrícula: {{ separarUsuario(u.usuario).matricula }}</p>
           </template>
           <template #celula-leituras="{ item: u }">
             <div class="flex items-center gap-2">
@@ -777,13 +777,13 @@ const acoesCabecalho = computed(() => [
               <input type="checkbox" class="size-4 cursor-pointer rounded accent-blue-600" :checked="selecionadas.includes(l.id)" :aria-label="`Comparar auditoria ${l.id}`" @change="alternarSelecao(l.id)">
             </template>
             <template #celula-tipo="{ item: l }">
-              <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold" :class="getTipoConfig(l.tipo).cor"><i class="fas text-[9px]" :class="getTipoConfig(l.tipo).icone"></i>{{ l.tipo }}</span>
+              <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[0.6875rem] font-semibold" :class="getTipoConfig(l.tipo).cor"><i class="fas text-[0.5625rem]" :class="getTipoConfig(l.tipo).icone"></i>{{ l.tipo }}</span>
             </template>
             <template #celula-status="{ item: l }">
-              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.fechada ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'"><i :class="l.fechada ? 'fas fa-lock' : 'fas fa-spinner'" class="text-[9px]"></i>{{ l.status }}</span>
+              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold" :class="l.fechada ? 'bg-slate-100 text-slate-600' : 'bg-sky-50 text-sky-700'"><i :class="l.fechada ? 'fas fa-lock' : 'fas fa-spinner'" class="text-[0.5625rem]"></i>{{ l.status }}</span>
             </template>
             <template #celula-meta="{ item: l }">
-              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="l.dentroMeta ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"><i class="fas text-[9px]" :class="l.dentroMeta ? 'fa-check' : 'fa-times'"></i>{{ l.meta }}</span>
+              <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold" :class="l.dentroMeta ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'"><i class="fas text-[0.5625rem]" :class="l.dentroMeta ? 'fa-check' : 'fa-times'"></i>{{ l.meta }}</span>
             </template>
             <template #celula-pendente="{ item: l, texto }"><span class="font-semibold" :class="l.pendente > META ? 'text-red-700' : 'text-emerald-700'">{{ texto }}</span></template>
             <template #celula-abrir="{ item: l }">

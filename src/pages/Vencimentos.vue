@@ -642,25 +642,25 @@ const acoesSetores = computed(() => [
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-gray-900 truncate group-hover:text-orange-600 transition-colors">{{
                   setor.nome }}</p>
-                <p class="text-[11px] text-slate-400 mt-0.5">{{ setor.total }} itens</p>
+                <p class="text-[0.6875rem] text-slate-400 mt-0.5">{{ setor.total }} itens</p>
               </div>
 
               <!-- Status badges -->
               <div class="flex items-center gap-2 shrink-0">
                 <div
-                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 min-w-[52px]">
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 min-w-[3.25rem]">
                   <span class="text-sm font-bold text-red-700 tabular-nums">{{ setor.vencidos }}</span>
-                  <span class="text-[9px] text-red-500 font-medium">Vencidos</span>
+                  <span class="text-[0.5625rem] text-red-500 font-medium">Vencidos</span>
                 </div>
                 <div
-                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 min-w-[52px]">
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 min-w-[3.25rem]">
                   <span class="text-sm font-bold text-orange-700 tabular-nums">{{ setor.hoje }}</span>
-                  <span class="text-[9px] text-orange-500 font-medium">Hoje</span>
+                  <span class="text-[0.5625rem] text-orange-500 font-medium">Hoje</span>
                 </div>
                 <div
-                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[52px]">
+                  class="flex flex-col items-center px-2.5 py-1 rounded-lg bg-yellow-50 border border-yellow-200 min-w-[3.25rem]">
                   <span class="text-sm font-bold text-yellow-700 tabular-nums">{{ setor.ate3 }}</span>
-                  <span class="text-[9px] text-yellow-600 font-medium">Até 3d</span>
+                  <span class="text-[0.5625rem] text-yellow-600 font-medium">Até 3d</span>
                 </div>
               </div>
 

@@ -218,7 +218,7 @@ const abrirPagina = () => {
 
 <template>
   <UiModal v-if="tutorial.aberto" title="Tutorial" :subtitle="`Passo ${atual + 1} de ${PASSOS.length}`" width="max-w-4xl" @close="fechar">
-    <div class="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+    <div class="grid gap-5 md:grid-cols-[13.75rem_minmax(0,1fr)]">
       <nav class="hidden md:block" aria-label="Tópicos do tutorial">
         <ol class="space-y-0.5">
           <li v-for="(p, i) in PASSOS" :key="p.titulo">
@@ -245,7 +245,7 @@ const abrirPagina = () => {
           </div>
         </div>
         <dl class="mt-5 divide-y divide-slate-100 border-y border-slate-100">
-          <div v-for="[t, d] in passo.itens" :key="t" class="grid gap-1 py-3 sm:grid-cols-[170px_minmax(0,1fr)] sm:gap-4">
+          <div v-for="[t, d] in passo.itens" :key="t" class="grid gap-1 py-3 sm:grid-cols-[10.625rem_minmax(0,1fr)] sm:gap-4">
             <dt class="text-sm font-semibold text-slate-900">{{ t }}</dt>
             <dd class="text-sm leading-relaxed text-slate-600">{{ d }}</dd>
           </div>

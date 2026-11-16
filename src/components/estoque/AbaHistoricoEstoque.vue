@@ -127,13 +127,13 @@ usarAcoesDaAba(() => acoes.value)
       <!-- Indicadores -->
       <section class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" aria-label="Indicadores">
         <button v-for="c in cartoes" :key="c.chave" type="button" class="ui-card ui-card-hover p-4 text-left" :class="metrica === c.chave ? 'border-blue-300 ring-1 ring-blue-200' : ''" :aria-pressed="metrica === c.chave" title="Ver no gráfico" @click="metrica = c.chave">
-          <span class="block text-[13px] font-semibold text-slate-600">{{ c.rotulo }}</span>
+          <span class="block text-[0.8125rem] font-semibold text-slate-600">{{ c.rotulo }}</span>
           <span class="mt-2 block text-[1.6rem] font-semibold leading-none tabular-nums text-slate-900">{{ c.formato(c.atual) }}</span>
           <span v-if="c.delta !== null" class="mt-2 block text-xs font-semibold" :class="c.delta === 0 ? 'text-slate-500' : c.ruim ? 'text-red-700' : 'text-emerald-700'">
-            <i :class="c.delta > 0 ? 'fas fa-arrow-up' : c.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="mr-0.5 text-[10px]"></i>{{ sinal(c.delta, c.formato) }} desde {{ br(anterior.data).slice(0, 5) }}
+            <i :class="c.delta > 0 ? 'fas fa-arrow-up' : c.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="mr-0.5 text-[0.625rem]"></i>{{ sinal(c.delta, c.formato) }} desde {{ br(anterior.data).slice(0, 5) }}
           </span>
           <span v-if="c.proj" class="mt-1 block text-xs text-slate-500">em 4 semanas: <b class="text-slate-700">{{ c.formato(c.proj.final) }}</b> ({{ sinal(c.proj.porSemana, c.formato) }}/sem.)</span>
-          <span class="mt-1 block text-[11px] leading-snug text-slate-400">{{ c.nota() }}</span>
+          <span class="mt-1 block text-[0.6875rem] leading-snug text-slate-400">{{ c.nota() }}</span>
         </button>
       </section>
 
@@ -162,7 +162,7 @@ usarAcoesDaAba(() => acoes.value)
         <h2 class="text-lg font-semibold text-slate-900">Fotos do estoque</h2>
         <UiTabela id="estoque-fotos" titulo="Fotos do estoque" :itens="linhasFotos" :colunas="COLUNAS_FOTOS" :ordem-inicial="{ chave: 'data', direcao: 'desc' }" chave-item="id" :agrupavel="false">
           <template #celula-menu="{ item }"><UiMenu :acoes="acoesDaFoto(item)" rotulo="" estilo="ferramenta" titulo="Ações da foto" /></template>
-          <template #celula-data="{ item }"><span class="font-semibold text-slate-800">{{ br(item.data) }}</span><span v-if="item.data === store.info?.data" class="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">atual</span></template>
+          <template #celula-data="{ item }"><span class="font-semibold text-slate-800">{{ br(item.data) }}</span><span v-if="item.data === store.info?.data" class="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-blue-700">atual</span></template>
         </UiTabela>
       </section>
     </template>

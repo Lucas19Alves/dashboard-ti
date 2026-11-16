@@ -48,8 +48,8 @@ const ATALHOS_LOCAIS = [
       <div class="flex items-center gap-2 flex-wrap">
         <i class="fas fa-chart-pie text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
         <h2 class="text-sm font-bold text-slate-800">Parcial por setor</h2>
-        <span v-if="setoresComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ setoresComAnalise.length }} setor(es)</span>
-        <span v-if="setoresComAnalise.filter(s => s.percentualPendente > 3).length" class="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium border border-orange-100">{{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta</span>
+        <span v-if="setoresComAnalise.length" class="text-[0.625rem] text-slate-400 font-medium">{{ setoresComAnalise.length }} setor(es)</span>
+        <span v-if="setoresComAnalise.filter(s => s.percentualPendente > 3).length" class="text-[0.625rem] px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium border border-orange-100">{{ setoresComAnalise.filter(s => s.percentualPendente > 3).length }} acima da meta</span>
       </div>
       <UiTabela id="auditoria-estat-setores" titulo="Parcial por setor" :itens="setoresComAnalise" :colunas="COLUNAS_SETORES" :atalhos="ATALHOS_SETORES" :ordem-inicial="{ chave: 'percentualPendente', direcao: 'desc' }" chave-item="nome" :tamanho-pagina="10" clicavel :agrupavel="false" vazio="Nenhum setor." @linha="abrirModalSetorLocal('setor', [$event])">
         <template #celula-percentualConclusao="{ item: s, texto }">
@@ -58,7 +58,7 @@ const ATALHOS_LOCAIS = [
             <span class="font-semibold text-slate-700">{{ texto }}</span>
           </div>
         </template>
-        <template #celula-classificacao="{ item: s }"><span class="rounded-full px-2 py-1 text-[10px] font-bold" :class="s.classificacaoClass">{{ s.classificacao }}</span></template>
+        <template #celula-classificacao="{ item: s }"><span class="rounded-full px-2 py-1 text-[0.625rem] font-bold" :class="s.classificacaoClass">{{ s.classificacao }}</span></template>
       </UiTabela>
     </div>
 
@@ -67,8 +67,8 @@ const ATALHOS_LOCAIS = [
       <div class="flex items-center gap-2 flex-wrap">
         <i class="fas fa-map-marker-alt text-sm shrink-0 text-slate-400" aria-hidden="true"></i>
         <h2 class="text-sm font-bold text-slate-800">Locais</h2>
-        <span v-if="locaisComAnalise.length" class="text-[10px] text-slate-400 font-medium">{{ locaisComAnalise.length }} local(is)</span>
-        <span v-if="locaisComAnalise.filter(l => l.pendentes > 0).length" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium border border-amber-100">{{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência</span>
+        <span v-if="locaisComAnalise.length" class="text-[0.625rem] text-slate-400 font-medium">{{ locaisComAnalise.length }} local(is)</span>
+        <span v-if="locaisComAnalise.filter(l => l.pendentes > 0).length" class="text-[0.625rem] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium border border-amber-100">{{ locaisComAnalise.filter(l => l.pendentes > 0).length }} com pendência</span>
       </div>
       <UiTabela id="auditoria-estat-locais" titulo="Locais" :itens="locaisComAnalise" :colunas="COLUNAS_LOCAIS" :atalhos="ATALHOS_LOCAIS" :ordem-inicial="{ chave: 'pendentes', direcao: 'desc' }" chave-item="nome" clicavel :agrupavel="false" vazio="Nenhum local." @linha="abrirModalSetorLocal('local', [$event])">
         <template #celula-percentualLido="{ item: l, texto }">

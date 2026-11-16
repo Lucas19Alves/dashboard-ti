@@ -147,7 +147,7 @@ const facetasProdutos = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'vezes', 
               <li v-for="l in locaisDaArea(area).slice(0, 6)" :key="l.Local" class="text-xs">
                 <div class="flex items-center justify-between gap-2">
                   <span class="truncate font-semibold text-slate-800">{{ l.local }}</span>
-                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" :class="CLASSE_SITUACAO[situacao(l)]">{{ situacao(l) }}</span>
+                  <span class="shrink-0 rounded-full px-2 py-0.5 text-[0.625rem] font-bold" :class="CLASSE_SITUACAO[situacao(l)]">{{ situacao(l) }}</span>
                   <span class="w-12 shrink-0 text-right font-bold tabular-nums" :class="l.foraMeta ? 'text-red-700' : 'text-emerald-700'">{{ l.foraMeta }}/{{ l.auditorias }}</span>
                 </div>
                 <div class="mt-1 flex gap-0.5" :aria-label="`Histórico de ${l.local}`">
@@ -155,7 +155,7 @@ const facetasProdutos = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'vezes', 
                 </div>
               </li>
             </ul>
-            <p v-if="locaisDaArea(area).length > 6" class="mt-2 text-[11px] text-slate-500">+ {{ locaisDaArea(area).length - 6 }} local(is)</p>
+            <p v-if="locaisDaArea(area).length > 6" class="mt-2 text-[0.6875rem] text-slate-500">+ {{ locaisDaArea(area).length - 6 }} local(is)</p>
           </div>
         </template>
       </MapaLoja>
@@ -172,7 +172,7 @@ const facetasProdutos = [{ chave: 'setor', titulo: 'Setor' }, { chave: 'vezes', 
 
       <div class="mt-4">
         <UiTabela id="reincidencia-locais" titulo="Locais reincidentes" :itens="locais" :colunas="COLUNAS_LOCAIS" :atalhos="ATALHOS_LOCAIS" :filtros-iniciais="[{ chave: 'foraMeta', op: 'maiorIgual', valor: '2' }]" :ordem-inicial="[{ chave: 'foraMeta', direcao: 'desc' }, { chave: 'taxaFora', direcao: 'desc' }]" chave-item="chave" :agrupavel="true" vazio="Nenhum local no período.">
-          <template #celula-local="{ item: l }"><p class="font-bold text-slate-900">{{ l.local }}</p><p class="text-[11px] font-normal text-slate-500">{{ l.tipoArea }}</p></template>
+          <template #celula-local="{ item: l }"><p class="font-bold text-slate-900">{{ l.local }}</p><p class="text-[0.6875rem] font-normal text-slate-500">{{ l.tipoArea }}</p></template>
           <template #celula-taxaFora="{ item: l, texto }"><span class="font-bold" :class="l.taxaFora > 50 ? 'text-red-700' : l.taxaFora > 25 ? 'text-amber-700' : 'text-emerald-700'">{{ texto }}</span></template>
           <template #celula-sequencia="{ item: l }"><span class="rounded-full px-2 py-0.5 text-xs font-bold" :class="l.sequencia >= 3 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'">{{ l.sequencia }}</span></template>
           <template #celula-historico="{ item: l }">
